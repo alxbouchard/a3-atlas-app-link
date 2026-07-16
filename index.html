@@ -3,47 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projet Atlas Scanner</title>
+<title>PAZ — Apps</title>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f7;
          display: flex; align-items: center; justify-content: center; min-height: 90vh; margin: 0; }
-  .card { background: #fff; border-radius: 20px; padding: 36px 28px; max-width: 380px;
+  .card { background: #fff; border-radius: 20px; padding: 36px 28px; max-width: 400px;
           text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
-  h1 { font-size: 22px; margin: 12px 0 4px; }
-  p { color: #555; font-size: 15px; line-height: 1.45; }
-  .btn { display: block; margin: 12px auto 0; padding: 14px 20px; border-radius: 12px;
-         background: #2563eb; color: #fff; text-decoration: none; font-weight: 600; }
-  .btn.secondary { background: #eef2ff; color: #2563eb; }
-  .icon { font-size: 44px; }
-  .meta { color: #888; font-size: 13px; margin-top: 4px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  p { color: #555; font-size: 15px; }
+  a.app { display: flex; align-items: center; gap: 12px; text-decoration: none; color: #111;
+          background: #f0f4ff; border-radius: 14px; padding: 14px 16px; margin-top: 14px; }
+  a.app .emoji { font-size: 28px; }
+  a.app .name { font-weight: 600; }
+  a.app .desc { color: #666; font-size: 13px; }
 </style>
 </head>
 <body>
 <div class="card">
-  <div class="icon">🏠</div>
-  <h1 id="title">Projet Atlas Scanner</h1>
-  <p id="meta" class="meta"></p>
-  <p>Si l'app est installée, le projet s'ouvre automatiquement. Sinon :</p>
-  <a class="btn" href="https://apps.apple.com/ca/app/atlas-scanner/id6787545744">Installer Atlas Scanner</a>
-  <a class="btn secondary" id="zip" href="#" style="display:none">Télécharger le ZIP</a>
-  <p class="meta">Scan 3D, plans et photos — la mémoire du bâtiment.</p>
+  <h1>PAZ</h1>
+  <p>Les apps de l'équipe PAZ.</p>
+  <a class="app" href="/atlas/">
+    <span class="emoji">🏠</span>
+    <span>
+      <span class="name">Atlas Scanner</span><br>
+      <span class="desc">Scan 3D, plans et photos — la mémoire du bâtiment.</span>
+    </span>
+  </a>
 </div>
-<script>
-  const q = new URLSearchParams(location.search);
-  const name = q.get("n");
-  if (name) document.getElementById("title").textContent = "« " + name + " »";
-  const zones = q.get("z"), photos = q.get("p");
-  if (zones || photos) {
-    document.getElementById("meta").textContent =
-      (zones ? zones + " zone(s)" : "") + (zones && photos ? " · " : "") +
-      (photos ? photos + " photo(s)" : "");
-  }
-  const d = q.get("d");
-  if (d && /^[A-Za-z0-9_-]{10,}$/.test(d)) {
-    const zip = document.getElementById("zip");
-    zip.href = "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(d) + "&export=download&confirm=t";
-    zip.style.display = "block";
-  }
-</script>
 </body>
 </html>

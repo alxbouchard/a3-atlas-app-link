@@ -5,6 +5,8 @@
       {
         "appIDs": ["E3N3Q67WNM.com.a3atlas.scanner"],
         "components": [
+          { "/": "/atlas/ouvrir" },
+          { "/": "/atlas/ouvrir/*" },
           { "/": "/ouvrir" },
           { "/": "/ouvrir/*" }
         ]
