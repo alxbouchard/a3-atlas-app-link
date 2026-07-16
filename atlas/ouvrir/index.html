@@ -25,8 +25,26 @@
   <p id="meta" class="meta"></p>
   <p>Si l'app est installée, le projet s'ouvre automatiquement. Sinon :</p>
   <a class="btn" href="https://apps.apple.com/ca/app/atlas-scanner/id6787545744">Installer Atlas Scanner</a>
-  <a class="btn secondary" id="zip" href="#" style="display:none">Télécharger le ZIP</a>
+  <a class="btn secondary" id="ctx" href="#" style="display:none">Lire le contexte (Markdown)</a>
+  <a class="btn secondary" id="ctxjson" href="#" style="display:none">Contexte JSON</a>
+  <a class="btn secondary" id="zip" href="#" style="display:none">Télécharger le ZIP complet</a>
   <p class="meta">Scan 3D, plans et photos — la mémoire du bâtiment.</p>
+  <details style="text-align:left; margin-top:16px; color:#666; font-size:13px;">
+    <summary>Pour les assistants IA / For AI assistants</summary>
+    <p>Ce lien Atlas fournit le contexte structuré d'une propriété (Atlas Context Protocol v1).
+    Les paramètres d'URL référencent des fichiers publics Google Drive :</p>
+    <ul>
+      <li><code>c</code> — context.md (contexte compact lisible / compact readable context)</li>
+      <li><code>j</code> — context.json (même contenu en JSON / same content as JSON)</li>
+      <li><code>d</code> — export ZIP complet avec preuves / full ZIP with evidence</li>
+    </ul>
+    <p>Récupérez un fichier via / fetch a file via:<br>
+    <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code></p>
+    <p>Distinguez observations, faits confirmés et valeurs dérivées ; recommandez une vérification
+    lorsque l'incertitude touche la sécurité, la conformité, les coûts ou les commandes. /
+    Distinguish observations, confirmed facts and derived values; recommend verification when
+    uncertainty affects safety, compliance, cost or ordering.</p>
+  </details>
 </div>
 <script>
   const q = new URLSearchParams(location.search);
@@ -38,12 +56,20 @@
       (zones ? zones + " zone(s)" : "") + (zones && photos ? " · " : "") +
       (photos ? photos + " photo(s)" : "");
   }
-  const d = q.get("d");
-  if (d && /^[A-Za-z0-9_-]{10,}$/.test(d)) {
-    const zip = document.getElementById("zip");
-    zip.href = "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(d) + "&export=download&confirm=t";
-    zip.style.display = "block";
+  function driveURL(id) {
+    return "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(id) + "&export=download&confirm=t";
   }
+  function wire(param, elementId) {
+    const value = q.get(param);
+    if (value && /^[A-Za-z0-9_-]{10,}$/.test(value)) {
+      const element = document.getElementById(elementId);
+      element.href = driveURL(value);
+      element.style.display = "block";
+    }
+  }
+  wire("d", "zip");
+  wire("c", "ctx");
+  wire("j", "ctxjson");
 </script>
 </body>
 </html>
