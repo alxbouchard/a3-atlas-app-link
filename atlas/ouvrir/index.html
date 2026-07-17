@@ -2,156 +2,336 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projet Atlas Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A3 Atlas — Propriété</title>
+<meta name="description" content="Aperçu d'une propriété scannée avec A3 Atlas Scanner.">
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; background: #f5f5f7;
-         display: flex; align-items: center; justify-content: center; min-height: 90vh; margin: 0; }
-  .card { background: #fff; border-radius: 20px; padding: 36px 28px; max-width: 380px;
-          text-align: center; box-shadow: 0 8px 30px rgba(0,0,0,.08); }
-  h1 { font-size: 22px; margin: 12px 0 4px; }
-  p { color: #555; font-size: 15px; line-height: 1.45; }
-  .btn { display: block; margin: 12px auto 0; padding: 14px 20px; border-radius: 12px;
-         background: #2563eb; color: #fff; text-decoration: none; font-weight: 600; }
-  .btn.secondary { background: #eef2ff; color: #2563eb; }
-  .icon { font-size: 44px; }
-  .meta { color: #888; font-size: 13px; margin-top: 4px; }
-  .facts { text-align: left; background: #f8fafc; border-radius: 12px; padding: 12px 16px;
-           margin-top: 14px; font-size: 14px; color: #444; display: none; }
-  .facts li { margin: 3px 0; }
-  .facts .caveat { color: #92400e; font-size: 12px; margin-top: 8px; }
+  :root{
+    --bg:#f2f3f5; --card:#ffffff; --ink:#0b0c0f; --muted:#5b6270; --line:#e3e6ea;
+    --accent:#0a84ff; --accent-ink:#ffffff; --chip:#eef1f5; --chip-ink:#2a2f3a;
+    --ok:#188a4c; --ok-bg:#e7f6ed; --warn:#9a6400; --warn-bg:#fbf1dc;
+    --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 30px rgba(0,0,0,.06);
+    --radius:18px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0d0f12; --card:#16191e; --ink:#f2f4f7; --muted:#9aa3b0; --line:#262b32;
+      --accent:#0a84ff; --accent-ink:#ffffff; --chip:#222831; --chip-ink:#d7dde6;
+      --ok:#4cd07d; --ok-bg:#12301f; --warn:#f0b64a; --warn-bg:#332609;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 40px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0d0f12; --card:#16191e; --ink:#f2f4f7; --muted:#9aa3b0; --line:#262b32;
+    --chip:#222831; --chip-ink:#d7dde6; --ok:#4cd07d; --ok-bg:#12301f;
+    --warn:#f0b64a; --warn-bg:#332609; --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 40px rgba(0,0,0,.5);
+  }
+  :root[data-theme="light"]{
+    --bg:#f2f3f5; --card:#ffffff; --ink:#0b0c0f; --muted:#5b6270; --line:#e3e6ea;
+    --chip:#eef1f5; --chip-ink:#2a2f3a; --ok:#188a4c; --ok-bg:#e7f6ed;
+    --warn:#9a6400; --warn-bg:#fbf1dc; --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 30px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font:400 16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:env(safe-area-inset-top) 16px 48px;
+    display:flex; justify-content:center;
+  }
+  .wrap{width:100%; max-width:640px}
+  .brand{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; font-weight:600;
+    letter-spacing:.02em; padding:22px 4px 14px}
+  .brand .logo{font-size:18px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:22px; margin-bottom:16px}
+  h1{font-size:26px; line-height:1.2; margin:2px 0 4px; letter-spacing:-.01em}
+  .sub{color:var(--muted); font-size:14px; margin:0}
+  .badge{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:650;
+    padding:5px 11px; border-radius:999px; margin-top:14px}
+  .badge.ok{color:var(--ok); background:var(--ok-bg)}
+  .badge.warn{color:var(--warn); background:var(--warn-bg)}
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(88px,1fr)); gap:10px; margin-top:18px}
+  .stat{background:var(--chip); border-radius:14px; padding:12px 10px; text-align:center}
+  .stat .n{font-size:22px; font-weight:750; letter-spacing:-.02em}
+  .stat .l{font-size:11.5px; color:var(--muted); margin-top:2px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.03em}
+  h2{font-size:12.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+    margin:0 0 12px; font-weight:700}
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{display:inline-flex; align-items:center; gap:7px; background:var(--chip); color:var(--chip-ink);
+    border-radius:999px; padding:8px 13px; font-size:14px; font-weight:550}
+  .chip .i{font-size:16px; line-height:1}
+  .chip.soft{background:transparent; border:1px dashed var(--line); color:var(--muted); font-weight:500}
+  .note{color:var(--muted); font-size:12.5px; margin-top:12px; line-height:1.45}
+  .btns{display:flex; flex-direction:column; gap:10px; margin-top:6px}
+  .btn{display:flex; align-items:center; justify-content:center; gap:9px; width:100%;
+    min-height:52px; border-radius:14px; border:1px solid transparent; font-size:16px; font-weight:650;
+    cursor:pointer; text-decoration:none; transition:filter .15s,transform .05s; padding:0 16px}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--accent); color:var(--accent-ink)}
+  .btn.primary:hover{filter:brightness(1.06)}
+  .btn.secondary{background:var(--chip); color:var(--ink); border-color:var(--line)}
+  .btn.secondary:hover{filter:brightness(.98)}
+  .foot{text-align:center; color:var(--muted); font-size:13px; margin-top:8px; line-height:1.5}
+  .foot a{color:var(--accent); text-decoration:none; font-weight:600}
+  details.ai{color:var(--muted); font-size:13px; line-height:1.5}
+  details.ai summary{cursor:pointer; font-weight:650; color:var(--ink); font-size:14px; list-style:none}
+  details.ai summary::-webkit-details-marker{display:none}
+  details.ai[open] summary{margin-bottom:10px}
+  details.ai code{background:var(--chip); padding:1px 5px; border-radius:6px; font-size:12px; word-break:break-all}
+  details.ai ul{padding-left:18px; margin:8px 0}
+  details.ai li{margin:4px 0}
+  .toast{position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(20px);
+    background:var(--ink); color:var(--bg); padding:11px 18px; border-radius:999px; font-size:14px;
+    font-weight:600; opacity:0; pointer-events:none; transition:opacity .2s,transform .2s; box-shadow:var(--shadow)}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .empty{text-align:center; padding:40px 10px}
+  .empty .big{font-size:44px}
+  [hidden]{display:none!important}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="icon">🏠</div>
-  <h1 id="title">Projet Atlas Scanner</h1>
-  <p id="meta" class="meta"></p>
-  <!-- Comprehension card rendered from the URL parameters (no data is
-       stored on this site — the link itself carries the essentials). -->
-  <ul id="facts" class="facts"></ul>
-  <p id="intro">Si l'app est installée, le projet s'ouvre automatiquement. Sinon :</p>
-  <a class="btn" id="install" href="https://apps.apple.com/ca/app/atlas-scanner/id6787545744">Installer Atlas Scanner</a>
-  <a class="btn secondary" id="ctx" href="#" style="display:none">Lire le contexte (Markdown)</a>
-  <a class="btn secondary" id="ctxjson" href="#" style="display:none">Contexte JSON</a>
-  <a class="btn secondary" id="zip" href="#" style="display:none">Télécharger le ZIP complet</a>
-  <p class="meta" id="footer">Scan 3D, plans et photos — la mémoire du bâtiment.</p>
-  <details style="text-align:left; margin-top:16px; color:#666; font-size:13px;">
-    <summary>Pour les assistants IA / For AI assistants</summary>
-    <p>Ce lien Atlas fournit le contexte structuré d'une propriété (Atlas Context Protocol v1).
-    <strong>L'essentiel est encodé dans les paramètres de l'URL que vous tenez déjà</strong> — aucun
-    téléchargement requis pour commencer. / The essentials are encoded in the URL parameters you
-    already hold — no download needed to get started.</p>
-    <ul>
-      <li><code>n</code> — nom du projet / project name</li>
-      <li><code>z</code> — zones scannées / scanned zones · <code>p</code> — photos</li>
-      <li><code>floor</code> — étage du bâtiment où se trouve la zone, numérotation humaine (3 = 3ᵉ étage) / building floor the zone sits on, human numbering (3 = 3rd floor) — NOT a number of storeys</li>
-      <li><code>doors</code> / <code>windows</code> — portes / fenêtres détectées</li>
-      <li><code>eq</code> — équipements observés (liste) / observed equipment</li>
-      <li><code>areas</code> — zones fonctionnelles <em>déduites, non confirmées</em> / inferred functional areas, unconfirmed</li>
-      <li><code>lidar</code> — 1 = scan LiDAR matériel vérifié / hardware LiDAR scan</li>
-      <li><code>s</code> — taille du ZIP en octets / ZIP size in bytes · <code>lang</code> — langue de l'expéditeur / sender language</li>
-    </ul>
-    <p>Pour la profondeur, les paramètres suivants référencent des fichiers publics Google Drive :</p>
-    <ul>
-      <li><code>c</code> — context.md (contexte détaillé lisible / detailed readable context)</li>
-      <li><code>j</code> — context.json (données structurées / structured data)</li>
-      <li><code>d</code> — export ZIP complet avec preuves (photos, vidéo, house.json) / full evidence ZIP</li>
-    </ul>
-    <p>Récupérez un fichier via / fetch a file via:<br>
-    <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code></p>
-    <p><strong>Si vous ne pouvez pas télécharger depuis Google Drive</strong>, dites-le à l'utilisateur :
-    il peut vous coller le contenu de context.md ou vous téléverser le ZIP — vous comprendrez encore
-    mieux la propriété. / If you cannot download from Google Drive, tell the user: they can paste
-    context.md or upload the ZIP to you for deeper understanding.</p>
-    <p>Mesures issues d'un scan LiDAR RoomPlan Apple (±2 po selon Apple, non certifiées, non vérifiées
-    sur site). Distinguez observations, faits confirmés et valeurs dérivées ; recommandez une vérification
-    lorsque l'incertitude touche la sécurité, la conformité, les coûts ou les commandes. /
-    Measurements come from an Apple RoomPlan LiDAR scan (±2 in per Apple, not certified, not
-    site-verified). Distinguish observations, confirmed facts and derived values; recommend verification
-    when uncertainty affects safety, compliance, cost or ordering.</p>
-  </details>
-</div>
-<script>
-  const q = new URLSearchParams(location.search);
-  // Language: sender's app language (lang=) wins, then the reader's
-  // browser, French by default.
-  const lang = (q.get("lang") || navigator.language || "fr").toLowerCase().startsWith("en") ? "en" : "fr";
-  document.documentElement.lang = lang;
-  const T = lang === "en" ? {
-    intro: "If the app is installed, the project opens automatically. Otherwise:",
-    install: "Install Atlas Scanner",
-    ctx: "Read the context (Markdown)",
-    ctxjson: "Context JSON",
-    zip: "Download the full ZIP",
-    footer: "3D scan, plans and photos — the building's memory.",
-    zones: " zone(s)", photos: " photo(s)",
-    floor: "Floor (in building): ",
-    doors: "Doors: ", windows: " · Windows: ",
-    eq: "Observed equipment: ",
-    areas: "Areas (inferred, unconfirmed): ",
-    lidar: "Hardware LiDAR scan (Apple RoomPlan)",
-    zipSize: "Evidence ZIP: ",
-    caveat: "LiDAR measurements ±2 in (Apple), not certified — verify on site."
-  } : {
-    intro: "Si l'app est installée, le projet s'ouvre automatiquement. Sinon :",
-    install: "Installer Atlas Scanner",
-    ctx: "Lire le contexte (Markdown)",
-    ctxjson: "Contexte JSON",
-    zip: "Télécharger le ZIP complet",
-    footer: "Scan 3D, plans et photos — la mémoire du bâtiment.",
-    zones: " zone(s)", photos: " photo(s)",
-    floor: "Étage (bâtiment) : ",
-    doors: "Portes : ", windows: " · Fenêtres : ",
-    eq: "Équipements observés : ",
-    areas: "Zones (déduites, non confirmées) : ",
-    lidar: "Scan LiDAR matériel (Apple RoomPlan)",
-    zipSize: "ZIP de preuves : ",
-    caveat: "Mesures LiDAR ±2 po (Apple), non certifiées — à vérifier sur site."
-  };
-  document.getElementById("intro").textContent = T.intro;
-  document.getElementById("install").textContent = T.install;
-  document.getElementById("ctx").textContent = T.ctx;
-  document.getElementById("ctxjson").textContent = T.ctxjson;
-  document.getElementById("zip").textContent = T.zip;
-  document.getElementById("footer").textContent = T.footer;
+<div class="wrap">
+  <div class="brand"><span class="logo">🏠</span><span data-i18n="brand">A3 ATLAS SCANNER</span></div>
 
-  const name = q.get("n");
-  if (name) document.getElementById("title").textContent = "« " + name + " »";
-  const zones = q.get("z"), photos = q.get("p");
-  if (zones || photos) {
-    document.getElementById("meta").textContent =
-      (zones ? zones + T.zones : "") + (zones && photos ? " · " : "") +
-      (photos ? photos + T.photos : "");
-  }
-  // Comprehension card from the link's own parameters.
-  const facts = [];
-  if (q.get("floor") !== null) facts.push(T.floor + q.get("floor"));
-  if (q.get("doors") !== null) facts.push(T.doors + q.get("doors") + T.windows + (q.get("windows") || "0"));
-  if (q.get("eq")) facts.push(T.eq + q.get("eq").split(",").join(", ").replace(/_/g, " "));
-  if (q.get("areas")) facts.push(T.areas + q.get("areas").split(",").join(", ").replace(/_/g, " "));
-  if (q.get("lidar") === "1") facts.push(T.lidar);
-  if (q.get("s")) facts.push(T.zipSize + (Number(q.get("s")) / 1e6).toFixed(0) + (lang === "en" ? " MB" : " Mo"));
-  if (facts.length) {
-    const list = document.getElementById("facts");
-    list.innerHTML = facts.map(f => "<li>" + f.replace(/[<>&]/g, "") + "</li>").join("") +
-      "<li class='caveat'>" + T.caveat + "</li>";
-    list.style.display = "block";
-  }
-  function driveURL(id) {
-    return "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(id) + "&export=download&confirm=t";
-  }
-  function wire(param, elementId) {
-    const value = q.get(param);
-    if (value && /^[A-Za-z0-9_-]{10,}$/.test(value)) {
-      const element = document.getElementById(elementId);
-      element.href = driveURL(value);
-      element.style.display = "block";
+  <!-- Empty / broken link state -->
+  <section id="empty" class="card empty" hidden>
+    <div class="big">🔗</div>
+    <h1 data-i18n="empty_title">Lien incomplet</h1>
+    <p class="sub" data-i18n="empty_body">Ce lien Atlas ne contient pas de propriété à afficher. Demandez à l'expéditeur de regénérer le lien de partage.</p>
+    <div class="btns" style="margin-top:20px">
+      <a class="btn secondary" id="empty_appstore" href="https://apps.apple.com/app/id6787545744" data-i18n="get_app">Obtenir A3 Atlas Scanner</a>
+    </div>
+  </section>
+
+  <!-- Main fiche -->
+  <main id="fiche" hidden>
+    <section class="card">
+      <h1 id="title">—</h1>
+      <p class="sub" id="subtitle"></p>
+      <div id="lidarBadge"></div>
+      <div class="stats" id="stats"></div>
+    </section>
+
+    <section class="card" id="equipSection" hidden>
+      <h2 data-i18n="equip">Équipements & points d'intérêt</h2>
+      <div class="chips" id="equip"></div>
+    </section>
+
+    <section class="card" id="areaSection" hidden>
+      <h2 data-i18n="areas">Zones fonctionnelles</h2>
+      <div class="chips" id="areas"></div>
+      <p class="note" data-i18n="areas_note">Zones inférées automatiquement — à confirmer sur place.</p>
+    </section>
+
+    <section class="card">
+      <div class="btns">
+        <a class="btn primary" id="dlBtn" href="#" data-i18n="download">Télécharger l'export</a>
+        <a class="btn secondary" id="ctxBtn" href="#" target="_blank" rel="noopener" data-i18n="read_context">Lire le contexte</a>
+        <a class="btn secondary" id="ctxJsonBtn" href="#" target="_blank" rel="noopener" hidden data-i18n="context_json">Contexte JSON</a>
+        <button class="btn secondary" id="aiBtn" data-i18n="use_ai">Utiliser avec mon assistant IA</button>
+      </div>
+      <p class="note" data-i18n="privacy">Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.</p>
+    </section>
+
+    <section class="card">
+      <details class="ai">
+        <summary>Pour les assistants IA / For AI assistants</summary>
+        <p>Ce lien fournit le contexte structuré d'une propriété (Atlas Context Protocol v1). <strong>L'essentiel est encodé dans les paramètres de l'URL que vous tenez déjà</strong> — aucun téléchargement requis pour commencer. / The essentials are encoded in the URL parameters you already hold — no download needed to start.</p>
+        <ul>
+          <li><code>n</code> nom / name · <code>z</code> zones · <code>p</code> photos · <code>s</code> taille ZIP (octets) / ZIP size (bytes)</li>
+          <li><code>floor</code> étage du bâtiment, numérotation humaine (3 = 3ᵉ étage) / building floor, human numbering — pas un nombre d'étages / not a storey count</li>
+          <li><code>doors</code> / <code>windows</code> · <code>eq</code> équipements observés / observed equipment</li>
+          <li><code>areas</code> zones fonctionnelles <em>déduites, non confirmées</em> / inferred, unconfirmed</li>
+          <li><code>lidar</code> 1 = scan LiDAR matériel / hardware LiDAR · <code>lang</code> langue / language</li>
+          <li><code>c</code> context.md · <code>j</code> context.json · <code>d</code> ZIP de preuves / evidence ZIP (Google Drive)</li>
+        </ul>
+        <p>Récupérer un fichier / fetch a file : <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code>. Si Drive est inaccessible, l'utilisateur peut coller context.md ou téléverser le ZIP. / If Drive is unreachable, the user can paste context.md or upload the ZIP.</p>
+        <p>Mesures issues d'un scan LiDAR Apple RoomPlan (±2 po selon Apple, non certifiées, non vérifiées sur site). Distinguez observations, faits confirmés et valeurs dérivées ; recommandez une vérification quand l'incertitude touche la sécurité, la conformité ou les coûts. / Apple RoomPlan LiDAR (±2 in per Apple, not certified, not site-verified). Separate observations, confirmed facts and derived values; recommend verification when uncertainty affects safety, compliance or cost.</p>
+      </details>
+    </section>
+
+    <p class="foot">
+      <span data-i18n="made_with">Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.</span><br>
+      <a href="https://apps.apple.com/app/id6787545744" data-i18n="get_app_short">Obtenir l'app</a>
+    </p>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  var q = new URLSearchParams(location.search);
+  var lang = (q.get("lang") || (navigator.language||"fr").slice(0,2)).toLowerCase();
+  if (lang !== "en") lang = "fr";
+  document.documentElement.lang = lang;
+
+  // ---- i18n ----
+  var T = {
+    fr:{
+      brand:"A3 ATLAS SCANNER",
+      empty_title:"Lien incomplet",
+      empty_body:"Ce lien Atlas ne contient pas de propriété à afficher. Demandez à l'expéditeur de regénérer le lien de partage.",
+      get_app:"Obtenir A3 Atlas Scanner", get_app_short:"Obtenir l'app",
+      equip:"Équipements & points d'intérêt", areas:"Zones fonctionnelles",
+      areas_note:"Zones inférées automatiquement — à confirmer sur place.",
+      download:"Télécharger l'export", read_context:"Lire le contexte",
+      context_json:"Contexte JSON", use_ai:"Utiliser avec mon assistant IA",
+      privacy:"Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.",
+      made_with:"Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.",
+      lidar_ok:"Scan LiDAR vérifié", lidar_demo:"Mode démo — mesures indicatives",
+      rooms:"Pièces", photos:"Photos", doors:"Portes", windows:"Fenêtres", size:"Export",
+      ground:"Rez-de-chaussée", basement:"Sous-sol", floor_n:function(n){return n+"ᵉ étage";},
+      copied:"Consigne copiée ✓ — collez-la à votre assistant IA",
+      ai_prompt:function(u){return "Voici le contexte Atlas d'une propriété : "+u+"\n\nAide-moi à préparer l'intervention. Distingue clairement les observations, les confirmations et les estimations. Le lien porte l'essentiel; le contexte détaillé (context.md / context.json) et le ZIP de preuves sont accessibles depuis la page.";}
+    },
+    en:{
+      brand:"A3 ATLAS SCANNER",
+      empty_title:"Incomplete link",
+      empty_body:"This Atlas link carries no property to show. Ask the sender to regenerate the share link.",
+      get_app:"Get A3 Atlas Scanner", get_app_short:"Get the app",
+      equip:"Equipment & points of interest", areas:"Functional areas",
+      areas_note:"Areas inferred automatically — confirm on site.",
+      download:"Download export", read_context:"Read the context",
+      context_json:"Context JSON", use_ai:"Use with my AI assistant",
+      privacy:"Preview from the link. No address or GPS location is shared. Full surfaces and details live in the context, with their confidence level.",
+      made_with:"Made with A3 Atlas Scanner — create your property's passport.",
+      lidar_ok:"Verified LiDAR scan", lidar_demo:"Demo mode — indicative measurements",
+      rooms:"Rooms", photos:"Photos", doors:"Doors", windows:"Windows", size:"Export",
+      ground:"Ground floor", basement:"Basement", floor_n:function(n){return "Floor "+n;},
+      copied:"Prompt copied ✓ — paste it to your AI assistant",
+      ai_prompt:function(u){return "Here is the Atlas context of a property: "+u+"\n\nHelp me prepare the visit. Clearly separate observations, confirmations and estimates. The link carries the essentials; the detailed context (context.md / context.json) and the evidence ZIP are reachable from the page.";}
     }
+  };
+  var t = T[lang];
+  document.querySelectorAll("[data-i18n]").forEach(function(el){
+    var v = t[el.getAttribute("data-i18n")]; if (typeof v === "string") el.textContent = v;
+  });
+
+  // ---- equipment label + icon map (POIType raw values) ----
+  var EQ = {
+    electrical_panel:{i:"⚡", fr:"Panneau électrique", en:"Electrical panel"},
+    water_valve:{i:"🚰", fr:"Valve d'eau principale", en:"Main water valve"},
+    water_heater:{i:"♨️", fr:"Chauffe-eau", en:"Water heater"},
+    router:{i:"📶", fr:"Routeur / modem", en:"Router / modem"},
+    thermostat:{i:"🌡️", fr:"Thermostat", en:"Thermostat"},
+    main_entry_door:{i:"🚪", fr:"Porte d'entrée", en:"Main entry door"},
+    sink:{i:"🚿", fr:"Évier", en:"Sink"},
+    washing_machine:{i:"🧺", fr:"Laveuse", en:"Washer"},
+    dishwasher:{i:"🍽️", fr:"Lave-vaisselle", en:"Dishwasher"},
+    fireplace:{i:"🔥", fr:"Foyer", en:"Fireplace"},
+    other:{i:"📍", fr:"Autre", en:"Other"}
+  };
+  function prettifySlug(s){ s = s.replace(/_/g," ").trim(); return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  // ---- helpers ----
+  function num(v){ var n = parseInt(v,10); return isNaN(n) ? null : n; }
+  function validId(v){ return !!v && /^[A-Za-z0-9_-]{10,}$/.test(v); }
+  function driveView(id){ return "https://drive.google.com/file/d/"+encodeURIComponent(id)+"/view"; }
+  function fmtSize(bytes){
+    var b = parseInt(bytes,10); if (isNaN(b)||b<=0) return null;
+    if (b >= 1048576) return (b/1048576).toFixed(b>=10485760?0:1)+" MB";
+    return Math.max(1,Math.round(b/1024))+" KB";
   }
-  wire("d", "zip");
-  wire("c", "ctx");
-  wire("j", "ctxjson");
+  function floorLabel(n){
+    if (n === null) return null;
+    if (n === 1) return t.ground;
+    if (n < 0) return t.basement;
+    return t.floor_n(n);
+  }
+  function esc(s){ var d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+
+  // ---- parse ----
+  var d = q.get("d");                 // zip drive id (required)
+  if (!validId(d)){
+    document.getElementById("empty").hidden = false;
+    return;
+  }
+  var label = q.get("n") || (lang==="fr"?"Propriété":"Property");
+  var rooms = num(q.get("z")), photos = num(q.get("p"));
+  var doors = num(q.get("doors")), windows = num(q.get("windows"));
+  var floor = num(q.get("floor"));
+  var lidar = q.get("lidar");
+  var eq = (q.get("eq")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+  var areas = (q.get("areas")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+  var ctxMd = q.get("c"), ctxJson = q.get("j");
+
+  // ---- render ----
+  document.getElementById("fiche").hidden = false;
+  document.getElementById("title").textContent = label;
+
+  var subParts = [];
+  var fl = floorLabel(floor); if (fl) subParts.push(fl);
+  if (rooms !== null) subParts.push(rooms + " " + (lang==="fr"?(rooms>1?"espaces":"espace"):(rooms>1?"spaces":"space")));
+  document.getElementById("subtitle").textContent = subParts.join(" · ");
+
+  var badge = document.getElementById("lidarBadge");
+  if (lidar === "1"){ badge.innerHTML = '<span class="badge ok">🛰️ '+esc(t.lidar_ok)+'</span>'; }
+  else if (lidar === "0"){ badge.innerHTML = '<span class="badge warn">⚠️ '+esc(t.lidar_demo)+'</span>'; }
+
+  var stats = [];
+  if (rooms !== null)   stats.push({n:rooms, l:t.rooms});
+  if (doors !== null)   stats.push({n:doors, l:t.doors});
+  if (windows !== null) stats.push({n:windows, l:t.windows});
+  if (photos !== null)  stats.push({n:photos, l:t.photos});
+  var sz = fmtSize(q.get("s")); if (sz) stats.push({n:sz, l:t.size});
+  document.getElementById("stats").innerHTML = stats.map(function(s){
+    return '<div class="stat"><div class="n">'+esc(String(s.n))+'</div><div class="l">'+esc(s.l)+'</div></div>';
+  }).join("");
+
+  if (eq.length){
+    document.getElementById("equipSection").hidden = false;
+    document.getElementById("equip").innerHTML = eq.map(function(slug){
+      var m = EQ[slug];
+      var icon = m ? m.i : "📍";
+      var name = m ? (m[lang]||m.fr) : prettifySlug(slug);
+      return '<span class="chip"><span class="i">'+icon+'</span>'+esc(name)+'</span>';
+    }).join("");
+  }
+  if (areas.length){
+    document.getElementById("areaSection").hidden = false;
+    document.getElementById("areas").innerHTML = areas.map(function(a){
+      return '<span class="chip soft">'+esc(prettifySlug(a))+'</span>';
+    }).join("");
+  }
+
+  // download (proven no-auth pattern used by the app)
+  document.getElementById("dlBtn").href = "https://drive.usercontent.google.com/download?id="+encodeURIComponent(d)+"&export=download&confirm=t";
+  var dlSz = fmtSize(q.get("s"));
+  if (dlSz) document.getElementById("dlBtn").textContent = t.download + " · " + dlSz;
+
+  // read context: md as "Lire le contexte", json as a separate button.
+  var ctxBtn = document.getElementById("ctxBtn"), ctxJsonBtn = document.getElementById("ctxJsonBtn");
+  if (validId(ctxMd)){
+    ctxBtn.href = driveView(ctxMd);
+    if (validId(ctxJson)){ ctxJsonBtn.href = driveView(ctxJson); ctxJsonBtn.hidden = false; }
+  } else if (validId(ctxJson)){
+    ctxBtn.href = driveView(ctxJson);   // only JSON available — read it as the context
+  } else {
+    ctxBtn.hidden = true;
+  }
+
+  // AI prompt copy
+  var toast = document.getElementById("toast");
+  function showToast(msg){ toast.textContent = msg; toast.classList.add("show"); setTimeout(function(){toast.classList.remove("show");},2600); }
+  document.getElementById("aiBtn").addEventListener("click", function(){
+    var text = t.ai_prompt(location.href);
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(function(){ showToast(t.copied); }, function(){ fallbackCopy(text); });
+    } else { fallbackCopy(text); }
+  });
+  function fallbackCopy(text){
+    var ta = document.createElement("textarea"); ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); showToast(t.copied); }catch(e){}
+    document.body.removeChild(ta);
+  }
+})();
 </script>
 </body>
 </html>
