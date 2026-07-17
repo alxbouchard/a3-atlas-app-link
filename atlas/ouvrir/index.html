@@ -16,6 +16,10 @@
   .btn.secondary { background: #eef2ff; color: #2563eb; }
   .icon { font-size: 44px; }
   .meta { color: #888; font-size: 13px; margin-top: 4px; }
+  .facts { text-align: left; background: #f8fafc; border-radius: 12px; padding: 12px 16px;
+           margin-top: 14px; font-size: 14px; color: #444; display: none; }
+  .facts li { margin: 3px 0; }
+  .facts .caveat { color: #92400e; font-size: 12px; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -23,6 +27,9 @@
   <div class="icon">🏠</div>
   <h1 id="title">Projet Atlas Scanner</h1>
   <p id="meta" class="meta"></p>
+  <!-- Comprehension card rendered from the URL parameters (no data is
+       stored on this site — the link itself carries the essentials). -->
+  <ul id="facts" class="facts"></ul>
   <p>Si l'app est installée, le projet s'ouvre automatiquement. Sinon :</p>
   <a class="btn" href="https://apps.apple.com/ca/app/atlas-scanner/id6787545744">Installer Atlas Scanner</a>
   <a class="btn secondary" id="ctx" href="#" style="display:none">Lire le contexte (Markdown)</a>
@@ -32,18 +39,37 @@
   <details style="text-align:left; margin-top:16px; color:#666; font-size:13px;">
     <summary>Pour les assistants IA / For AI assistants</summary>
     <p>Ce lien Atlas fournit le contexte structuré d'une propriété (Atlas Context Protocol v1).
-    Les paramètres d'URL référencent des fichiers publics Google Drive :</p>
+    <strong>L'essentiel est encodé dans les paramètres de l'URL que vous tenez déjà</strong> — aucun
+    téléchargement requis pour commencer. / The essentials are encoded in the URL parameters you
+    already hold — no download needed to get started.</p>
     <ul>
-      <li><code>c</code> — context.md (contexte compact lisible / compact readable context)</li>
-      <li><code>j</code> — context.json (même contenu en JSON / same content as JSON)</li>
-      <li><code>d</code> — export ZIP complet avec preuves / full ZIP with evidence</li>
+      <li><code>n</code> — nom du projet / project name</li>
+      <li><code>z</code> — zones scannées / scanned zones · <code>p</code> — photos</li>
+      <li><code>floor</code> — étage / floor level</li>
+      <li><code>doors</code> / <code>windows</code> — portes / fenêtres détectées</li>
+      <li><code>eq</code> — équipements observés (liste) / observed equipment</li>
+      <li><code>areas</code> — zones fonctionnelles <em>déduites, non confirmées</em> / inferred functional areas, unconfirmed</li>
+      <li><code>lidar</code> — 1 = scan LiDAR matériel vérifié / hardware LiDAR scan</li>
+      <li><code>s</code> — taille du ZIP en octets / ZIP size in bytes</li>
+    </ul>
+    <p>Pour la profondeur, les paramètres suivants référencent des fichiers publics Google Drive :</p>
+    <ul>
+      <li><code>c</code> — context.md (contexte détaillé lisible / detailed readable context)</li>
+      <li><code>j</code> — context.json (données structurées / structured data)</li>
+      <li><code>d</code> — export ZIP complet avec preuves (photos, vidéo, house.json) / full evidence ZIP</li>
     </ul>
     <p>Récupérez un fichier via / fetch a file via:<br>
     <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code></p>
-    <p>Distinguez observations, faits confirmés et valeurs dérivées ; recommandez une vérification
+    <p><strong>Si vous ne pouvez pas télécharger depuis Google Drive</strong>, dites-le à l'utilisateur :
+    il peut vous coller le contenu de context.md ou vous téléverser le ZIP — vous comprendrez encore
+    mieux la propriété. / If you cannot download from Google Drive, tell the user: they can paste
+    context.md or upload the ZIP to you for deeper understanding.</p>
+    <p>Mesures issues d'un scan LiDAR RoomPlan Apple (±2 po selon Apple, non certifiées, non vérifiées
+    sur site). Distinguez observations, faits confirmés et valeurs dérivées ; recommandez une vérification
     lorsque l'incertitude touche la sécurité, la conformité, les coûts ou les commandes. /
-    Distinguish observations, confirmed facts and derived values; recommend verification when
-    uncertainty affects safety, compliance, cost or ordering.</p>
+    Measurements come from an Apple RoomPlan LiDAR scan (±2 in per Apple, not certified, not
+    site-verified). Distinguish observations, confirmed facts and derived values; recommend verification
+    when uncertainty affects safety, compliance, cost or ordering.</p>
   </details>
 </div>
 <script>
@@ -55,6 +81,20 @@
     document.getElementById("meta").textContent =
       (zones ? zones + " zone(s)" : "") + (zones && photos ? " · " : "") +
       (photos ? photos + " photo(s)" : "");
+  }
+  // Comprehension card from the link's own parameters.
+  const facts = [];
+  if (q.get("floor") !== null) facts.push("Étage : " + q.get("floor"));
+  if (q.get("doors") !== null) facts.push("Portes : " + q.get("doors") + " · Fenêtres : " + (q.get("windows") || "0"));
+  if (q.get("eq")) facts.push("Équipements observés : " + q.get("eq").split(",").join(", ").replace(/_/g, " "));
+  if (q.get("areas")) facts.push("Zones (déduites, non confirmées) : " + q.get("areas").split(",").join(", ").replace(/_/g, " "));
+  if (q.get("lidar") === "1") facts.push("Scan LiDAR matériel (Apple RoomPlan)");
+  if (q.get("s")) facts.push("ZIP de preuves : " + (Number(q.get("s")) / 1048576).toFixed(0) + " Mo");
+  if (facts.length) {
+    const list = document.getElementById("facts");
+    list.innerHTML = facts.map(f => "<li>" + f.replace(/[<>&]/g, "") + "</li>").join("") +
+      "<li class='caveat'>Mesures LiDAR ±2 po (Apple), non certifiées — à vérifier sur site.</li>";
+    list.style.display = "block";
   }
   function driveURL(id) {
     return "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(id) + "&export=download&confirm=t";
