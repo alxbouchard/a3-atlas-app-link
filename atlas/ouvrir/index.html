@@ -30,12 +30,12 @@
   <!-- Comprehension card rendered from the URL parameters (no data is
        stored on this site — the link itself carries the essentials). -->
   <ul id="facts" class="facts"></ul>
-  <p>Si l'app est installée, le projet s'ouvre automatiquement. Sinon :</p>
-  <a class="btn" href="https://apps.apple.com/ca/app/atlas-scanner/id6787545744">Installer Atlas Scanner</a>
+  <p id="intro">Si l'app est installée, le projet s'ouvre automatiquement. Sinon :</p>
+  <a class="btn" id="install" href="https://apps.apple.com/ca/app/atlas-scanner/id6787545744">Installer Atlas Scanner</a>
   <a class="btn secondary" id="ctx" href="#" style="display:none">Lire le contexte (Markdown)</a>
   <a class="btn secondary" id="ctxjson" href="#" style="display:none">Contexte JSON</a>
   <a class="btn secondary" id="zip" href="#" style="display:none">Télécharger le ZIP complet</a>
-  <p class="meta">Scan 3D, plans et photos — la mémoire du bâtiment.</p>
+  <p class="meta" id="footer">Scan 3D, plans et photos — la mémoire du bâtiment.</p>
   <details style="text-align:left; margin-top:16px; color:#666; font-size:13px;">
     <summary>Pour les assistants IA / For AI assistants</summary>
     <p>Ce lien Atlas fournit le contexte structuré d'une propriété (Atlas Context Protocol v1).
@@ -45,12 +45,12 @@
     <ul>
       <li><code>n</code> — nom du projet / project name</li>
       <li><code>z</code> — zones scannées / scanned zones · <code>p</code> — photos</li>
-      <li><code>floor</code> — étage / floor level</li>
+      <li><code>floor</code> — étage du bâtiment où se trouve la zone / building floor the zone sits on (NOT a number of storeys)</li>
       <li><code>doors</code> / <code>windows</code> — portes / fenêtres détectées</li>
       <li><code>eq</code> — équipements observés (liste) / observed equipment</li>
       <li><code>areas</code> — zones fonctionnelles <em>déduites, non confirmées</em> / inferred functional areas, unconfirmed</li>
       <li><code>lidar</code> — 1 = scan LiDAR matériel vérifié / hardware LiDAR scan</li>
-      <li><code>s</code> — taille du ZIP en octets / ZIP size in bytes</li>
+      <li><code>s</code> — taille du ZIP en octets / ZIP size in bytes · <code>lang</code> — langue de l'expéditeur / sender language</li>
     </ul>
     <p>Pour la profondeur, les paramètres suivants référencent des fichiers publics Google Drive :</p>
     <ul>
@@ -74,26 +74,68 @@
 </div>
 <script>
   const q = new URLSearchParams(location.search);
+  // Language: sender's app language (lang=) wins, then the reader's
+  // browser, French by default.
+  const lang = (q.get("lang") || navigator.language || "fr").toLowerCase().startsWith("en") ? "en" : "fr";
+  document.documentElement.lang = lang;
+  const T = lang === "en" ? {
+    intro: "If the app is installed, the project opens automatically. Otherwise:",
+    install: "Install Atlas Scanner",
+    ctx: "Read the context (Markdown)",
+    ctxjson: "Context JSON",
+    zip: "Download the full ZIP",
+    footer: "3D scan, plans and photos — the building's memory.",
+    zones: " zone(s)", photos: " photo(s)",
+    floor: "Floor (in building): ",
+    doors: "Doors: ", windows: " · Windows: ",
+    eq: "Observed equipment: ",
+    areas: "Areas (inferred, unconfirmed): ",
+    lidar: "Hardware LiDAR scan (Apple RoomPlan)",
+    zipSize: "Evidence ZIP: ",
+    caveat: "LiDAR measurements ±2 in (Apple), not certified — verify on site."
+  } : {
+    intro: "Si l'app est installée, le projet s'ouvre automatiquement. Sinon :",
+    install: "Installer Atlas Scanner",
+    ctx: "Lire le contexte (Markdown)",
+    ctxjson: "Contexte JSON",
+    zip: "Télécharger le ZIP complet",
+    footer: "Scan 3D, plans et photos — la mémoire du bâtiment.",
+    zones: " zone(s)", photos: " photo(s)",
+    floor: "Étage (bâtiment) : ",
+    doors: "Portes : ", windows: " · Fenêtres : ",
+    eq: "Équipements observés : ",
+    areas: "Zones (déduites, non confirmées) : ",
+    lidar: "Scan LiDAR matériel (Apple RoomPlan)",
+    zipSize: "ZIP de preuves : ",
+    caveat: "Mesures LiDAR ±2 po (Apple), non certifiées — à vérifier sur site."
+  };
+  document.getElementById("intro").textContent = T.intro;
+  document.getElementById("install").textContent = T.install;
+  document.getElementById("ctx").textContent = T.ctx;
+  document.getElementById("ctxjson").textContent = T.ctxjson;
+  document.getElementById("zip").textContent = T.zip;
+  document.getElementById("footer").textContent = T.footer;
+
   const name = q.get("n");
   if (name) document.getElementById("title").textContent = "« " + name + " »";
   const zones = q.get("z"), photos = q.get("p");
   if (zones || photos) {
     document.getElementById("meta").textContent =
-      (zones ? zones + " zone(s)" : "") + (zones && photos ? " · " : "") +
-      (photos ? photos + " photo(s)" : "");
+      (zones ? zones + T.zones : "") + (zones && photos ? " · " : "") +
+      (photos ? photos + T.photos : "");
   }
   // Comprehension card from the link's own parameters.
   const facts = [];
-  if (q.get("floor") !== null) facts.push("Étage : " + q.get("floor"));
-  if (q.get("doors") !== null) facts.push("Portes : " + q.get("doors") + " · Fenêtres : " + (q.get("windows") || "0"));
-  if (q.get("eq")) facts.push("Équipements observés : " + q.get("eq").split(",").join(", ").replace(/_/g, " "));
-  if (q.get("areas")) facts.push("Zones (déduites, non confirmées) : " + q.get("areas").split(",").join(", ").replace(/_/g, " "));
-  if (q.get("lidar") === "1") facts.push("Scan LiDAR matériel (Apple RoomPlan)");
-  if (q.get("s")) facts.push("ZIP de preuves : " + (Number(q.get("s")) / 1048576).toFixed(0) + " Mo");
+  if (q.get("floor") !== null) facts.push(T.floor + q.get("floor"));
+  if (q.get("doors") !== null) facts.push(T.doors + q.get("doors") + T.windows + (q.get("windows") || "0"));
+  if (q.get("eq")) facts.push(T.eq + q.get("eq").split(",").join(", ").replace(/_/g, " "));
+  if (q.get("areas")) facts.push(T.areas + q.get("areas").split(",").join(", ").replace(/_/g, " "));
+  if (q.get("lidar") === "1") facts.push(T.lidar);
+  if (q.get("s")) facts.push(T.zipSize + (Number(q.get("s")) / 1048576).toFixed(0) + (lang === "en" ? " MB" : " Mo"));
   if (facts.length) {
     const list = document.getElementById("facts");
     list.innerHTML = facts.map(f => "<li>" + f.replace(/[<>&]/g, "") + "</li>").join("") +
-      "<li class='caveat'>Mesures LiDAR ±2 po (Apple), non certifiées — à vérifier sur site.</li>";
+      "<li class='caveat'>" + T.caveat + "</li>";
     list.style.display = "block";
   }
   function driveURL(id) {
