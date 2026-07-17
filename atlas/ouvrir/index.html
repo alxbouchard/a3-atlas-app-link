@@ -131,7 +131,7 @@
   if (q.get("eq")) facts.push(T.eq + q.get("eq").split(",").join(", ").replace(/_/g, " "));
   if (q.get("areas")) facts.push(T.areas + q.get("areas").split(",").join(", ").replace(/_/g, " "));
   if (q.get("lidar") === "1") facts.push(T.lidar);
-  if (q.get("s")) facts.push(T.zipSize + (Number(q.get("s")) / 1048576).toFixed(0) + (lang === "en" ? " MB" : " Mo"));
+  if (q.get("s")) facts.push(T.zipSize + (Number(q.get("s")) / 1e6).toFixed(0) + (lang === "en" ? " MB" : " Mo"));
   if (facts.length) {
     const list = document.getElementById("facts");
     list.innerHTML = facts.map(f => "<li>" + f.replace(/[<>&]/g, "") + "</li>").join("") +
