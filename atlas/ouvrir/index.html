@@ -66,6 +66,8 @@
   .chip .i{font-size:16px; line-height:1}
   .chip.soft{background:transparent; border:1px dashed var(--line); color:var(--muted); font-weight:500}
   .note{color:var(--muted); font-size:12.5px; margin-top:12px; line-height:1.45}
+  .hint{color:var(--muted); font-size:12.5px; margin-top:14px; line-height:1.45}
+  .generated{color:var(--muted); font-size:12.5px; margin-top:10px}
   .btns{display:flex; flex-direction:column; gap:10px; margin-top:6px}
   .btn{display:flex; align-items:center; justify-content:center; gap:9px; width:100%;
     min-height:52px; border-radius:14px; border:1px solid transparent; font-size:16px; font-weight:650;
@@ -91,6 +93,37 @@
   .empty{text-align:center; padding:40px 10px}
   .empty .big{font-size:44px}
   [hidden]{display:none!important}
+
+  /* ---- Phase 1 enriched sections ---- */
+  .spaces{display:flex; flex-direction:column; gap:12px}
+  .space{border:1px solid var(--line); border-radius:14px; padding:14px}
+  .space .top{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap}
+  .space .name{font-size:16px; font-weight:700}
+  .space .type{font-size:12.5px; color:var(--muted); font-weight:600}
+  .space .meta{margin-top:9px; display:flex; flex-direction:column; gap:6px}
+  .kv{font-size:13.5px; color:var(--ink)}
+  .kv .k{color:var(--muted); font-weight:600; margin-right:6px}
+  .tag{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:650;
+    padding:3px 9px; border-radius:999px}
+  .tag.ok{color:var(--ok); background:var(--ok-bg)}
+  .tag.warn{color:var(--warn); background:var(--warn-bg)}
+  .tag.muted{color:var(--muted); background:var(--chip)}
+  .eqlist{display:flex; flex-direction:column; gap:10px}
+  .eq{display:flex; gap:12px; align-items:flex-start; border:1px solid var(--line); border-radius:14px; padding:12px 14px}
+  .eq .ico{font-size:20px; line-height:1.1}
+  .eq .body{flex:1; min-width:0}
+  .eq .name{font-weight:650; font-size:15px}
+  .eq .where{font-size:12.5px; color:var(--muted); margin-top:1px}
+  .eq .row2{margin-top:7px; display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+  .eq .cap{font-size:11.5px; color:var(--muted); margin-top:7px; line-height:1.4}
+  .thumbs{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px}
+  .thumbs img{width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--line); background:var(--chip)}
+  .legend{display:flex; flex-direction:column; gap:9px}
+  .legend .li{font-size:13.5px; line-height:1.5; color:var(--muted)}
+  .legend .li b{color:var(--ink)}
+  ul.limits{margin:0; padding-left:18px}
+  ul.limits li{margin:7px 0; font-size:13.5px; line-height:1.5; color:var(--ink)}
+  .verbatim{color:var(--muted); font-size:12px; margin:0 0 10px; font-style:italic}
 </style>
 </head>
 <body>
@@ -113,7 +146,15 @@
       <h1 id="title">—</h1>
       <p class="sub" id="subtitle"></p>
       <div id="lidarBadge"></div>
+      <div class="generated" id="generated" hidden></div>
       <div class="stats" id="stats"></div>
+      <div class="hint" id="fallbackNote" hidden></div>
+    </section>
+
+    <!-- Spaces (enriched only) -->
+    <section class="card" id="spacesSection" hidden>
+      <h2 data-i18n="spaces_h">Espaces / pièces</h2>
+      <div class="spaces" id="spaces"></div>
     </section>
 
     <section class="card" id="equipSection" hidden>
@@ -124,7 +165,19 @@
     <section class="card" id="areaSection" hidden>
       <h2 data-i18n="areas">Zones fonctionnelles</h2>
       <div class="chips" id="areas"></div>
-      <p class="note" data-i18n="areas_note">Zones inférées automatiquement — à confirmer sur place.</p>
+      <p class="note" data-i18n="areas_note">Déduites des objets détectés par RoomPlan — jamais confirmées sur place.</p>
+    </section>
+
+    <!-- Data semantics legend (always) -->
+    <section class="card" id="dataSemSection">
+      <h2 data-i18n="datasem_h">Comment lire ces données</h2>
+      <div class="legend" id="legend"></div>
+    </section>
+
+    <!-- Limitations (always, verbatim) -->
+    <section class="card" id="limitsSection">
+      <h2 data-i18n="limits_h">Limites & mise en garde</h2>
+      <div id="limits"></div>
     </section>
 
     <section class="card">
@@ -148,7 +201,9 @@
           <li><code>areas</code> zones fonctionnelles <em>déduites, non confirmées</em> / inferred, unconfirmed</li>
           <li><code>lidar</code> 1 = scan LiDAR matériel / hardware LiDAR · <code>lang</code> langue / language</li>
           <li><code>c</code> context.md · <code>j</code> context.json · <code>d</code> ZIP de preuves / evidence ZIP (Google Drive)</li>
+          <li><code>ph</code> photos.json — vignettes de preuve, optionnel / evidence thumbnails, optional</li>
         </ul>
+        <p>Quand une clé API référente est configurée, la page enrichit automatiquement la fiche en lisant <code>context.json</code> (googleapis, <code>alt=media</code>) : espaces mesurés, statut des équipements, limites verbatim. Sans clé ou hors ligne, la fiche reste complète depuis l'URL. / When a referrer-restricted API key is configured, the page auto-enriches from <code>context.json</code> (googleapis, <code>alt=media</code>): measured spaces, equipment status, verbatim limitations. Without a key or offline, the fiche stays complete from the URL.</p>
         <p>Récupérer un fichier / fetch a file : <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code>. Si Drive est inaccessible, l'utilisateur peut coller context.md ou téléverser le ZIP. / If Drive is unreachable, the user can paste context.md or upload the ZIP.</p>
         <p>Mesures issues d'un scan LiDAR Apple RoomPlan (±2 po selon Apple, non certifiées, non vérifiées sur site). Distinguez observations, faits confirmés et valeurs dérivées ; recommandez une vérification quand l'incertitude touche la sécurité, la conformité ou les coûts. / Apple RoomPlan LiDAR (±2 in per Apple, not certified, not site-verified). Separate observations, confirmed facts and derived values; recommend verification when uncertainty affects safety, compliance or cost.</p>
       </details>
@@ -166,6 +221,19 @@
 <script>
 (function(){
   "use strict";
+
+  // =====================================================================
+  // OWNER CONFIG — referrer-restricted Google Drive API key.
+  // Leave "" to ship the zero-network baseline only (page still works).
+  // Restrict the key: HTTP referrers = https://app.paz.team/* AND
+  // https://app.paz.team ; API restrictions = Google Drive API only.
+  // It is read-only, reaches ONLY already anyone-with-link files, and is
+  // NOT a secret — treat any "private" assumption as false.
+  // =====================================================================
+  var DRIVE_API_KEY = "AIzaSyCwKNvKziIRtDMGWw_bWKBVDOtvwtX_c_A";
+
+  var FETCH_TIMEOUT_MS = 8000;
+
   var q = new URLSearchParams(location.search);
   // Language: the READER's browser wins (this page is for the receiver),
   // then the sender's ?lang= as a fallback, French by default.
@@ -176,6 +244,15 @@
   lang = lang || pickLang(q.get("lang")) || "fr";
   document.documentElement.lang = lang;
 
+  // Verbatim manufacturer disclaimers (mirror AtlasContextBuilder.criticalLimitations).
+  // Shown as a baseline; replaced by context.json's criticalLimitations when enriched.
+  var DEFAULT_LIMITATIONS = [
+    "Measurements come from an Apple RoomPlan LiDAR scan (±2 in per Apple, not verified) — they are not certified legal or construction measurements.",
+    "Hidden conditions (inside walls, under floors) are not observable.",
+    "Each zone has an independent ARKit coordinate frame; cross-zone directions and distances are deliberately not stated.",
+    "Room-type detections and equipment auto-detections are observations, not confirmed facts, unless a confirmation says otherwise."
+  ];
+
   // ---- i18n ----
   var T = {
     fr:{
@@ -184,14 +261,33 @@
       empty_body:"Ce lien Atlas ne contient pas de propriété à afficher. Demandez à l'expéditeur de regénérer le lien de partage.",
       get_app:"Obtenir A3 Atlas Scanner", get_app_short:"Obtenir l'app",
       equip:"Équipements & points d'intérêt", areas:"Zones fonctionnelles",
-      areas_note:"Zones inférées automatiquement — à confirmer sur place.",
+      areas_note:"Déduites des objets détectés par RoomPlan — jamais confirmées sur place.",
       download:"Télécharger l'export", read_context:"Lire le contexte",
       context_json:"Contexte JSON", use_ai:"Utiliser avec mon assistant IA",
       privacy:"Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.",
       made_with:"Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.",
       lidar_ok:"Scan LiDAR vérifié", lidar_demo:"Mode démo — mesures indicatives",
+      lidar_unverified:"Mesures indicatives — LiDAR non vérifié",
       rooms:"Pièces", photos:"Photos", doors:"Portes", windows:"Fenêtres", size:"Export",
+      equip_stat:"Équipements",
       ground:"Rez-de-chaussée", basement:"Sous-sol", floor_n:function(n){return n+"ᵉ étage";},
+      floor_word:"Étage", dim_label:"Dimensions", dims_not_measured:"Non mesurées",
+      spaces_h:"Espaces / pièces",
+      datasem_h:"Comment lire ces données",
+      limits_h:"Limites & mise en garde",
+      limits_verbatim:"Mise en garde du fabricant, affichée telle quelle (en anglais).",
+      hw_verified:"Scan LiDAR matériel", hw_unverified:"Non vérifié (matériel)",
+      status_observed:"Vu en place", status_declared:"Position estimée",
+      room_unknown:"Pièce inconnue",
+      in_room:function(r){return "dans "+r;},
+      evidence_count:function(n){return n+" photo"+(n>1?"s":"")+" (contexte)";},
+      evidence_caveat:"Montre où la photo a été prise, pas que l'objet est visible à l'image.",
+      generated_label:"Généré le",
+      fallback_hint:"Détails complets (espaces mesurés, statut, limites) dans le contexte — utilisez les boutons ci-dessous.",
+      legend_obs_t:"Observation", legend_obs_d:"détecté automatiquement, non confirmé par un humain.",
+      legend_fact_t:"Fait confirmé", legend_fact_d:"validé sur place par l'installateur.",
+      legend_deriv_t:"Valeur dérivée", legend_deriv_d:"calculée à partir des mesures (ex. surfaces) — vit dans derived.json, pas ici.",
+      legend_absence:"Absence déclarée ≠ absence d'information : « rien de signalé » ne veut pas dire « rien présent ».",
       copied:"Consigne copiée ✓ — collez-la à votre assistant IA",
       ai_prompt:function(u){return "Voici le contexte Atlas d'une propriété : "+u+"\n\nAide-moi à préparer l'intervention. Distingue clairement les observations, les confirmations et les estimations. Le lien porte l'essentiel; le contexte détaillé (context.md / context.json) et le ZIP de preuves sont accessibles depuis la page.";}
     },
@@ -201,14 +297,33 @@
       empty_body:"This Atlas link carries no property to show. Ask the sender to regenerate the share link.",
       get_app:"Get A3 Atlas Scanner", get_app_short:"Get the app",
       equip:"Equipment & points of interest", areas:"Functional areas",
-      areas_note:"Areas inferred automatically — confirm on site.",
+      areas_note:"Inferred from objects RoomPlan detected — never confirmed on site.",
       download:"Download export", read_context:"Read the context",
       context_json:"Context JSON", use_ai:"Use with my AI assistant",
       privacy:"Preview from the link. No address or GPS location is shared. Full surfaces and details live in the context, with their confidence level.",
       made_with:"Made with A3 Atlas Scanner — create your property's passport.",
       lidar_ok:"Verified LiDAR scan", lidar_demo:"Demo mode — indicative measurements",
+      lidar_unverified:"Indicative measurements — LiDAR not verified",
       rooms:"Rooms", photos:"Photos", doors:"Doors", windows:"Windows", size:"Export",
+      equip_stat:"Equipment",
       ground:"Ground floor", basement:"Basement", floor_n:function(n){return "Floor "+n;},
+      floor_word:"Floor", dim_label:"Dimensions", dims_not_measured:"Not measured",
+      spaces_h:"Spaces / rooms",
+      datasem_h:"How to read this data",
+      limits_h:"Limitations & disclaimer",
+      limits_verbatim:"Manufacturer disclaimer, shown verbatim.",
+      hw_verified:"Hardware LiDAR scan", hw_unverified:"Not hardware-verified",
+      status_observed:"Observed in place", status_declared:"Estimated position",
+      room_unknown:"Unknown room",
+      in_room:function(r){return "in "+r;},
+      evidence_count:function(n){return n+" evidence photo"+(n>1?"s":"");},
+      evidence_caveat:"Shows where the photo was taken, not that the object is in frame.",
+      generated_label:"Generated",
+      fallback_hint:"Full details (measured spaces, status, limitations) are in the context — use the buttons below.",
+      legend_obs_t:"Observation", legend_obs_d:"auto-detected, not human-confirmed.",
+      legend_fact_t:"Confirmed fact", legend_fact_d:"validated on site by the installer.",
+      legend_deriv_t:"Derived value", legend_deriv_d:"computed from measurements (e.g. areas) — lives in derived.json, not here.",
+      legend_absence:"Declared absence ≠ missing information: “nothing reported” is not “nothing there.”",
       copied:"Prompt copied ✓ — paste it to your AI assistant",
       ai_prompt:function(u){return "Here is the Atlas context of a property: "+u+"\n\nHelp me prepare the visit. Clearly separate observations, confirmations and estimates. The link carries the essentials; the detailed context (context.md / context.json) and the evidence ZIP are reachable from the page.";}
     }
@@ -232,26 +347,67 @@
     fireplace:{i:"🔥", fr:"Foyer", en:"Fireplace"},
     other:{i:"📍", fr:"Autre", en:"Other"}
   };
-  function prettifySlug(s){ s = s.replace(/_/g," ").trim(); return s.charAt(0).toUpperCase()+s.slice(1); }
+  // ---- RoomType raw values (MIXED casing: snake_case AND camelCase) ----
+  var SPACE_TYPES = {
+    whole_floor:{fr:"Étage complet", en:"Whole floor"},
+    kitchen:{fr:"Cuisine", en:"Kitchen"},
+    bathroom:{fr:"Salle de bain", en:"Bathroom"},
+    bedroom:{fr:"Chambre", en:"Bedroom"},
+    livingRoom:{fr:"Salon", en:"Living room"},
+    diningRoom:{fr:"Salle à manger", en:"Dining room"},
+    entry:{fr:"Entrée", en:"Entry"},
+    hallway:{fr:"Couloir", en:"Hallway"},
+    mechanical:{fr:"Local technique", en:"Mechanical room"},
+    laundry:{fr:"Buanderie", en:"Laundry"},
+    garage:{fr:"Garage", en:"Garage"},
+    office:{fr:"Bureau", en:"Office"},
+    basement:{fr:"Sous-sol", en:"Basement"},
+    other:{fr:"Autre", en:"Other"}
+  };
+  // ---- FunctionalArea.area raw values ----
+  var FUNC_AREAS = {
+    kitchen:{fr:"Cuisine", en:"Kitchen"},
+    sleeping_area:{fr:"Espace nuit", en:"Sleeping area"},
+    bathroom:{fr:"Salle de bain", en:"Bathroom"},
+    living_area:{fr:"Espace de vie", en:"Living area"},
+    laundry:{fr:"Buanderie", en:"Laundry"},
+    dining_area:{fr:"Coin repas", en:"Dining area"}
+  };
+  function prettifySlug(s){ s = String(s||"").replace(/_/g," ").trim(); return s ? s.charAt(0).toUpperCase()+s.slice(1) : ""; }
 
   // ---- helpers ----
   function num(v){ var n = parseInt(v,10); return isNaN(n) ? null : n; }
   function validId(v){ return !!v && /^[A-Za-z0-9_-]{10,}$/.test(v); }
   function driveView(id){ return "https://drive.google.com/file/d/"+encodeURIComponent(id)+"/view"; }
+  function mediaUrl(id){ return "https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"?alt=media&key="+encodeURIComponent(DRIVE_API_KEY); }
   function fmtSize(bytes){
     var b = parseInt(bytes,10); if (isNaN(b)||b<=0) return null;
     if (b >= 1048576) return (b/1048576).toFixed(b>=10485760?0:1)+" MB";
     return Math.max(1,Math.round(b/1024))+" KB";
   }
   function floorLabel(n){
-    if (n === null) return null;
+    if (n === null || n === undefined) return null;
+    if (n < 0) return (n < -1) ? (t.basement+" "+Math.abs(n)) : t.basement;
     if (n === 1) return t.ground;
-    if (n < 0) return t.basement;
     return t.floor_n(n);
   }
-  function esc(s){ var d=document.createElement("div"); d.textContent=s; return d.innerHTML; }
+  function esc(s){ var d=document.createElement("div"); d.textContent=(s==null?"":String(s)); return d.innerHTML; }
+  function measureVal(m){ if(!m||typeof m!=="object") return null; var v=m.value; return (typeof v==="number"&&isFinite(v))?v:null; }
+  function fmtDimensions(dim){
+    if(!dim||typeof dim!=="object") return {measured:false};
+    var w=measureVal(dim.width), l=measureVal(dim.length), h=measureVal(dim.height);
+    if(w===null||l===null) return {measured:false};
+    return {measured:true, w:w, l:l, h:h};
+  }
+  function fmtDate(iso){
+    if(!iso) return null;
+    try{
+      var d=new Date(iso); if(isNaN(d.getTime())) return null;
+      return new Intl.DateTimeFormat(lang==="fr"?"fr-CA":"en-CA",{year:"numeric",month:"long",day:"numeric"}).format(d);
+    }catch(e){ return null; }
+  }
 
-  // ---- parse ----
+  // ---- parse baseline params (zero-network) ----
   var d = q.get("d");                 // zip drive id (required)
   if (!validId(d)){
     document.getElementById("empty").hidden = false;
@@ -264,9 +420,9 @@
   var lidar = q.get("lidar");
   var eq = (q.get("eq")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
   var areas = (q.get("areas")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
-  var ctxMd = q.get("c"), ctxJson = q.get("j");
+  var ctxMd = q.get("c"), ctxJson = q.get("j"), photosId = q.get("ph");
 
-  // ---- render ----
+  // ---- BASELINE render (synchronous, never broken) ----
   document.getElementById("fiche").hidden = false;
   document.getElementById("title").textContent = label;
 
@@ -279,19 +435,22 @@
   if (lidar === "1"){ badge.innerHTML = '<span class="badge ok">🛰️ '+esc(t.lidar_ok)+'</span>'; }
   else if (lidar === "0"){ badge.innerHTML = '<span class="badge warn">⚠️ '+esc(t.lidar_demo)+'</span>'; }
 
-  var stats = [];
-  if (rooms !== null)   stats.push({n:rooms, l:t.rooms});
-  if (doors !== null)   stats.push({n:doors, l:t.doors});
-  if (windows !== null) stats.push({n:windows, l:t.windows});
-  if (photos !== null)  stats.push({n:photos, l:t.photos});
-  var sz = fmtSize(q.get("s")); if (sz) stats.push({n:sz, l:t.size});
-  document.getElementById("stats").innerHTML = stats.map(function(s){
-    return '<div class="stat"><div class="n">'+esc(String(s.n))+'</div><div class="l">'+esc(s.l)+'</div></div>';
-  }).join("");
+  (function renderBaselineStats(){
+    var stats = [];
+    if (rooms !== null)   stats.push({n:rooms, l:t.rooms});
+    if (doors !== null)   stats.push({n:doors, l:t.doors});
+    if (windows !== null) stats.push({n:windows, l:t.windows});
+    if (photos !== null)  stats.push({n:photos, l:t.photos});
+    var sz = fmtSize(q.get("s")); if (sz) stats.push({n:sz, l:t.size});
+    document.getElementById("stats").innerHTML = stats.map(function(s){
+      return '<div class="stat"><div class="n">'+esc(String(s.n))+'</div><div class="l">'+esc(s.l)+'</div></div>';
+    }).join("");
+  })();
 
   if (eq.length){
+    var eqEl0 = document.getElementById("equip"); eqEl0.className = "chips";
     document.getElementById("equipSection").hidden = false;
-    document.getElementById("equip").innerHTML = eq.map(function(slug){
+    eqEl0.innerHTML = eq.map(function(slug){
       var m = EQ[slug];
       var icon = m ? m.i : "📍";
       var name = m ? (m[lang]||m.fr) : prettifySlug(slug);
@@ -301,11 +460,16 @@
   if (areas.length){
     document.getElementById("areaSection").hidden = false;
     document.getElementById("areas").innerHTML = areas.map(function(a){
-      return '<span class="chip soft">'+esc(prettifySlug(a))+'</span>';
+      var m = FUNC_AREAS[a];
+      return '<span class="chip soft">'+esc(m ? (m[lang]||m.fr) : prettifySlug(a))+'</span>';
     }).join("");
   }
 
-  // download (proven no-auth pattern used by the app)
+  // Data-semantics legend + Limitations always render (static trust framing).
+  renderLegend();
+  renderLimits(DEFAULT_LIMITATIONS);
+
+  // download (proven no-auth navigation pattern used by the app)
   document.getElementById("dlBtn").href = "https://drive.usercontent.google.com/download?id="+encodeURIComponent(d)+"&export=download&confirm=t";
   var dlSz = fmtSize(q.get("s"));
   if (dlSz) document.getElementById("dlBtn").textContent = t.download + " · " + dlSz;
@@ -335,6 +499,260 @@
     document.body.appendChild(ta); ta.select();
     try{ document.execCommand("copy"); showToast(t.copied); }catch(e){}
     document.body.removeChild(ta);
+  }
+
+  // =====================================================================
+  // PROGRESSIVE ENRICHMENT — best-effort, single CORS-simple GET.
+  // Any failure is SILENT: the baseline fiche above stays intact.
+  // =====================================================================
+  var enriched = false;
+  var evidenceRows = [];   // [{id, filenames}] populated by buildEquipment
+
+  function showFallbackNote(){
+    if (enriched) return;
+    if (validId(ctxMd) || validId(ctxJson)){
+      var el = document.getElementById("fallbackNote");
+      el.textContent = t.fallback_hint;
+      el.hidden = false;
+    }
+  }
+  function hideFallbackNote(){ document.getElementById("fallbackNote").hidden = true; }
+
+  // Simple GET: key in query string, NO Authorization/custom headers,
+  // mode:'cors', AbortController timeout. googleapis alt=media is the ONLY
+  // endpoint measured CORS-clean AND API-key-only for anyone-with-link files.
+  function fetchJson(id){
+    var ctrl = ("AbortController" in window) ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, FETCH_TIMEOUT_MS) : null;
+    var opts = { mode:"cors", credentials:"omit" };
+    if (ctrl) opts.signal = ctrl.signal;
+    return fetch(mediaUrl(id), opts).then(function(r){
+      if (timer) clearTimeout(timer);
+      if (!r.ok) throw new Error("http "+r.status);
+      return r.text();
+    }).then(function(txt){ return JSON.parse(txt); });
+  }
+
+  if (DRIVE_API_KEY && validId(ctxJson)){
+    fetchJson(ctxJson).then(function(doc){
+      // Hard-guard the schema before touching the DOM.
+      if (!doc || doc.schemaVersion !== "atlas.context.v1"){ showFallbackNote(); return; }
+      try{
+        applyContext(doc);
+        enriched = true;
+        hideFallbackNote();
+      }catch(e){
+        // Partial upgrade guard: baseline already rendered, keep it.
+        showFallbackNote();
+        return;
+      }
+      // Photos.json companion (Phase-1-dormant unless `ph` present).
+      if (validId(photosId)){
+        fetchJson(photosId).then(function(map){
+          if (map && typeof map === "object"){ try{ upgradeThumbnails(map); }catch(e){} }
+        }).catch(function(){ /* thumbnails silently stay as count+caveat */ });
+      }
+    }).catch(function(){
+      // no network / non-2xx / parse error / resourceKey preflight — silent.
+      showFallbackNote();
+    });
+  } else {
+    // No key or no context.json id: baseline is the whole story.
+    showFallbackNote();
+  }
+
+  // ---- enrichment: authoritative upgrade from context.json ----
+  function applyContext(doc){
+    var spaces = Array.isArray(doc.spaces) ? doc.spaces : [];
+    var byId = {};
+    spaces.forEach(function(s){ if (s && s.id) byId[s.id] = (s.label!=null ? String(s.label) : ""); });
+
+    // 1. Identity header
+    var subj = doc.subject || {};
+    if (subj.label){ document.getElementById("title").textContent = subj.label; }
+
+    var sub = [];
+    var fsum = spacesFloorSummary(spaces); if (fsum) sub.push(fsum);
+    sub.push(spaces.length + " " + (lang==="fr"?(spaces.length>1?"espaces":"espace"):(spaces.length>1?"spaces":"space")));
+    document.getElementById("subtitle").textContent = sub.join(" · ");
+
+    var gEl = document.getElementById("generated");
+    var gd = fmtDate(doc.capturedAt);
+    if (gd){ gEl.textContent = t.generated_label + " " + gd; gEl.hidden = false; }
+
+    // Honest LiDAR aggregate — trust the per-space flags, not the URL `lidar`.
+    if (spaces.length){
+      var allHw = spaces.every(function(s){ return !!(s.quality && s.quality.hardwareScanVerified === true); });
+      if (allHw){ badge.innerHTML = '<span class="badge ok">🛰️ '+esc(t.lidar_ok)+'</span>'; }
+      else { badge.innerHTML = '<span class="badge warn">⚠️ '+esc(t.lidar_unverified)+'</span>'; }
+    }
+
+    // 2. Inventory stats from entityCounts (authoritative)
+    var ec = doc.entityCounts || {};
+    var st = [];
+    function addStat(v,l){ if (typeof v === "number" && isFinite(v)) st.push({n:v,l:l}); }
+    addStat(ec.spaces,  t.rooms);
+    addStat(ec.doors,   t.doors);
+    addStat(ec.windows, t.windows);
+    addStat(ec.equipment, t.equip_stat);
+    addStat(ec.photos,  t.photos);
+    var sz = fmtSize(q.get("s")); if (sz) st.push({n:sz, l:t.size});
+    if (st.length){
+      document.getElementById("stats").innerHTML = st.map(function(s){
+        return '<div class="stat"><div class="n">'+esc(String(s.n))+'</div><div class="l">'+esc(s.l)+'</div></div>';
+      }).join("");
+    }
+
+    // 3. Spaces (core upgrade)
+    if (spaces.length){
+      document.getElementById("spaces").innerHTML = buildSpaces(spaces);
+      document.getElementById("spacesSection").hidden = false;
+    }
+
+    // 4. Equipment & points of interest
+    var highlights = Array.isArray(doc.highlights) ? doc.highlights : [];
+    var equipSec = document.getElementById("equipSection");
+    if (highlights.length){
+      var built = buildEquipment(highlights, byId);
+      evidenceRows = built.ev;
+      var eqEl = document.getElementById("equip");
+      eqEl.className = "eqlist";
+      eqEl.innerHTML = built.html;
+      equipSec.hidden = false;
+    } else {
+      // Authoritative: no equipment resolves to a known room.
+      equipSec.hidden = true;
+    }
+
+    // 5. Observed functional areas (conditional)
+    var fa = Array.isArray(doc.observedFunctionalAreas) ? doc.observedFunctionalAreas : [];
+    var areaSec = document.getElementById("areaSection");
+    if (fa.length){
+      document.getElementById("areas").innerHTML = fa.map(function(a){
+        var m = FUNC_AREAS[a && a.area];
+        return '<span class="chip soft">'+esc(m ? (m[lang]||m.fr) : prettifySlug(a && a.area))+'</span>';
+      }).join("");
+      areaSec.hidden = false;
+    } else {
+      // Authoritative absence: hide even if the baseline param showed chips.
+      areaSec.hidden = true;
+    }
+
+    // 7. Limitations — verbatim from context.json when present.
+    var lim = (Array.isArray(doc.criticalLimitations) && doc.criticalLimitations.length)
+      ? doc.criticalLimitations : DEFAULT_LIMITATIONS;
+    renderLimits(lim);
+  }
+
+  function spacesFloorSummary(spaces){
+    var set = {}, any = false;
+    spaces.forEach(function(s){ if (s && typeof s.buildingFloor === "number"){ set[s.buildingFloor]=1; any=true; } });
+    var keys = Object.keys(set);
+    if (any && keys.length === 1){ return floorLabel(parseInt(keys[0],10)); }
+    return null;
+  }
+
+  function buildSpaces(spaces){
+    return spaces.map(function(s){
+      s = s || {};
+      var tm = SPACE_TYPES[s.type];
+      var typeLabel = tm ? (tm[lang]||tm.fr) : prettifySlug(s.type||"other");
+      var name = (s.label!=null && String(s.label).length) ? String(s.label) : typeLabel;
+      var floorTxt = (typeof s.buildingFloor === "number") ? floorLabel(s.buildingFloor) : null;
+      var dim = fmtDimensions(s.dimensions);
+      var dimTxt = dim.measured
+        ? (dim.w.toFixed(2)+" × "+dim.l.toFixed(2)+" m" + ((dim.h!==null && dim.h!==undefined) ? " · h "+dim.h.toFixed(2)+" m" : ""))
+        : t.dims_not_measured;
+      var hw = !!(s.quality && s.quality.hardwareScanVerified === true);
+
+      var lines = "";
+      if (floorTxt) lines += '<div class="kv"><span class="k">'+esc(t.floor_word)+'</span>'+esc(floorTxt)+'</div>';
+      lines += '<div class="kv"><span class="k">'+esc(t.dim_label)+'</span>'+esc(dimTxt)+'</div>';
+      lines += '<div><span class="tag '+(hw?'ok':'warn')+'">'+esc(hw?t.hw_verified:t.hw_unverified)+'</span></div>';
+
+      return '<div class="space"><div class="top"><span class="name">'+esc(name)+'</span>'+
+             '<span class="type">'+esc(typeLabel)+'</span></div>'+
+             '<div class="meta">'+lines+'</div></div>';
+    }).join("");
+  }
+
+  function buildEquipment(highlights, byId){
+    var ev = [];
+    var html = highlights.map(function(h, i){
+      h = h || {};
+      var m = EQ[h.type];
+      var ico = m ? m.i : "📍";
+      var nm = m ? (m[lang]||m.fr) : prettifySlug(h.type||"other");
+      var hasRoom = h.spaceId && Object.prototype.hasOwnProperty.call(byId, h.spaceId) && byId[h.spaceId];
+      var where = hasRoom ? t.in_room(esc(byId[h.spaceId])) : esc(t.room_unknown);
+      var ok = h.status === "observed";
+      var stTxt = ok ? t.status_observed : t.status_declared;
+      var files = Array.isArray(h.evidencePhotoFilenames) ? h.evidencePhotoFilenames.filter(Boolean) : [];
+
+      var evHtml = "";
+      if (files.length){
+        var evId = "ev-"+i;
+        ev.push({ id: evId, filenames: files });
+        evHtml = '<div class="eq-ev" id="'+evId+'">'+
+                 '<div class="row2"><span class="tag muted">📷 '+esc(t.evidence_count(files.length))+'</span></div>'+
+                 '<div class="cap">'+esc(t.evidence_caveat)+'</div></div>';
+      }
+
+      return '<div class="eq"><span class="ico">'+ico+'</span><div class="body">'+
+             '<div class="name">'+esc(nm)+'</div>'+
+             '<div class="where">'+where+'</div>'+
+             '<div class="row2"><span class="tag '+(ok?'ok':'warn')+'">'+esc(stTxt)+'</span></div>'+
+             evHtml+'</div></div>';
+    }).join("");
+    return { html: html, ev: ev };
+  }
+
+  function renderLegend(){
+    document.getElementById("legend").innerHTML =
+      '<div class="li"><b>'+esc(t.legend_obs_t)+'</b> — '+esc(t.legend_obs_d)+'</div>'+
+      '<div class="li"><b>'+esc(t.legend_fact_t)+'</b> — '+esc(t.legend_fact_d)+'</div>'+
+      '<div class="li"><b>'+esc(t.legend_deriv_t)+'</b> — '+esc(t.legend_deriv_d)+'</div>'+
+      '<div class="li">'+esc(t.legend_absence)+'</div>';
+  }
+
+  function renderLimits(list){
+    document.getElementById("limits").innerHTML =
+      '<p class="verbatim">'+esc(t.limits_verbatim)+'</p>'+
+      '<ul class="limits">'+list.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join("")+'</ul>';
+  }
+
+  // ---- photos.json thumbnail upgrade (dormant until `ph` + photos.json) ----
+  // photos.json shape: { "<filename>": { "id": "<driveFileId>" }, ... }
+  function upgradeThumbnails(photoMap){
+    evidenceRows.forEach(function(row){
+      var container = document.getElementById(row.id);
+      if (!container) return;
+      var ids = row.filenames.map(function(f){
+        var e = photoMap[f]; return (e && e.id) ? String(e.id) : null;
+      }).filter(Boolean);
+      if (!ids.length) return;
+      var wrap = document.createElement("div");
+      wrap.className = "thumbs";
+      ids.forEach(function(id){ wrap.appendChild(makeThumb(id)); });
+      var cap = container.querySelector(".cap");
+      if (cap) container.insertBefore(wrap, cap); else container.appendChild(wrap);
+    });
+  }
+  function makeThumb(id){
+    var img = document.createElement("img");
+    img.loading = "lazy"; img.alt = "";
+    // Primary: lh3 CDN (CORS-open for <img>, needs no key).
+    img.src = "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w400";
+    img.onerror = function(){
+      img.onerror = null;
+      // Fallback: googleapis media blob -> objectURL (needs the key).
+      if (!DRIVE_API_KEY){ img.remove(); return; }
+      fetch(mediaUrl(id), { mode:"cors", credentials:"omit" })
+        .then(function(r){ if (!r.ok) throw new Error("http "+r.status); return r.blob(); })
+        .then(function(b){ img.src = URL.createObjectURL(b); })
+        .catch(function(){ img.remove(); });   // finally: no thumbnail, caveat stays
+    };
+    return img;
   }
 })();
 </script>
