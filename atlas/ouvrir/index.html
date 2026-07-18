@@ -297,6 +297,7 @@
         <a class="btn primary" id="dlBtn" href="#" data-i18n="download">Télécharger l'export</a>
         <a class="btn secondary" id="ctxBtn" href="#" target="_blank" rel="noopener" data-i18n="read_context">Lire le contexte</a>
         <a class="btn secondary" id="ctxJsonBtn" href="#" target="_blank" rel="noopener" hidden data-i18n="context_json">Contexte JSON</a>
+        <a class="btn secondary" id="aiJsonBtn" href="#" target="_blank" rel="noopener" hidden data-i18n="ai_json">Contexte complet pour IA — JSON</a>
         <button class="btn secondary" id="aiBtn" data-i18n="use_ai">Utiliser avec mon assistant IA</button>
       </div>
       <p class="note" data-i18n="privacy">Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.</p>
@@ -393,7 +394,8 @@
       equip:"Équipements & points d'intérêt", areas:"Zones fonctionnelles",
       areas_note:"Déduites des objets détectés par RoomPlan — jamais confirmées sur place.",
       download:"Télécharger l'export", read_context:"Lire le contexte",
-      context_json:"Contexte JSON", use_ai:"Utiliser avec mon assistant IA",
+      context_json:"Contexte JSON", ai_json:"Contexte complet pour IA — JSON",
+      use_ai:"Utiliser avec mon assistant IA",
       privacy:"Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.",
       made_with:"Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.",
       lidar_ok:"Scan LiDAR vérifié", lidar_demo:"Mode démo — mesures indicatives",
@@ -449,7 +451,8 @@
       equip:"Equipment & points of interest", areas:"Functional areas",
       areas_note:"Inferred from objects RoomPlan detected — never confirmed on site.",
       download:"Download export", read_context:"Read the context",
-      context_json:"Context JSON", use_ai:"Use with my AI assistant",
+      context_json:"Context JSON", ai_json:"Full AI context — JSON",
+      use_ai:"Use with my AI assistant",
       privacy:"Preview from the link. No address or GPS location is shared. Full surfaces and details live in the context, with their confidence level.",
       made_with:"Made with A3 Atlas Scanner — create your property's passport.",
       lidar_ok:"Verified LiDAR scan", lidar_demo:"Demo mode — indicative measurements",
@@ -549,6 +552,8 @@
   function num(v){ var n = parseInt(v,10); return isNaN(n) ? null : n; }
   function validId(v){ return !!v && /^[A-Za-z0-9_-]{10,}$/.test(v); }
   function driveView(id){ return "https://drive.google.com/file/d/"+encodeURIComponent(id)+"/view"; }
+  // Raw bytes (no interstitial) — the direct-download form an AI actually fetches.
+  function driveRaw(id){ return "https://drive.usercontent.google.com/download?id="+encodeURIComponent(id)+"&export=download&confirm=t"; }
   function mediaUrl(id){ return "https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(id)+"?alt=media&key="+encodeURIComponent(DRIVE_API_KEY); }
   function fmtSize(bytes){
     var b = parseInt(bytes,10); if (isNaN(b)||b<=0) return null;
@@ -594,6 +599,7 @@
   var mediaId = q.get("m");            // media.json manifest drive id (Complet shares)
   var derivedId = q.get("v");          // derived.json — surfaces & materials (estimated)
   var historyId = q.get("hy");         // history.json — event timeline
+  var aiContextId = q.get("a");        // atlas-ai-context.json — single AI aggregate
 
   // ---- BASELINE render (synchronous, never broken) ----
   document.getElementById("fiche").hidden = false;
@@ -657,6 +663,12 @@
   } else {
     ctxBtn.hidden = true;
   }
+
+  // Single AI aggregate (atlas-ai-context.json, param a) — one direct URL that
+  // holds all the structured data + evidence links + interpretation rules. Old
+  // links without `a` simply keep the button hidden.
+  var aiJsonBtn = document.getElementById("aiJsonBtn");
+  if (validId(aiContextId)){ aiJsonBtn.href = driveRaw(aiContextId); aiJsonBtn.hidden = false; }
 
   // AI prompt copy
   var toast = document.getElementById("toast");
