@@ -159,6 +159,10 @@
   .plan-fig{margin:0; min-width:0}
   .plan-fig img{width:100%; object-fit:contain; border-radius:12px; border:1px solid var(--line);
     background:var(--chip); display:block; cursor:zoom-in}
+  .plan-toggle{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap}
+  .plan-toggle-btn{font:inherit; font-size:13px; font-weight:600; padding:6px 14px; border-radius:999px;
+    border:1px solid var(--line); background:var(--chip); color:var(--chip-ink); cursor:pointer}
+  .plan-toggle-btn.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
 
   /* ---- Phase 2: history timeline (history.json) ---- */
   .hist{display:flex; flex-direction:column; gap:16px}
@@ -1001,34 +1005,73 @@
     }).catch(function(){ /* no network / non-2xx / parse — silent */ });
   }
 
+  // filename -> Drive id, so the history timeline can link « Photo de visite »
+  // events (which carry only the filename) to the real photo + lightbox.
+  var _photoIdByFile = {}, _historyDoc = null;
+
   function applyMedia(manifest){
     var photos = Array.isArray(manifest.photos) ? manifest.photos.filter(function(p){
       return p && typeof p === "object" && validId(p.driveId);
     }) : [];
+    photos.forEach(function(p){ if (p.filename) _photoIdByFile[p.filename] = p.driveId; });
     renderGallery(photos);
     renderBeforeAfter(photos);
     renderPlans(Array.isArray(manifest.plans) ? manifest.plans : []);
     renderVideo(manifest.video);
+    // Media may arrive AFTER history — re-link the timeline's photos now.
+    if (_historyDoc) { try { applyHistory(_historyDoc); } catch(e){} }
   }
 
   // FLOOR PLANS — 2D exports (annotated w/ POI+sensors, or clean dimensions).
   // lh3 <img> (no CORS, no key); onerror hides that figure; click → lightbox.
+  function planKindLabel(k){
+    return k === "annotated" ? t.plan_annotated : k === "clean" ? t.plan_clean : (k || "");
+  }
   function renderPlans(plans){
     var valid = plans.filter(function(p){ return p && typeof p === "object" && validId(p.driveId); });
     if (!valid.length) return;
     var root = document.getElementById("plans");
     root.innerHTML = "";
+    // Group the two versions (annotated / clean) of a room into ONE figure
+    // with a Technique / Mesures toggle — the same options as the app's plan.
+    var groups = [], byLabel = {};
     valid.forEach(function(p){
-      var kindLabel = (p.kind === "annotated") ? t.plan_annotated
-                    : (p.kind === "clean") ? t.plan_clean : null;
-      var caption = (p.label!=null && String(p.label).trim()) ? String(p.label).trim() : kindLabel;
+      var key = (p.label != null ? String(p.label).trim() : "") || "_nolabel_";
+      if (!byLabel[key]){ byLabel[key] = { label:(p.label!=null?String(p.label).trim():""), variants:[] }; groups.push(byLabel[key]); }
+      byLabel[key].variants.push(p);
+    });
+    var order = { annotated:0, clean:1 };
+    groups.forEach(function(g){
+      g.variants.sort(function(a,b){ return (order[a.kind]!=null?order[a.kind]:9) - (order[b.kind]!=null?order[b.kind]:9); });
       var fig = document.createElement("figure");
       fig.className = "plan-fig";
+      var imgs = [];
+      if (g.variants.length > 1){
+        var seg = document.createElement("div");
+        seg.className = "plan-toggle";
+        g.variants.forEach(function(p, i){
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "plan-toggle-btn" + (i === 0 ? " on" : "");
+          btn.textContent = planKindLabel(p.kind);
+          btn.onclick = function(){
+            for (var k = 0; k < imgs.length; k++){ imgs[k].style.display = (k === i ? "" : "none"); }
+            for (var j = 0; j < seg.children.length; j++){ seg.children[j].classList.remove("on"); }
+            btn.classList.add("on");
+          };
+          seg.appendChild(btn);
+        });
+        fig.appendChild(seg);
+      }
       // Plans carry fine dimension text — request a larger render than photos.
-      var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; }, 1600);
-      bindLightbox(im, p.driveId, caption);
-      fig.appendChild(im);
-      var cap = makeCaption(caption);
+      g.variants.forEach(function(p, i){
+        var im = makeMediaImg(p.driveId, function(){}, 1600);
+        im.style.display = (i === 0 ? "" : "none");
+        bindLightbox(im, p.driveId, g.label || planKindLabel(p.kind));
+        imgs.push(im);
+        fig.appendChild(im);
+      });
+      var cap = makeCaption(g.label || planKindLabel(g.variants[0].kind));
       if (cap) fig.appendChild(cap);
       root.appendChild(fig);
     });
@@ -1276,6 +1319,7 @@
     if (!(DRIVE_API_KEY && validId(historyId))) return;
     fetchJson(historyId).then(function(doc){
       if (!doc || doc.schemaVersion !== "atlas.history.v1") return;
+      _historyDoc = doc;   // kept so applyMedia can re-link photos once media loads
       try{ applyHistory(doc); }catch(e){ /* baseline stays intact */ }
     }).catch(function(){ /* silent */ });
   }
@@ -1296,7 +1340,11 @@
       if (!ev || typeof ev !== "object") return;
       var d = ev.at ? new Date(ev.at) : null;
       if (!d || isNaN(d.getTime())) return;   // skip unparseable timestamps
-      parsed.push({ d:d, type:ev.type, label:ev.label, photoDriveId:ev.photoDriveId });
+      // Resolve the photo from its filename via media.json when the event
+      // didn't carry a Drive id directly (the usual case for visit photos).
+      var pid = validId(ev.photoDriveId) ? ev.photoDriveId
+              : (ev.filename && _photoIdByFile[ev.filename]) || ev.photoDriveId;
+      parsed.push({ d:d, type:ev.type, label:ev.label, photoDriveId:pid });
     });
     if (!parsed.length) return;
     parsed.sort(function(a,b){ return b.d - a.d; });   // newest first
