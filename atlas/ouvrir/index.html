@@ -108,6 +108,8 @@
   .tag.ok{color:var(--ok); background:var(--ok-bg)}
   .tag.warn{color:var(--warn); background:var(--warn-bg)}
   .tag.muted{color:var(--muted); background:var(--chip)}
+  .ev-chip.ev-clickable{cursor:zoom-in; color:var(--accent); background:var(--chip);
+    outline:1px solid var(--accent); outline-offset:-1px}
   .eqlist{display:flex; flex-direction:column; gap:10px}
   .eq{display:flex; gap:12px; align-items:flex-start; border:1px solid var(--line); border-radius:14px; padding:12px 14px}
   .eq .ico{font-size:20px; line-height:1.1}
@@ -728,6 +730,39 @@
     });
   }
 
+  // Open the shared lightbox at the gallery photo with this Drive id.
+  function openLightboxByDriveId(driveId){
+    for (var i = 0; i < lbItems.length; i++){
+      if (lbItems[i].driveId === driveId){ openLightboxAt(i); return true; }
+    }
+    return false;
+  }
+
+  // Make each equipment's « X photo (contexte) » chip open its context photo(s)
+  // in the lightbox. The chip carries FILENAMES (from context.json); we resolve
+  // them to Drive ids via media.json — so a chip only turns clickable once its
+  // photos actually exist (a Restreint share leaves it plain). Idempotent:
+  // safe to call after equipment renders AND after media loads (either order).
+  function wireEvidenceChips(){
+    evidenceRows.forEach(function(row){
+      var host = document.getElementById(row.id);
+      if (!host) return;
+      var chip = host.querySelector(".ev-chip");
+      if (!chip || chip.dataset.wired) return;
+      var ids = (row.filenames || []).map(function(f){ return _photoIdByFile[f]; }).filter(validId);
+      if (!ids.length) return;               // no photo available yet — stays plain
+      chip.dataset.wired = "1";
+      chip.classList.add("ev-clickable");
+      chip.setAttribute("role", "button");
+      chip.setAttribute("tabindex", "0");
+      var open = function(){ openLightboxByDriveId(ids[0]); };
+      chip.addEventListener("click", open);
+      chip.addEventListener("keydown", function(e){
+        if (e.key === "Enter" || e.key === " "){ e.preventDefault(); open(); }
+      });
+    });
+  }
+
   // =====================================================================
   // PROGRESSIVE ENRICHMENT — best-effort, single CORS-simple GET.
   // Any failure is SILENT: the baseline fiche above stays intact.
@@ -854,6 +889,7 @@
       eqEl.className = "eqlist";
       eqEl.innerHTML = built.html;
       equipSec.hidden = false;
+      wireEvidenceChips();  // clickable if media already loaded; re-tried in applyMedia
     } else {
       // Authoritative: no equipment resolves to a known room.
       equipSec.hidden = true;
@@ -929,7 +965,7 @@
         var evId = "ev-"+i;
         ev.push({ id: evId, filenames: files });
         evHtml = '<div class="eq-ev" id="'+evId+'">'+
-                 '<div class="row2"><span class="tag muted">📷 '+esc(t.evidence_count(files.length))+'</span></div>'+
+                 '<div class="row2"><span class="tag muted ev-chip">📷 '+esc(t.evidence_count(files.length))+'</span></div>'+
                  '<div class="cap">'+esc(t.evidence_caveat)+'</div></div>';
       }
 
@@ -1018,8 +1054,9 @@
     renderBeforeAfter(photos);
     renderPlans(Array.isArray(manifest.plans) ? manifest.plans : []);
     renderVideo(manifest.video);
-    // Media may arrive AFTER history — re-link the timeline's photos now.
+    // Media may arrive AFTER history / equipment — link their photos now.
     if (_historyDoc) { try { applyHistory(_historyDoc); } catch(e){} }
+    try { wireEvidenceChips(); } catch(e){}
   }
 
   // FLOOR PLANS — 2D exports (annotated w/ POI+sensors, or clean dimensions).
