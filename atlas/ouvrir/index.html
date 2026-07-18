@@ -407,8 +407,8 @@
       ba_h:"Avant / Après", before_label:"Avant", after_label:"Après",
       video_h:"Vidéo du scan",
       surfaces_h:"Surfaces & matériaux",
-      surf_walls:"Murs (net, ouvertures déduites)", surf_ceiling:"Plafond",
-      surf_floor:"Plancher", surf_walllen:"Longueur de murs",
+      surf_walls:"Murs (net, ouvertures déduites)", surf_ceiling:"Plafond (rectangle hors tout)",
+      surf_floor:"Emprise au sol (rectangle hors tout)", surf_walllen:"Longueur de murs",
       mat_h:"Matériaux (estimés, calculés)",
       mat_paint:"Peinture (2 couches)", mat_drywall:"Gypse (feuilles 4×8, +10 %)",
       unit_ft2:"pi²", unit_ft:"pi",
@@ -463,8 +463,8 @@
       ba_h:"Before / After", before_label:"Before", after_label:"After",
       video_h:"Scan video",
       surfaces_h:"Surfaces & materials",
-      surf_walls:"Walls (net)", surf_ceiling:"Ceiling",
-      surf_floor:"Floor", surf_walllen:"Wall length",
+      surf_walls:"Walls (net)", surf_ceiling:"Ceiling (bounding rectangle)",
+      surf_floor:"Footprint (bounding rectangle)", surf_walllen:"Wall length",
       mat_h:"Materials (estimated)",
       mat_paint:"Paint (2 coats)", mat_drywall:"Drywall (4×8 sheets, +10%)",
       unit_ft2:"ft²", unit_ft:"ft",
@@ -1397,16 +1397,22 @@
       return '<div class="surf-row"><span class="srk">'+esc(r.k)+'</span><span class="srv">'+esc(r.v)+'</span></div>';
     }).join("") + '</div>';
 
-    // Materials — computed from unrounded net wall area in ft² (matches app).
-    if (netWallM2 !== null){
-      var netFt2 = netWallM2 * FT2_PER_M2;
-      var paint = Math.max(0, Math.round(netFt2 / 350 * 2));
-      var drywall = Math.max(0, Math.ceil(netFt2 / 32 * 1.1));
-      html += '<div class="surf-sub">'+esc(t.mat_h)+'</div>' +
-              '<div class="surf-rows">' +
-              '<div class="surf-row"><span class="srk">'+esc(t.mat_paint)+'</span><span class="srv">'+fmtNum(paint)+' '+esc(t.unit_gallon(paint))+'</span></div>' +
-              '<div class="surf-row"><span class="srk">'+esc(t.mat_drywall)+'</span><span class="srv">'+fmtNum(drywall)+' '+esc(t.unit_sheet(drywall))+'</span></div>' +
-              '</div>';
+    // Materials — PREFER the canonical values in derived.json (paint_quantity,
+    // sheetrock_sheet_count); fall back to computing from net wall area only if
+    // an older export lacks them (Hermes 2026-07-18: the shown number must be
+    // reproducible from derived.json).
+    var netFt2 = netWallM2 !== null ? netWallM2 * FT2_PER_M2 : null;
+    var paintDv   = byType.paint_quantity ? derivedVal(byType.paint_quantity.value) : null;
+    var drywallDv = byType.sheetrock_sheet_count ? derivedVal(byType.sheetrock_sheet_count.value) : null;
+    var paint = paintDv !== null ? Math.round(paintDv)
+              : (netFt2 !== null ? Math.max(0, Math.round(netFt2 / 350 * 2)) : null);
+    var drywall = drywallDv !== null ? Math.round(drywallDv)
+              : (netFt2 !== null ? Math.max(0, Math.ceil(netFt2 / 32 * 1.1)) : null);
+    if (paint !== null || drywall !== null){
+      html += '<div class="surf-sub">'+esc(t.mat_h)+'</div><div class="surf-rows">';
+      if (paint !== null)   html += '<div class="surf-row"><span class="srk">'+esc(t.mat_paint)+'</span><span class="srv">'+fmtNum(paint)+' '+esc(t.unit_gallon(paint))+'</span></div>';
+      if (drywall !== null) html += '<div class="surf-row"><span class="srk">'+esc(t.mat_drywall)+'</span><span class="srv">'+fmtNum(drywall)+' '+esc(t.unit_sheet(drywall))+'</span></div>';
+      html += '</div>';
     }
 
     // Honest caveat (ALWAYS) + needs-site-verification chip.
