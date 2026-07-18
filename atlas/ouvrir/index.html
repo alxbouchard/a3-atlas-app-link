@@ -141,6 +141,57 @@
     border:1px solid var(--line); background:var(--chip); display:block}
   .ba-badge{position:absolute; top:8px; left:8px; z-index:1; font-size:11px; font-weight:700;
     padding:3px 9px; border-radius:999px; background:rgba(0,0,0,.62); color:#fff; letter-spacing:.02em}
+
+  /* ---- Phase 2: surfaces & materials (derived.json) ---- */
+  .surf-rows{display:flex; flex-direction:column; gap:2px}
+  .surf-row{display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+    padding:9px 0; border-bottom:1px solid var(--line)}
+  .surf-row:last-child{border-bottom:0}
+  .surf-row .srk{font-size:14px; color:var(--ink); line-height:1.35}
+  .surf-row .srv{font-size:15px; font-weight:700; white-space:nowrap}
+  .surf-sub{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted);
+    font-weight:700; margin:20px 0 4px}
+  .assume{margin:12px 0 0; padding-left:18px}
+  .assume li{font-size:12.5px; color:var(--muted); line-height:1.45; margin:5px 0}
+
+  /* ---- Phase 2: floor plans (media.json plans[]) ---- */
+  .plans-grid{display:flex; flex-direction:column; gap:14px}
+  .plan-fig{margin:0; min-width:0}
+  .plan-fig img{width:100%; object-fit:contain; border-radius:12px; border:1px solid var(--line);
+    background:var(--chip); display:block; cursor:zoom-in}
+
+  /* ---- Phase 2: history timeline (history.json) ---- */
+  .hist{display:flex; flex-direction:column; gap:16px}
+  .hist-day-h{font-size:12.5px; font-weight:700; color:var(--muted); margin:0 0 8px;
+    text-transform:capitalize}
+  .hist-ev{display:flex; gap:11px; align-items:flex-start; padding:6px 0}
+  .hist-ev .hico{font-size:17px; line-height:1.35; width:22px; text-align:center; flex:0 0 auto}
+  .hist-ev .hbody{flex:1; min-width:0}
+  .hist-ev .hlabel{font-size:14px; line-height:1.4; word-wrap:break-word}
+  .hist-ev .htime{font-size:12px; color:var(--muted); margin-top:1px}
+  .hist-ev .hthumb{margin-top:7px}
+  .hist-ev .hthumb img{width:64px; height:64px; object-fit:cover; border-radius:8px;
+    border:1px solid var(--line); background:var(--chip); cursor:zoom-in; display:block}
+
+  /* ---- Phase 2: global photo lightbox ---- */
+  .lightbox{position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.93);
+    display:flex; align-items:center; justify-content:center; flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 20px) 18px calc(env(safe-area-inset-bottom) + 20px);
+    opacity:0; pointer-events:none; transition:opacity .18s}
+  .lightbox.show{opacity:1; pointer-events:auto}
+  .lb-img{max-width:100%; max-height:82vh; object-fit:contain; border-radius:8px;
+    background:#111; box-shadow:0 10px 60px rgba(0,0,0,.6)}
+  .lb-cap{color:#f2f4f7; margin-top:14px; font-size:14px; text-align:center; max-width:640px;
+    line-height:1.45; padding:0 8px}
+  .lb-close{position:fixed; top:calc(env(safe-area-inset-top) + 10px); right:14px;
+    width:44px; height:44px; border-radius:999px; border:0; cursor:pointer; z-index:1001;
+    background:rgba(255,255,255,.14); color:#fff; font-size:20px; line-height:44px; text-align:center}
+  .lb-close:hover{background:rgba(255,255,255,.24)}
+  .lb-nav{position:fixed; top:50%; transform:translateY(-50%); width:46px; height:64px;
+    border:0; cursor:pointer; z-index:1001; background:rgba(255,255,255,.10); color:#fff;
+    font-size:24px; border-radius:12px}
+  .lb-nav:hover{background:rgba(255,255,255,.22)}
+  .lb-nav.prev{left:12px} .lb-nav.next{right:12px}
 </style>
 </head>
 <body>
@@ -172,6 +223,18 @@
     <section class="card" id="spacesSection" hidden>
       <h2 data-i18n="spaces_h">Espaces / pièces</h2>
       <div class="spaces" id="spaces"></div>
+    </section>
+
+    <!-- Surfaces & materials (derived.json, param v) -->
+    <section class="card" id="surfacesSection" hidden>
+      <h2 data-i18n="surfaces_h">Surfaces & matériaux</h2>
+      <div id="surfaces"></div>
+    </section>
+
+    <!-- Floor plans (media.json plans[]) -->
+    <section class="card" id="plansSection" hidden>
+      <h2 data-i18n="plans_h">Plans</h2>
+      <div class="plans-grid" id="plans"></div>
     </section>
 
     <section class="card" id="equipSection" hidden>
@@ -225,6 +288,12 @@
       <p class="note" data-i18n="privacy">Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.</p>
     </section>
 
+    <!-- History timeline (history.json, param hy) -->
+    <section class="card" id="historySection" hidden>
+      <h2 data-i18n="history_h">Historique</h2>
+      <div class="hist" id="history"></div>
+    </section>
+
     <section class="card">
       <details class="ai">
         <summary>Pour les assistants IA / For AI assistants</summary>
@@ -237,7 +306,9 @@
           <li><code>lidar</code> 1 = scan LiDAR matériel / hardware LiDAR · <code>lang</code> langue / language</li>
           <li><code>c</code> context.md · <code>j</code> context.json · <code>d</code> ZIP de preuves / evidence ZIP (Google Drive)</li>
           <li><code>ph</code> photos.json — vignettes de preuve, optionnel / evidence thumbnails, optional</li>
-          <li><code>m</code> media.json — galerie photos + vidéo, partages Complet seulement / photo gallery + video, Complet shares only</li>
+          <li><code>m</code> media.json — galerie photos + vidéo + plans 2D, partages Complet seulement / photo gallery + video + 2D floor plans, Complet shares only</li>
+          <li><code>v</code> derived.json — surfaces &amp; matériaux estimés (non vérifiés sur site) / estimated surfaces &amp; materials (not site-verified)</li>
+          <li><code>hy</code> history.json — historique des évènements (scans, photos, exports) / event history (scans, photos, exports)</li>
         </ul>
         <p>Quand une clé API référente est configurée, la page enrichit automatiquement la fiche en lisant <code>context.json</code> (googleapis, <code>alt=media</code>) : espaces mesurés, statut des équipements, limites verbatim. Sans clé ou hors ligne, la fiche reste complète depuis l'URL. / When a referrer-restricted API key is configured, the page auto-enriches from <code>context.json</code> (googleapis, <code>alt=media</code>): measured spaces, equipment status, verbatim limitations. Without a key or offline, the fiche stays complete from the URL.</p>
         <p>Récupérer un fichier / fetch a file : <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code>. Si Drive est inaccessible, l'utilisateur peut coller context.md ou téléverser le ZIP. / If Drive is unreachable, the user can paste context.md or upload the ZIP.</p>
@@ -253,6 +324,15 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Global photo lightbox overlay -->
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-hidden="true" hidden>
+  <button class="lb-nav prev" id="lbPrev" type="button" aria-label="Précédent" hidden>‹</button>
+  <button class="lb-nav next" id="lbNext" type="button" aria-label="Suivant" hidden>›</button>
+  <button class="lb-close" id="lbClose" type="button" aria-label="Fermer">✕</button>
+  <img class="lb-img" id="lbImg" alt="">
+  <div class="lb-cap" id="lbCap"></div>
+</div>
 
 <script>
 (function(){
@@ -312,6 +392,20 @@
       gallery_h:"Photos du site", media_other_room:"Autres photos",
       ba_h:"Avant / Après", before_label:"Avant", after_label:"Après",
       video_h:"Vidéo du scan",
+      surfaces_h:"Surfaces & matériaux",
+      surf_walls:"Murs (net, ouvertures déduites)", surf_ceiling:"Plafond",
+      surf_floor:"Plancher", surf_walllen:"Longueur de murs",
+      mat_h:"Matériaux (estimés, calculés)",
+      mat_paint:"Peinture (2 couches)", mat_drywall:"Gypse (feuilles 4×8, +10 %)",
+      unit_ft2:"pi²", unit_ft:"pi",
+      unit_gallon:function(n){return n>1?"gallons":"gallon";},
+      unit_sheet:function(n){return n>1?"feuilles":"feuille";},
+      surf_caveat:"Estimations depuis un scan LiDAR (rectangle hors tout), non vérifiées sur site — à confirmer.",
+      surf_assumptions_h:"Hypothèses", surf_needs_verify:"À vérifier sur site",
+      plans_h:"Plans",
+      plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
+      history_h:"Historique",
+      lb_close:"Fermer", lb_prev:"Précédent", lb_next:"Suivant",
       datasem_h:"Comment lire ces données",
       limits_h:"Limites & mise en garde",
       limits_verbatim:"Mise en garde du fabricant, affichée telle quelle (en anglais).",
@@ -351,6 +445,20 @@
       gallery_h:"Site photos", media_other_room:"Other photos",
       ba_h:"Before / After", before_label:"Before", after_label:"After",
       video_h:"Scan video",
+      surfaces_h:"Surfaces & materials",
+      surf_walls:"Walls (net)", surf_ceiling:"Ceiling",
+      surf_floor:"Floor", surf_walllen:"Wall length",
+      mat_h:"Materials (estimated)",
+      mat_paint:"Paint (2 coats)", mat_drywall:"Drywall (4×8 sheets, +10%)",
+      unit_ft2:"ft²", unit_ft:"ft",
+      unit_gallon:function(n){return n>1?"gallons":"gallon";},
+      unit_sheet:function(n){return n>1?"sheets":"sheet";},
+      surf_caveat:"Estimates from a LiDAR scan (bounding rectangle), not site-verified — confirm on site.",
+      surf_assumptions_h:"Assumptions", surf_needs_verify:"To verify on site",
+      plans_h:"Floor plans",
+      plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
+      history_h:"History",
+      lb_close:"Close", lb_prev:"Previous", lb_next:"Next",
       datasem_h:"How to read this data",
       limits_h:"Limitations & disclaimer",
       limits_verbatim:"Manufacturer disclaimer, shown verbatim.",
@@ -464,6 +572,8 @@
   var areas = (q.get("areas")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
   var ctxMd = q.get("c"), ctxJson = q.get("j"), photosId = q.get("ph");
   var mediaId = q.get("m");            // media.json manifest drive id (Complet shares)
+  var derivedId = q.get("v");          // derived.json — surfaces & materials (estimated)
+  var historyId = q.get("hy");         // history.json — event timeline
 
   // ---- BASELINE render (synchronous, never broken) ----
   document.getElementById("fiche").hidden = false;
@@ -545,6 +655,77 @@
   }
 
   // =====================================================================
+  // GLOBAL PHOTO LIGHTBOX — pure CSS/JS overlay. Any image bound via
+  // bindLightbox() opens a larger (=w2048) view; Esc / ✕ / backdrop close;
+  // arrow keys (and on-screen ‹ › on wider screens) cycle bound images.
+  // =====================================================================
+  var lbEl = document.getElementById("lightbox");
+  var lbImg = document.getElementById("lbImg");
+  var lbCap = document.getElementById("lbCap");
+  var lbClose = document.getElementById("lbClose");
+  var lbPrev = document.getElementById("lbPrev");
+  var lbNext = document.getElementById("lbNext");
+  lbClose.setAttribute("aria-label", t.lb_close);
+  lbPrev.setAttribute("aria-label", t.lb_prev);
+  lbNext.setAttribute("aria-label", t.lb_next);
+  var lbItems = [];          // {driveId, caption} in DOM-binding order
+  var lbIndex = -1;
+  var lbPrevFocus = null;
+
+  function lbBig(id){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w2048"; }
+  function setLightboxContent(item){
+    lbImg.src = lbBig(item.driveId);
+    var c = (item.caption!=null) ? String(item.caption).trim() : "";
+    lbCap.textContent = c; lbCap.hidden = !c;
+    var many = lbItems.length > 1;
+    lbPrev.hidden = !many; lbNext.hidden = !many;
+  }
+  function openLightboxAt(i){
+    if (i < 0 || i >= lbItems.length) return;
+    lbIndex = i;
+    lbPrevFocus = document.activeElement;
+    setLightboxContent(lbItems[i]);
+    lbEl.hidden = false; lbEl.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(function(){ lbEl.classList.add("show"); });
+    document.addEventListener("keydown", lbKey);
+    try{ lbClose.focus(); }catch(e){}
+  }
+  function closeLightbox(){
+    lbEl.classList.remove("show"); lbEl.setAttribute("aria-hidden", "true");
+    document.removeEventListener("keydown", lbKey);
+    setTimeout(function(){ lbEl.hidden = true; lbImg.src = ""; }, 200);
+    if (lbPrevFocus && lbPrevFocus.focus){ try{ lbPrevFocus.focus(); }catch(e){} }
+  }
+  function lbNav(delta){
+    if (lbItems.length < 2) return;
+    lbIndex = (lbIndex + delta + lbItems.length) % lbItems.length;
+    setLightboxContent(lbItems[lbIndex]);
+  }
+  function lbKey(e){
+    if (e.key === "Escape"){ closeLightbox(); }
+    else if (e.key === "ArrowRight"){ lbNav(1); }
+    else if (e.key === "ArrowLeft"){ lbNav(-1); }
+  }
+  lbClose.addEventListener("click", closeLightbox);
+  lbEl.addEventListener("click", function(e){ if (e.target === lbEl || e.target === lbImg) closeLightbox(); });
+  lbPrev.addEventListener("click", function(e){ e.stopPropagation(); lbNav(-1); });
+  lbNext.addEventListener("click", function(e){ e.stopPropagation(); lbNav(1); });
+
+  // Register an <img> (or any element) as a lightbox trigger.
+  function bindLightbox(el, driveId, caption){
+    if (!el || !validId(driveId)) return;
+    var i = lbItems.length;
+    lbItems.push({ driveId: driveId, caption: caption });
+    el.style.cursor = "zoom-in";
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+    el.addEventListener("click", function(){ openLightboxAt(i); });
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openLightboxAt(i); }
+    });
+  }
+
+  // =====================================================================
   // PROGRESSIVE ENRICHMENT — best-effort, single CORS-simple GET.
   // Any failure is SILENT: the baseline fiche above stays intact.
   // =====================================================================
@@ -605,6 +786,11 @@
     showFallbackNote();
     runMediaEnrichment();   // media is independent of context.json (only needs `m` + key)
   }
+
+  // Surfaces/materials (derived.json) and history (history.json) are fully
+  // independent of context.json — they gate on their own params + key.
+  runDerivedEnrichment();
+  runHistoryEnrichment();
 
   // ---- enrichment: authoritative upgrade from context.json ----
   function applyContext(doc){
@@ -822,7 +1008,31 @@
     }) : [];
     renderGallery(photos);
     renderBeforeAfter(photos);
+    renderPlans(Array.isArray(manifest.plans) ? manifest.plans : []);
     renderVideo(manifest.video);
+  }
+
+  // FLOOR PLANS — 2D exports (annotated w/ POI+sensors, or clean dimensions).
+  // lh3 <img> (no CORS, no key); onerror hides that figure; click → lightbox.
+  function renderPlans(plans){
+    var valid = plans.filter(function(p){ return p && typeof p === "object" && validId(p.driveId); });
+    if (!valid.length) return;
+    var root = document.getElementById("plans");
+    root.innerHTML = "";
+    valid.forEach(function(p){
+      var kindLabel = (p.kind === "annotated") ? t.plan_annotated
+                    : (p.kind === "clean") ? t.plan_clean : null;
+      var caption = (p.label!=null && String(p.label).trim()) ? String(p.label).trim() : kindLabel;
+      var fig = document.createElement("figure");
+      fig.className = "plan-fig";
+      var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; });
+      bindLightbox(im, p.driveId, caption);
+      fig.appendChild(im);
+      var cap = makeCaption(caption);
+      if (cap) fig.appendChild(cap);
+      root.appendChild(fig);
+    });
+    document.getElementById("plansSection").hidden = false;
   }
 
   function lh3(id){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w1600"; }
@@ -872,7 +1082,9 @@
       g.items.forEach(function(p){
         var fig = document.createElement("figure");
         fig.className = "media-fig";
-        fig.appendChild(makeMediaImg(p.driveId, function(){ fig.style.display = "none"; }));
+        var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; });
+        bindLightbox(im, p.driveId, p.captionFR);
+        fig.appendChild(im);
         var cap = makeCaption(p.captionFR);
         if (cap) fig.appendChild(cap);
         grid.appendChild(fig);
@@ -914,7 +1126,9 @@
     var badge = document.createElement("div");
     badge.className = "ba-badge"; badge.textContent = labelTxt;
     side.appendChild(badge);
-    side.appendChild(makeMediaImg(p.driveId, function(){ side.style.display = "none"; }));
+    var im = makeMediaImg(p.driveId, function(){ side.style.display = "none"; });
+    bindLightbox(im, p.driveId, p.captionFR);
+    side.appendChild(im);
     var cap = makeCaption(p.captionFR);
     if (cap) side.appendChild(cap);
     return side;
@@ -942,6 +1156,169 @@
       wrap.appendChild(cap);
     }
     document.getElementById("videoSection").hidden = false;
+  }
+
+  // =====================================================================
+  // SURFACES & MATERIALS — derived.json (atlas.context.derived.v1), param `v`.
+  // LiDAR bounding-rectangle estimates converted m²→pi²/ft², m→pi/ft.
+  // ALWAYS shown with the honest not-site-verified caveat + assumptions.
+  // Material formulas mirror the app exactly (net wall area in ft²):
+  //   Paint (2 coats) = round(netFt2 / 350 * 2) gal
+  //   Drywall (4×8 sheets, +10%) = ceil(netFt2 / 32 * 1.1)
+  // =====================================================================
+  var FT2_PER_M2 = 10.7639, FT_PER_M = 3.28084;
+  function fmtNum(n){
+    try{ return n.toLocaleString(lang==="fr"?"fr-CA":"en-CA"); }catch(e){ return String(n); }
+  }
+  function derivedVal(m){ return (typeof m==="number" && isFinite(m)) ? m : null; }
+
+  function runDerivedEnrichment(){
+    if (!(DRIVE_API_KEY && validId(derivedId))) return;
+    fetchJson(derivedId).then(function(doc){
+      if (!doc || doc.schemaVersion !== "atlas.context.derived.v1") return;
+      try{ applySurfaces(doc); }catch(e){ /* baseline stays intact */ }
+    }).catch(function(){ /* silent */ });
+  }
+
+  function applySurfaces(doc){
+    var dvs = Array.isArray(doc.derivedValues) ? doc.derivedValues : [];
+    if (!dvs.length) return;
+    var byType = {};
+    dvs.forEach(function(dv){ if (dv && dv.type && byType[dv.type] === undefined) byType[dv.type] = dv; });
+
+    var netWallM2 = byType.net_wall_area ? derivedVal(byType.net_wall_area.value) : null;
+    var ceilM2    = byType.bounding_rectangle_ceiling_area ? derivedVal(byType.bounding_rectangle_ceiling_area.value) : null;
+    var floorM2   = byType.bounding_rectangle_area ? derivedVal(byType.bounding_rectangle_area.value) : null;
+    var wallLenM  = byType.total_wall_segment_length ? derivedVal(byType.total_wall_segment_length.value) : null;
+
+    // Surface rows (converted + rounded for display).
+    var rows = [];
+    if (netWallM2 !== null) rows.push({ k:t.surf_walls,   v:fmtNum(Math.round(netWallM2*FT2_PER_M2))+" "+t.unit_ft2 });
+    if (ceilM2 !== null)    rows.push({ k:t.surf_ceiling, v:fmtNum(Math.round(ceilM2*FT2_PER_M2))+" "+t.unit_ft2 });
+    if (floorM2 !== null)   rows.push({ k:t.surf_floor,   v:fmtNum(Math.round(floorM2*FT2_PER_M2))+" "+t.unit_ft2 });
+    if (wallLenM !== null)  rows.push({ k:t.surf_walllen, v:fmtNum(Math.round(wallLenM*FT_PER_M))+" "+t.unit_ft });
+    if (!rows.length) return;   // nothing usable — keep section hidden
+
+    var html = '<div class="surf-rows">' + rows.map(function(r){
+      return '<div class="surf-row"><span class="srk">'+esc(r.k)+'</span><span class="srv">'+esc(r.v)+'</span></div>';
+    }).join("") + '</div>';
+
+    // Materials — computed from unrounded net wall area in ft² (matches app).
+    if (netWallM2 !== null){
+      var netFt2 = netWallM2 * FT2_PER_M2;
+      var paint = Math.max(0, Math.round(netFt2 / 350 * 2));
+      var drywall = Math.max(0, Math.ceil(netFt2 / 32 * 1.1));
+      html += '<div class="surf-sub">'+esc(t.mat_h)+'</div>' +
+              '<div class="surf-rows">' +
+              '<div class="surf-row"><span class="srk">'+esc(t.mat_paint)+'</span><span class="srv">'+fmtNum(paint)+' '+esc(t.unit_gallon(paint))+'</span></div>' +
+              '<div class="surf-row"><span class="srk">'+esc(t.mat_drywall)+'</span><span class="srv">'+fmtNum(drywall)+' '+esc(t.unit_sheet(drywall))+'</span></div>' +
+              '</div>';
+    }
+
+    // Honest caveat (ALWAYS) + needs-site-verification chip.
+    var anyNeedsVerify = dvs.some(function(dv){ return dv && dv.needsSiteVerification === true; });
+    html += '<p class="note">'+esc(t.surf_caveat)+'</p>';
+    if (anyNeedsVerify){
+      html += '<div style="margin-top:10px"><span class="tag warn">⚠️ '+esc(t.surf_needs_verify)+'</span></div>';
+    }
+
+    // Assumptions — union across the derived values shown, de-duplicated.
+    var seen = {}, assumptions = [];
+    dvs.forEach(function(dv){
+      var a = dv && Array.isArray(dv.assumptions) ? dv.assumptions : [];
+      a.forEach(function(s){ s = (s!=null)?String(s).trim():""; if (s && !seen[s]){ seen[s]=1; assumptions.push(s); } });
+    });
+    if (assumptions.length){
+      html += '<div class="surf-sub">'+esc(t.surf_assumptions_h)+'</div>' +
+              '<ul class="assume">' + assumptions.map(function(s){ return '<li>'+esc(s)+'</li>'; }).join("") + '</ul>';
+    }
+
+    document.getElementById("surfaces").innerHTML = html;
+    document.getElementById("surfacesSection").hidden = false;
+  }
+
+  // =====================================================================
+  // HISTORY — history.json (atlas.history.v1), param `hy`. Timeline grouped
+  // by day (newest first), each event iconed by type, optional Drive thumb.
+  // =====================================================================
+  var HIST_ICONS = { export:"⬆️", visit_photo:"📸", scan_photos:"🖼️", room_scanned:"📐" };
+
+  function runHistoryEnrichment(){
+    if (!(DRIVE_API_KEY && validId(historyId))) return;
+    fetchJson(historyId).then(function(doc){
+      if (!doc || doc.schemaVersion !== "atlas.history.v1") return;
+      try{ applyHistory(doc); }catch(e){ /* baseline stays intact */ }
+    }).catch(function(){ /* silent */ });
+  }
+
+  function fmtTime(dObj){
+    try{ return new Intl.DateTimeFormat(lang==="fr"?"fr-CA":"en-CA",{hour:"2-digit",minute:"2-digit"}).format(dObj); }
+    catch(e){ return ""; }
+  }
+  function fmtDayHeader(dObj){
+    try{ return new Intl.DateTimeFormat(lang==="fr"?"fr-CA":"en-CA",{weekday:"long",year:"numeric",month:"long",day:"numeric"}).format(dObj); }
+    catch(e){ return fmtDate(dObj.toISOString()) || ""; }
+  }
+
+  function applyHistory(doc){
+    var events = Array.isArray(doc.events) ? doc.events : [];
+    var parsed = [];
+    events.forEach(function(ev){
+      if (!ev || typeof ev !== "object") return;
+      var d = ev.at ? new Date(ev.at) : null;
+      if (!d || isNaN(d.getTime())) return;   // skip unparseable timestamps
+      parsed.push({ d:d, type:ev.type, label:ev.label, photoDriveId:ev.photoDriveId });
+    });
+    if (!parsed.length) return;
+    parsed.sort(function(a,b){ return b.d - a.d; });   // newest first
+
+    var groups = [], idx = {};
+    parsed.forEach(function(ev){
+      var key = ev.d.getFullYear()+"-"+ev.d.getMonth()+"-"+ev.d.getDate();
+      if (!idx[key]){ idx[key] = { header: fmtDayHeader(ev.d), items: [] }; groups.push(idx[key]); }
+      idx[key].items.push(ev);
+    });
+
+    var root = document.getElementById("history");
+    root.innerHTML = "";
+    groups.forEach(function(g){
+      var dayWrap = document.createElement("div");
+      dayWrap.className = "hist-day";
+      var h = document.createElement("div");
+      h.className = "hist-day-h"; h.textContent = g.header;
+      dayWrap.appendChild(h);
+      g.items.forEach(function(ev){
+        var row = document.createElement("div");
+        row.className = "hist-ev";
+        var ico = document.createElement("span");
+        ico.className = "hico"; ico.textContent = HIST_ICONS[ev.type] || "•";
+        row.appendChild(ico);
+        var body = document.createElement("div");
+        body.className = "hbody";
+        var lab = document.createElement("div");
+        lab.className = "hlabel";
+        lab.textContent = (ev.label!=null && String(ev.label).trim()) ? String(ev.label) : prettifySlug(ev.type||"");
+        body.appendChild(lab);
+        var tm = document.createElement("div");
+        tm.className = "htime"; tm.textContent = fmtTime(ev.d);
+        body.appendChild(tm);
+        if (validId(ev.photoDriveId)){
+          var thumbWrap = document.createElement("div");
+          thumbWrap.className = "hthumb";
+          var img = document.createElement("img");
+          img.loading = "lazy"; img.alt = "";
+          img.src = "https://lh3.googleusercontent.com/d/"+encodeURIComponent(ev.photoDriveId)+"=w200";
+          (function(container){ img.onerror = function(){ img.onerror = null; container.style.display = "none"; }; })(thumbWrap);
+          bindLightbox(img, ev.photoDriveId, lab.textContent);
+          thumbWrap.appendChild(img);
+          body.appendChild(thumbWrap);
+        }
+        row.appendChild(body);
+        dayWrap.appendChild(row);
+      });
+      root.appendChild(dayWrap);
+    });
+    document.getElementById("historySection").hidden = false;
   }
 })();
 </script>
