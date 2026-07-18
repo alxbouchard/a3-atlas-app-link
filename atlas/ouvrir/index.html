@@ -427,10 +427,11 @@
       limits_verbatim:"Mise en garde du fabricant, affichée telle quelle (en anglais).",
       hw_verified:"Scan LiDAR matériel", hw_unverified:"Non vérifié (matériel)",
       status_observed:"Vu en place", status_declared:"Position estimée",
+      badge_detected:"Détecté par le scan", badge_confirmed:"Confirmé sur place",
       room_unknown:"Pièce inconnue",
       in_room:function(r){return "dans "+r;},
       evidence_count:function(n){return n+" photo"+(n>1?"s":"")+" (contexte)";},
-      evidence_caveat:"Montre où la photo a été prise, pas que l'objet est visible à l'image.",
+      evidence_caveat:"Photo liée à cet équipement — visibilité non évaluée par Atlas (un agent IA peut l'analyser).",
       generated_label:"Généré le",
       fallback_hint:"Détails complets (espaces mesurés, statut, limites) dans le contexte — utilisez les boutons ci-dessous.",
       legend_obs_t:"Observation", legend_obs_d:"détecté automatiquement, non confirmé par un humain.",
@@ -482,10 +483,11 @@
       limits_verbatim:"Manufacturer disclaimer, shown verbatim.",
       hw_verified:"Hardware LiDAR scan", hw_unverified:"Not hardware-verified",
       status_observed:"Observed in place", status_declared:"Estimated position",
+      badge_detected:"Detected by the scan", badge_confirmed:"Confirmed on site",
       room_unknown:"Unknown room",
       in_room:function(r){return "in "+r;},
       evidence_count:function(n){return n+" evidence photo"+(n>1?"s":"");},
-      evidence_caveat:"Shows where the photo was taken, not that the object is in frame.",
+      evidence_caveat:"Photo linked to this equipment — visibility not assessed by Atlas (an AI agent can analyze it).",
       generated_label:"Generated",
       fallback_hint:"Full details (measured spaces, status, limitations) are in the context — use the buttons below.",
       legend_obs_t:"Observation", legend_obs_d:"auto-detected, not human-confirmed.",
@@ -968,8 +970,15 @@
       var nm = m ? (m[lang]||m.fr) : prettifySlug(h.type||"other");
       var hasRoom = h.spaceId && Object.prototype.hasOwnProperty.call(byId, h.spaceId) && byId[h.spaceId];
       var where = hasRoom ? t.in_room(esc(byId[h.spaceId])) : esc(t.room_unknown);
-      var ok = h.status === "observed";
-      var stTxt = ok ? t.status_observed : t.status_declared;
+      // Provenance badge — distinguish a scan detection (unconfirmed) from an
+      // installer-placed POI (confirmed), instead of flattening both to « Vu en
+      // place ». Falls back to the old status if source/confirmation absent.
+      var provTxt, provClass;
+      if (h.confirmation === "confirmed"){ provTxt = t.badge_confirmed; provClass = "ok"; }
+      else if (h.confirmation === "unconfirmed" || h.source === "apple_roomplan"){ provTxt = t.badge_detected; provClass = "muted"; }
+      else { provTxt = (h.status === "observed") ? t.status_observed : t.status_declared;
+             provClass = (h.status === "observed") ? "ok" : "warn"; }
+      var estimated = h.status === "declared_estimated";
       var files = Array.isArray(h.evidencePhotoFilenames) ? h.evidencePhotoFilenames.filter(Boolean) : [];
 
       var evHtml = "";
@@ -984,7 +993,8 @@
       return '<div class="eq"><span class="ico">'+ico+'</span><div class="body">'+
              '<div class="name">'+esc(nm)+'</div>'+
              '<div class="where">'+where+'</div>'+
-             '<div class="row2"><span class="tag '+(ok?'ok':'warn')+'">'+esc(stTxt)+'</span></div>'+
+             '<div class="row2"><span class="tag '+provClass+'">'+esc(provTxt)+'</span>'+
+             (estimated ? '<span class="tag warn">'+esc(t.status_declared)+'</span>' : '')+'</div>'+
              evHtml+'</div></div>';
     }).join("");
     return { html: html, ev: ev };
