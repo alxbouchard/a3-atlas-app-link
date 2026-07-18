@@ -165,6 +165,9 @@
   .plan-toggle-btn{font:inherit; font-size:13px; font-weight:600; padding:6px 14px; border-radius:999px;
     border:1px solid var(--line); background:var(--chip); color:var(--chip-ink); cursor:pointer}
   .plan-toggle-btn.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+  model-viewer.model3d{width:100%; height:min(62vh,440px); border-radius:12px;
+    border:1px solid var(--line); background:var(--chip); display:block; --poster-color:transparent}
+  .model-hint{font-size:12px; color:var(--muted); margin-top:8px}
 
   /* ---- Phase 2: history timeline (history.json) ---- */
   .hist{display:flex; flex-direction:column; gap:16px}
@@ -241,6 +244,11 @@
     <section class="card" id="plansSection" hidden>
       <h2 data-i18n="plans_h">Plans</h2>
       <div class="plans-grid" id="plans"></div>
+    </section>
+
+    <section class="card" id="modelSection" hidden>
+      <h2 data-i18n="model_h">Modèle 3D</h2>
+      <div id="models"></div>
     </section>
 
     <section class="card" id="equipSection" hidden>
@@ -409,6 +417,8 @@
       surf_caveat:"Estimations depuis un scan LiDAR (rectangle hors tout), non vérifiées sur site — à confirmer.",
       surf_assumptions_h:"Hypothèses", surf_needs_verify:"À vérifier sur site",
       plans_h:"Plans",
+      model_h:"Modèle 3D", model_hint:"Glissez pour pivoter · molette pour zoomer.",
+      model_download:"Télécharger le modèle 3D (.glb)",
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
       history_h:"Historique",
       lb_close:"Fermer", lb_prev:"Précédent", lb_next:"Suivant",
@@ -462,6 +472,8 @@
       surf_caveat:"Estimates from a LiDAR scan (bounding rectangle), not site-verified — confirm on site.",
       surf_assumptions_h:"Assumptions", surf_needs_verify:"To verify on site",
       plans_h:"Floor plans",
+      model_h:"3D model", model_hint:"Drag to rotate · scroll to zoom.",
+      model_download:"Download the 3D model (.glb)",
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
       history_h:"History",
       lb_close:"Close", lb_prev:"Previous", lb_next:"Next",
@@ -1053,6 +1065,7 @@
     renderGallery(photos);
     renderBeforeAfter(photos);
     renderPlans(Array.isArray(manifest.plans) ? manifest.plans : []);
+    renderModels(Array.isArray(manifest.models) ? manifest.models : []);
     renderVideo(manifest.video);
     // Media may arrive AFTER history / equipment — link their photos now.
     if (_historyDoc) { try { applyHistory(_historyDoc); } catch(e){} }
@@ -1113,6 +1126,68 @@
       root.appendChild(fig);
     });
     document.getElementById("plansSection").hidden = false;
+  }
+
+  // 3D MODEL — media.json models[] (.glb per room). <model-viewer> renders glTF
+  // (not USDZ), loaded lazily from a CDN only when a model exists so the base
+  // fiche stays light. The GLB streams from Drive via the CORS-open media
+  // endpoint (referrer-restricted key). Graceful: if the viewer library can't
+  // load, we fall back to a download link.
+  function driveModelUrl(id){
+    return "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) +
+           "?alt=media" + (DRIVE_API_KEY ? ("&key=" + DRIVE_API_KEY) : "");
+  }
+  var _mvState = 0, _mvCbs = [];   // 0 idle · 1 loading · 2 ready · 3 failed
+  function loadModelViewer(cb){
+    if (_mvState === 2) return cb(true);
+    if (_mvState === 3) return cb(false);
+    _mvCbs.push(cb);
+    if (_mvState === 1) return;
+    _mvState = 1;
+    function settle(ok){ _mvState = ok ? 2 : 3; var cbs = _mvCbs; _mvCbs = []; cbs.forEach(function(c){ c(ok); }); }
+    var s = document.createElement("script");
+    s.type = "module";
+    s.src = "https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js";
+    document.head.appendChild(s);
+    // Module onload is unreliable — poll for the defined element instead.
+    var tries = 0, poll = setInterval(function(){
+      if (customElements.get("model-viewer")){ clearInterval(poll); settle(true); }
+      else if (++tries > 48){ clearInterval(poll); settle(false); }   // ~12 s
+    }, 250);
+  }
+  function renderModels(models){
+    var valid = (models || []).filter(function(m){ return m && typeof m === "object" && validId(m.driveId); });
+    if (!valid.length) return;
+    loadModelViewer(function(ok){
+      var root = document.getElementById("models");
+      root.innerHTML = "";
+      valid.forEach(function(m){
+        if (ok){
+          var mv = document.createElement("model-viewer");
+          mv.className = "model3d";
+          mv.setAttribute("src", driveModelUrl(m.driveId));
+          mv.setAttribute("camera-controls", "");
+          mv.setAttribute("auto-rotate", "");
+          mv.setAttribute("environment-image", "neutral");
+          mv.setAttribute("shadow-intensity", "1");
+          mv.setAttribute("loading", "eager");
+          mv.setAttribute("reveal", "auto");
+          root.appendChild(mv);
+        } else {
+          var a = document.createElement("a");
+          a.className = "btn secondary"; a.href = driveModelUrl(m.driveId);
+          a.setAttribute("download", ""); a.textContent = t.model_download;
+          root.appendChild(a);
+        }
+        if (m.label){ var cap = makeCaption(m.label); if (cap) root.appendChild(cap); }
+      });
+      if (ok){
+        var hint = document.createElement("div");
+        hint.className = "model-hint"; hint.textContent = t.model_hint;
+        root.appendChild(hint);
+      }
+      document.getElementById("modelSection").hidden = false;
+    });
   }
 
   function lh3(id, w){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w"+(w||1600); }
