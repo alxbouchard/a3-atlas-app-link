@@ -441,7 +441,8 @@
       legend_deriv_t:"Valeur dérivée", legend_deriv_d:"calculée à partir des mesures (ex. surfaces) — vit dans derived.json, pas ici.",
       legend_absence:"Absence déclarée ≠ absence d'information : « rien de signalé » ne veut pas dire « rien présent ».",
       copied:"Consigne copiée ✓ — collez-la à votre assistant IA",
-      ai_prompt:function(u){return "Voici le contexte Atlas d'une propriété : "+u+"\n\nAide-moi à préparer l'intervention. Distingue clairement les observations, les confirmations et les estimations. Le lien porte l'essentiel; le contexte détaillé (context.md / context.json) et le ZIP de preuves sont accessibles depuis la page.";}
+      ai_prompt:function(u){return "Voici le contexte Atlas d'une propriété : "+u+"\n\nAide-moi à préparer l'intervention. Distingue clairement les observations, les confirmations et les estimations. Le lien porte l'essentiel; le contexte détaillé (context.md / context.json) et le ZIP de preuves sont accessibles depuis la page.";},
+      ai_copy:function(n,url){return "Contexte Atlas complet de « "+n+" » :\n"+url;}
     },
     en:{
       brand:"A3 ATLAS SCANNER",
@@ -498,7 +499,8 @@
       legend_deriv_t:"Derived value", legend_deriv_d:"computed from measurements (e.g. areas) — lives in derived.json, not here.",
       legend_absence:"Declared absence ≠ missing information: “nothing reported” is not “nothing there.”",
       copied:"Prompt copied ✓ — paste it to your AI assistant",
-      ai_prompt:function(u){return "Here is the Atlas context of a property: "+u+"\n\nHelp me prepare the visit. Clearly separate observations, confirmations and estimates. The link carries the essentials; the detailed context (context.md / context.json) and the evidence ZIP are reachable from the page.";}
+      ai_prompt:function(u){return "Here is the Atlas context of a property: "+u+"\n\nHelp me prepare the visit. Clearly separate observations, confirmations and estimates. The link carries the essentials; the detailed context (context.md / context.json) and the evidence ZIP are reachable from the page.";},
+      ai_copy:function(n,url){return "Complete Atlas context for \""+n+"\":\n"+url;}
     }
   };
   var t = T[lang];
@@ -674,7 +676,10 @@
   var toast = document.getElementById("toast");
   function showToast(msg){ toast.textContent = msg; toast.classList.add("show"); setTimeout(function(){toast.classList.remove("show");},2600); }
   document.getElementById("aiBtn").addEventListener("click", function(){
-    var text = t.ai_prompt(location.href);
+    // With the single AI aggregate present, copy the SAME two lines as the app:
+    // a title + the one direct URL. Without `a`, keep the old prompt (old links).
+    var text = validId(aiContextId) ? t.ai_copy(label, driveRaw(aiContextId))
+                                     : t.ai_prompt(location.href);
     if (navigator.clipboard && navigator.clipboard.writeText){
       navigator.clipboard.writeText(text).then(function(){ showToast(t.copied); }, function(){ fallbackCopy(text); });
     } else { fallbackCopy(text); }
