@@ -672,9 +672,8 @@
   var lbIndex = -1;
   var lbPrevFocus = null;
 
-  function lbBig(id){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w2048"; }
   function setLightboxContent(item){
-    lbImg.src = lbBig(item.driveId);
+    loadDriveImage(lbImg, item.driveId, 2048, null);
     var c = (item.caption!=null) ? String(item.caption).trim() : "";
     lbCap.textContent = c; lbCap.hidden = !c;
     var many = lbItems.length > 1;
@@ -1025,7 +1024,8 @@
       var caption = (p.label!=null && String(p.label).trim()) ? String(p.label).trim() : kindLabel;
       var fig = document.createElement("figure");
       fig.className = "plan-fig";
-      var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; });
+      // Plans carry fine dimension text — request a larger render than photos.
+      var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; }, 1600);
       bindLightbox(im, p.driveId, caption);
       fig.appendChild(im);
       var cap = makeCaption(caption);
@@ -1035,14 +1035,43 @@
     document.getElementById("plansSection").hidden = false;
   }
 
-  function lh3(id){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w1600"; }
+  function lh3(id, w){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w"+(w||1600); }
+  function driveThumb(id, w){ return "https://drive.google.com/thumbnail?id="+encodeURIComponent(id)+"&sz=w"+(w||1600); }
 
-  // <img> whose failure hides its own container — CDN load errors degrade cleanly.
-  function makeMediaImg(driveId, onFail){
+  // Drive's per-file thumbnail endpoints RATE-LIMIT bursts: a 23-photo gallery
+  // firing all at once (worst right after a share) comes back mostly blank.
+  // Two defences:
+  //   1) a concurrency GATE — at most IMG_CONCURRENCY requests in flight, the
+  //      rest queued, so we never burst;
+  //   2) per-image retry with jittered backoff, alternating endpoints
+  //      (drive.google.com/thumbnail ⇄ lh3), before giving up (onFail).
+  // Grid thumbnails also ask for a SMALL size (w600) — light and fast; the
+  // lightbox fetches the big one on demand.
+  var IMG_CONCURRENCY = 4, _imgQueue = [], _imgActive = 0;
+  function _imgPump(){
+    while (_imgActive < IMG_CONCURRENCY && _imgQueue.length){ _imgActive++; (_imgQueue.shift())(); }
+  }
+  function loadDriveImage(img, id, w, onFail){
+    var order = [driveThumb(id, w), lh3(id, w)], n = 0, MAX = 5, settled = false;
+    function release(){ if (settled) return; settled = true; _imgActive--; _imgPump(); }
+    function start(){
+      img.onload = release;
+      img.onerror = function(){
+        n++;
+        if (n > MAX){ img.onerror = null; if (onFail) onFail(); release(); return; }
+        setTimeout(function(){ img.src = order[n % order.length]; },
+                   500 * n + Math.floor(Math.random() * 500));
+      };
+      img.src = order[0];
+    }
+    _imgQueue.push(start); _imgPump();
+  }
+
+  // <img> whose repeated failure hides its own container — degrades cleanly.
+  function makeMediaImg(driveId, onFail, w){
     var img = document.createElement("img");
     img.loading = "lazy"; img.alt = "";
-    img.src = lh3(driveId);
-    img.onerror = function(){ img.onerror = null; onFail(); };
+    loadDriveImage(img, driveId, w || 600, onFail);
     return img;
   }
 
@@ -1307,8 +1336,7 @@
           thumbWrap.className = "hthumb";
           var img = document.createElement("img");
           img.loading = "lazy"; img.alt = "";
-          img.src = "https://lh3.googleusercontent.com/d/"+encodeURIComponent(ev.photoDriveId)+"=w200";
-          (function(container){ img.onerror = function(){ img.onerror = null; container.style.display = "none"; }; })(thumbWrap);
+          (function(container){ loadDriveImage(img, ev.photoDriveId, 400, function(){ container.style.display = "none"; }); })(thumbWrap);
           bindLightbox(img, ev.photoDriveId, lab.textContent);
           thumbWrap.appendChild(img);
           body.appendChild(thumbWrap);
