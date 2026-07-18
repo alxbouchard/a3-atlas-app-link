@@ -124,6 +124,23 @@
   ul.limits{margin:0; padding-left:18px}
   ul.limits li{margin:7px 0; font-size:13.5px; line-height:1.5; color:var(--ink)}
   .verbatim{color:var(--muted); font-size:12px; margin:0 0 10px; font-style:italic}
+
+  /* ---- Phase 1 media (from media.json — Complet shares only) ---- */
+  .media-group{margin-bottom:16px}
+  .media-group:last-child{margin-bottom:0}
+  .media-group-h{font-size:14px; font-weight:700; color:var(--ink); margin:0 0 9px}
+  .gallery-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px}
+  .media-fig{margin:0; min-width:0}
+  .media-fig img{width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px;
+    border:1px solid var(--line); background:var(--chip); display:block}
+  .media-cap{font-size:12px; color:var(--muted); margin-top:6px; line-height:1.4; word-wrap:break-word}
+  .ba-pair{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px}
+  .ba-pair:last-child{margin-bottom:0}
+  .ba-side{margin:0; position:relative; min-width:0}
+  .ba-side img{width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px;
+    border:1px solid var(--line); background:var(--chip); display:block}
+  .ba-badge{position:absolute; top:8px; left:8px; z-index:1; font-size:11px; font-weight:700;
+    padding:3px 9px; border-radius:999px; background:rgba(0,0,0,.62); color:#fff; letter-spacing:.02em}
 </style>
 </head>
 <body>
@@ -168,6 +185,24 @@
       <p class="note" data-i18n="areas_note">Déduites des objets détectés par RoomPlan — jamais confirmées sur place.</p>
     </section>
 
+    <!-- Media: photo gallery (media.json, Complet shares only) -->
+    <section class="card" id="gallerySection" hidden>
+      <h2 data-i18n="gallery_h">Photos du site</h2>
+      <div id="gallery"></div>
+    </section>
+
+    <!-- Media: before / after pairs -->
+    <section class="card" id="baSection" hidden>
+      <h2 data-i18n="ba_h">Avant / Après</h2>
+      <div id="beforeAfter"></div>
+    </section>
+
+    <!-- Media: scan video -->
+    <section class="card" id="videoSection" hidden>
+      <h2 data-i18n="video_h">Vidéo du scan</h2>
+      <div id="videoWrap"></div>
+    </section>
+
     <!-- Data semantics legend (always) -->
     <section class="card" id="dataSemSection">
       <h2 data-i18n="datasem_h">Comment lire ces données</h2>
@@ -202,6 +237,7 @@
           <li><code>lidar</code> 1 = scan LiDAR matériel / hardware LiDAR · <code>lang</code> langue / language</li>
           <li><code>c</code> context.md · <code>j</code> context.json · <code>d</code> ZIP de preuves / evidence ZIP (Google Drive)</li>
           <li><code>ph</code> photos.json — vignettes de preuve, optionnel / evidence thumbnails, optional</li>
+          <li><code>m</code> media.json — galerie photos + vidéo, partages Complet seulement / photo gallery + video, Complet shares only</li>
         </ul>
         <p>Quand une clé API référente est configurée, la page enrichit automatiquement la fiche en lisant <code>context.json</code> (googleapis, <code>alt=media</code>) : espaces mesurés, statut des équipements, limites verbatim. Sans clé ou hors ligne, la fiche reste complète depuis l'URL. / When a referrer-restricted API key is configured, the page auto-enriches from <code>context.json</code> (googleapis, <code>alt=media</code>): measured spaces, equipment status, verbatim limitations. Without a key or offline, the fiche stays complete from the URL.</p>
         <p>Récupérer un fichier / fetch a file : <code>https://drive.usercontent.google.com/download?id=&lt;ID&gt;&amp;export=download&amp;confirm=t</code>. Si Drive est inaccessible, l'utilisateur peut coller context.md ou téléverser le ZIP. / If Drive is unreachable, the user can paste context.md or upload the ZIP.</p>
@@ -273,6 +309,9 @@
       ground:"Rez-de-chaussée", basement:"Sous-sol", floor_n:function(n){return n+"ᵉ étage";},
       floor_word:"Étage", dim_label:"Dimensions", dims_not_measured:"Non mesurées",
       spaces_h:"Espaces / pièces",
+      gallery_h:"Photos du site", media_other_room:"Autres photos",
+      ba_h:"Avant / Après", before_label:"Avant", after_label:"Après",
+      video_h:"Vidéo du scan",
       datasem_h:"Comment lire ces données",
       limits_h:"Limites & mise en garde",
       limits_verbatim:"Mise en garde du fabricant, affichée telle quelle (en anglais).",
@@ -309,6 +348,9 @@
       ground:"Ground floor", basement:"Basement", floor_n:function(n){return "Floor "+n;},
       floor_word:"Floor", dim_label:"Dimensions", dims_not_measured:"Not measured",
       spaces_h:"Spaces / rooms",
+      gallery_h:"Site photos", media_other_room:"Other photos",
+      ba_h:"Before / After", before_label:"Before", after_label:"After",
+      video_h:"Scan video",
       datasem_h:"How to read this data",
       limits_h:"Limitations & disclaimer",
       limits_verbatim:"Manufacturer disclaimer, shown verbatim.",
@@ -421,6 +463,7 @@
   var eq = (q.get("eq")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
   var areas = (q.get("areas")||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
   var ctxMd = q.get("c"), ctxJson = q.get("j"), photosId = q.get("ph");
+  var mediaId = q.get("m");            // media.json manifest drive id (Complet shares)
 
   // ---- BASELINE render (synchronous, never broken) ----
   document.getElementById("fiche").hidden = false;
@@ -507,6 +550,7 @@
   // =====================================================================
   var enriched = false;
   var evidenceRows = [];   // [{id, filenames}] populated by buildEquipment
+  var spaceLabelsById = {};// id -> label, populated by applyContext; reused for media room grouping
 
   function showFallbackNote(){
     if (enriched) return;
@@ -555,10 +599,11 @@
     }).catch(function(){
       // no network / non-2xx / parse error / resourceKey preflight — silent.
       showFallbackNote();
-    });
+    }).then(function(){ runMediaEnrichment(); });   // media runs after context settles (labels ready)
   } else {
     // No key or no context.json id: baseline is the whole story.
     showFallbackNote();
+    runMediaEnrichment();   // media is independent of context.json (only needs `m` + key)
   }
 
   // ---- enrichment: authoritative upgrade from context.json ----
@@ -566,6 +611,7 @@
     var spaces = Array.isArray(doc.spaces) ? doc.spaces : [];
     var byId = {};
     spaces.forEach(function(s){ if (s && s.id) byId[s.id] = (s.label!=null ? String(s.label) : ""); });
+    spaceLabelsById = byId;   // share the id->label map with media room grouping
 
     // 1. Identity header
     var subj = doc.subject || {};
@@ -753,6 +799,149 @@
         .catch(function(){ img.remove(); });   // finally: no thumbnail, caveat stays
     };
     return img;
+  }
+
+  // =====================================================================
+  // MEDIA ENRICHMENT — media.json (atlas.media.v1), a Drive companion to
+  // context.json (NEVER inlined — Hermes byte-extracts context.json/md).
+  // Gated on `m` + key; any miss/failure is SILENT (baseline stays intact).
+  // Photos & video exist only for Complet shares by design.
+  //   Photos → lh3 CDN <img> (no CORS, no key).  Video → Drive preview iframe.
+  // =====================================================================
+  function runMediaEnrichment(){
+    if (!(DRIVE_API_KEY && validId(mediaId))) return;
+    fetchJson(mediaId).then(function(manifest){
+      if (!manifest || manifest.schemaVersion !== "atlas.media.v1") return;
+      try{ applyMedia(manifest); }catch(e){ /* baseline + context stay intact */ }
+    }).catch(function(){ /* no network / non-2xx / parse — silent */ });
+  }
+
+  function applyMedia(manifest){
+    var photos = Array.isArray(manifest.photos) ? manifest.photos.filter(function(p){
+      return p && typeof p === "object" && validId(p.driveId);
+    }) : [];
+    renderGallery(photos);
+    renderBeforeAfter(photos);
+    renderVideo(manifest.video);
+  }
+
+  function lh3(id){ return "https://lh3.googleusercontent.com/d/"+encodeURIComponent(id)+"=w1600"; }
+
+  // <img> whose failure hides its own container — CDN load errors degrade cleanly.
+  function makeMediaImg(driveId, onFail){
+    var img = document.createElement("img");
+    img.loading = "lazy"; img.alt = "";
+    img.src = lh3(driveId);
+    img.onerror = function(){ img.onerror = null; onFail(); };
+    return img;
+  }
+
+  function makeCaption(txt){
+    var s = (txt!=null) ? String(txt).trim() : "";
+    if (!s) return null;
+    var fc = document.createElement("figcaption");
+    fc.className = "media-cap"; fc.textContent = s;   // captionFR verbatim (FR authoring)
+    return fc;
+  }
+
+  // PHOTO GALLERY — responsive grid, grouped/labeled by room when the photo's
+  // roomId maps to a known space label (from context.json). Otherwise flat.
+  function renderGallery(photos){
+    if (!photos.length) return;
+    var groups = [], idx = {};
+    photos.forEach(function(p){
+      var label = (p.roomId && spaceLabelsById[p.roomId]) ? spaceLabelsById[p.roomId] : null;
+      var key = label || " ungrouped";
+      if (!idx[key]){ idx[key] = { label: label, items: [] }; groups.push(idx[key]); }
+      idx[key].items.push(p);
+    });
+    var anyLabeled = groups.some(function(g){ return !!g.label; });
+    var root = document.getElementById("gallery");
+    root.innerHTML = "";
+    groups.forEach(function(g){
+      var wrap = document.createElement("div");
+      wrap.className = "media-group";
+      if (anyLabeled){
+        var h = document.createElement("div");
+        h.className = "media-group-h";
+        h.textContent = g.label || t.media_other_room;
+        wrap.appendChild(h);
+      }
+      var grid = document.createElement("div");
+      grid.className = "gallery-grid";
+      g.items.forEach(function(p){
+        var fig = document.createElement("figure");
+        fig.className = "media-fig";
+        fig.appendChild(makeMediaImg(p.driveId, function(){ fig.style.display = "none"; }));
+        var cap = makeCaption(p.captionFR);
+        if (cap) fig.appendChild(cap);
+        grid.appendChild(fig);
+      });
+      wrap.appendChild(grid);
+      root.appendChild(wrap);
+    });
+    document.getElementById("gallerySection").hidden = false;
+  }
+
+  // AVANT / APRÈS — a photo whose beforeRef names another photo's filename is
+  // the "after" that re-frames that "before"; render the (before → after) pair.
+  function renderBeforeAfter(photos){
+    var byFilename = {};
+    photos.forEach(function(p){ if (p.filename) byFilename[p.filename] = p; });
+    var pairs = [];
+    photos.forEach(function(after){
+      if (!after.beforeRef) return;
+      var before = byFilename[String(after.beforeRef)];
+      if (before && before !== after && validId(before.driveId)){
+        pairs.push({ before: before, after: after });
+      }
+    });
+    if (!pairs.length) return;
+    var root = document.getElementById("beforeAfter");
+    root.innerHTML = "";
+    pairs.forEach(function(pair){
+      var wrap = document.createElement("div");
+      wrap.className = "ba-pair";
+      wrap.appendChild(makeBASide(pair.before, t.before_label));
+      wrap.appendChild(makeBASide(pair.after,  t.after_label));
+      root.appendChild(wrap);
+    });
+    document.getElementById("baSection").hidden = false;
+  }
+  function makeBASide(p, labelTxt){
+    var side = document.createElement("figure");
+    side.className = "ba-side";
+    var badge = document.createElement("div");
+    badge.className = "ba-badge"; badge.textContent = labelTxt;
+    side.appendChild(badge);
+    side.appendChild(makeMediaImg(p.driveId, function(){ side.style.display = "none"; }));
+    var cap = makeCaption(p.captionFR);
+    if (cap) side.appendChild(cap);
+    return side;
+  }
+
+  // VIDEO — Drive's own player (no CORS, no key). Cross-origin iframes give no
+  // load-error signal, so we only gate on a valid id; Drive shows its own error.
+  function renderVideo(video){
+    if (!video || typeof video !== "object" || !validId(video.driveId)) return;
+    var wrap = document.getElementById("videoWrap");
+    wrap.innerHTML = "";
+    var iframe = document.createElement("iframe");
+    iframe.src = "https://drive.google.com/file/d/"+encodeURIComponent(video.driveId)+"/preview";
+    iframe.setAttribute("allow", "autoplay");
+    iframe.setAttribute("allowfullscreen", "");
+    iframe.style.width = "100%";
+    iframe.style.aspectRatio = "16/9";
+    iframe.style.border = "0";
+    iframe.style.borderRadius = "14px";
+    wrap.appendChild(iframe);
+    var label = (video.label!=null) ? String(video.label).trim() : "";
+    if (label){
+      var cap = document.createElement("div");
+      cap.className = "media-cap"; cap.style.marginTop = "8px"; cap.textContent = label;
+      wrap.appendChild(cap);
+    }
+    document.getElementById("videoSection").hidden = false;
   }
 })();
 </script>
