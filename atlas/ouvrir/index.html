@@ -298,7 +298,7 @@
         <a class="btn secondary" id="ctxBtn" href="#" target="_blank" rel="noopener" data-i18n="read_context">Lire le contexte</a>
         <a class="btn secondary" id="ctxJsonBtn" href="#" target="_blank" rel="noopener" hidden data-i18n="context_json">Contexte JSON</a>
         <a class="btn secondary" id="aiJsonBtn" href="#" target="_blank" rel="noopener" hidden data-i18n="ai_json">Contexte complet pour IA — JSON</a>
-        <button class="btn secondary" id="aiBtn" data-i18n="use_ai">Utiliser avec mon assistant IA</button>
+        <button class="btn secondary" id="aiBtn" data-i18n="use_ai">Copier la fiche pour mon assistant IA</button>
       </div>
       <p class="note" id="privacyNote">Aperçu depuis le lien. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.</p>
     </section>
@@ -395,7 +395,8 @@
       areas_note:"Déduites des objets détectés par RoomPlan — jamais confirmées sur place.",
       download:"Télécharger l'export", read_context:"Lire le contexte",
       context_json:"Contexte JSON", ai_json:"Contexte complet pour IA — JSON",
-      use_ai:"Utiliser avec mon assistant IA",
+      use_ai:"Copier la fiche pour mon assistant IA",
+      page_copied:"Lien de la fiche copié",
       privacy_prefix:"Aperçu depuis le lien.",
       privacy_surfaces:"Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.",
       gps_absent:"Aucune position GPS précise n'est incluse dans ce partage.",
@@ -446,7 +447,8 @@
       legend_absence:"Absence déclarée ≠ absence d'information : « rien de signalé » ne veut pas dire « rien présent ».",
       copied:"Consigne copiée ✓ — collez-la à votre assistant IA",
       ai_prompt:function(u){return "Voici le contexte Atlas d'une propriété : "+u+"\n\nAide-moi à préparer l'intervention. Distingue clairement les observations, les confirmations et les estimations. Le lien porte l'essentiel; le contexte détaillé (context.md / context.json) et le ZIP de preuves sont accessibles depuis la page.";},
-      ai_copy:function(n,url){return "Contexte Atlas complet de « "+n+" » :\n"+url;}
+      ai_copy:function(n,url){return "Contexte Atlas complet de « "+n+" » :\n"+url;},
+      ai_copy_page:function(n,url){return "Contexte Atlas de « "+n+" » :\n"+url;}
     },
     en:{
       brand:"A3 ATLAS SCANNER",
@@ -457,7 +459,8 @@
       areas_note:"Inferred from objects RoomPlan detected — never confirmed on site.",
       download:"Download export", read_context:"Read the context",
       context_json:"Context JSON", ai_json:"Full AI context — JSON",
-      use_ai:"Use with my AI assistant",
+      use_ai:"Copy the property page for my AI assistant",
+      page_copied:"Property page link copied",
       privacy_prefix:"Preview from the link.",
       privacy_surfaces:"Full surfaces and details live in the context, with their confidence level.",
       gps_absent:"No precise GPS location is included in this share.",
@@ -508,7 +511,8 @@
       legend_absence:"Declared absence ≠ missing information: “nothing reported” is not “nothing there.”",
       copied:"Prompt copied ✓ — paste it to your AI assistant",
       ai_prompt:function(u){return "Here is the Atlas context of a property: "+u+"\n\nHelp me prepare the visit. Clearly separate observations, confirmations and estimates. The link carries the essentials; the detailed context (context.md / context.json) and the evidence ZIP are reachable from the page.";},
-      ai_copy:function(n,url){return "Complete Atlas context for \""+n+"\":\n"+url;}
+      ai_copy:function(n,url){return "Complete Atlas context for \""+n+"\":\n"+url;},
+      ai_copy_page:function(n,url){return "Atlas context for \""+n+"\":\n"+url;}
     }
   };
   var t = T[lang];
@@ -693,12 +697,12 @@
   var toast = document.getElementById("toast");
   function showToast(msg){ toast.textContent = msg; toast.classList.add("show"); setTimeout(function(){toast.classList.remove("show");},2600); }
   document.getElementById("aiBtn").addEventListener("click", function(){
-    // With the single AI aggregate present, copy the SAME two lines as the app:
-    // a title + the one direct URL. Without `a`, keep the old prompt (old links).
-    var text = validId(aiContextId) ? t.ai_copy(label, driveRaw(aiContextId))
-                                     : t.ai_prompt(location.href);
+    // ALWAYS copy the HTML property PAGE url (this fiche), never the raw Drive
+    // JSON — a browsing AI (ChatGPT) refuses drive.usercontent but reads this
+    // HTML page. The raw aggregate stays available via the advanced JSON button.
+    var text = t.ai_copy_page(label, location.href);
     if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).then(function(){ showToast(t.copied); }, function(){ fallbackCopy(text); });
+      navigator.clipboard.writeText(text).then(function(){ showToast(t.page_copied); }, function(){ fallbackCopy(text); });
     } else { fallbackCopy(text); }
   });
   function fallbackCopy(text){
