@@ -1,0 +1,307 @@
+{
+  "schemaVersion": "atlas.ai.v1",
+  "generatedAt": "2026-07-18T12:00:00Z",
+  "_fixtureNotice": "FIXTURE DE TEST SYNTHÉTIQUE — aucune donnée réelle. Nom, mesures, adresses et liens de preuves sont FICTIFS (domaine example.com). Sert uniquement à vérifier qu'un assistant IA peut lire ce JSON statique. FICTIONAL TEST DATA — not a real property.",
+  "generator": {
+    "app": "A3 Atlas Scanner",
+    "platform": "iOS",
+    "note": "Sortie de démonstration, non issue d'un scan réel."
+  },
+  "shareScope": {
+    "scope": "professional_context",
+    "preciseLocationIncluded": false,
+    "selectedPhotosIncluded": true,
+    "coverage": "Toutes les données structurées incluses dans ce partage (jeu de démonstration).",
+    "preciseLocationNote": "Coordonnées GPS absentes de ce partage — la localisation précise n'est pas exposée."
+  },
+  "subject": {
+    "name": "Appartement Démo Érable-514 (FICTIF)",
+    "type": "logement_court_sejour",
+    "descriptor": "Exemple de fiche générée pour tester la lisibilité IA. Propriété inexistante."
+  },
+  "dataSemantics": {
+    "coverage": "Toutes les données structurées incluses dans ce partage.",
+    "provenanceModel": "Chaque donnée conserve séparément source, confirmation, visibility, validationStatus et needsSiteVerification. Ne jamais les fusionner.",
+    "source": {
+      "apple_roomplan": "Détecté automatiquement par le scan LiDAR RoomPlan — PAS confirmé par un humain.",
+      "installer_entry": "Saisi par l'installateur.",
+      "installer_confirmation": "Confirmé sur place par l'installateur."
+    },
+    "confirmation": {
+      "unconfirmed": "Jamais confirmé par un humain.",
+      "confirmed": "Confirmé par un humain."
+    },
+    "visibility": {
+      "not_assessed": "Atlas ne fait AUCUNE analyse visuelle. Une photo liée à un POI ne prouve pas que l'objet y est visible. Un agent externe peut évaluer visible / not_visible / uncertain séparément.",
+      "note": "evidenceKind=poi_linked_photo signifie qu'une photo est LIÉE à un POI, jamais que l'objet est visible."
+    },
+    "derivedValues": "Estimations calculées (ex. peinture, gypse) — reproductibles depuis derivedValues + inputRefs ; validationStatus=not_site_verified tant qu'un humain n'a pas mesuré sur place.",
+    "measurements": "Scan LiDAR RoomPlan, ±2 pouces, non certifié. Les aires « rectangle hors tout » sont l'emprise, pas le polygone réel.",
+    "missingData": "Une information manquante reste manquante — jamais une absence confirmée. Aucun confirmedAt inventé."
+  },
+  "consumerGuidance": {
+    "readOrder": ["subject", "context", "entities", "observations", "relationships", "derivedValues", "media", "history"],
+    "doNot": [
+      "Traiter une détection RoomPlan comme un fait confirmé.",
+      "Traiter une photo liée comme preuve que l'objet est visible.",
+      "Traiter une estimation dérivée comme une mesure certifiée.",
+      "Traiter une information manquante comme une absence confirmée."
+    ],
+    "recommendVerification": "Recommande une vérification sur site si l'incertitude touche la sécurité, la conformité ou les coûts.",
+    "evidenceAccess": "Chaque preuve (photo, plan, modèle, vidéo, ZIP) est accessible par son url directe — aucun base64, aucun JavaScript à interpréter."
+  },
+  "context": {
+    "subject": {
+      "name": "Appartement Démo Érable-514 (FICTIF)",
+      "type": "logement_court_sejour"
+    },
+    "summary": "Logement de démonstration de 3½ sur un étage : cuisine, salle de bain et aire de séjour. Toutes les valeurs sont fictives.",
+    "criticalLimitations": [
+      "Jeu de données synthétique — ne représente aucun bâtiment réel.",
+      "Mesures LiDAR simulées, non certifiées, à vérifier sur place.",
+      "Aucune coordonnée GPS réelle dans ce partage."
+    ]
+  },
+  "entities": [
+    {
+      "id": "space_kitchen",
+      "kind": "space",
+      "label": "Cuisine",
+      "roomType": "kitchen",
+      "source": "apple_roomplan",
+      "confirmation": "confirmed"
+    },
+    {
+      "id": "space_bathroom",
+      "kind": "space",
+      "label": "Salle de bain",
+      "roomType": "bathroom",
+      "source": "apple_roomplan",
+      "confirmation": "unconfirmed"
+    },
+    {
+      "id": "space_living",
+      "kind": "space",
+      "label": "Aire de séjour",
+      "roomType": "living_area",
+      "source": "apple_roomplan",
+      "confirmation": "confirmed"
+    },
+    {
+      "id": "eq_electrical_panel",
+      "kind": "equipment",
+      "label": "Panneau électrique",
+      "equipmentType": "electrical_panel",
+      "linkedSpace": "space_kitchen",
+      "source": "installer_confirmation",
+      "confirmation": "confirmed"
+    },
+    {
+      "id": "eq_dishwasher",
+      "kind": "equipment",
+      "label": "Lave-vaisselle",
+      "equipmentType": "dishwasher",
+      "linkedSpace": "space_kitchen",
+      "source": "installer_entry",
+      "confirmation": "unconfirmed"
+    },
+    {
+      "id": "eq_thermostat",
+      "kind": "equipment",
+      "label": "Thermostat",
+      "equipmentType": "thermostat",
+      "linkedSpace": "space_living",
+      "source": "installer_confirmation",
+      "confirmation": "confirmed"
+    },
+    {
+      "id": "eq_water_heater",
+      "kind": "equipment",
+      "label": "Chauffe-eau",
+      "equipmentType": "water_heater",
+      "linkedSpace": "space_bathroom",
+      "source": "installer_entry",
+      "confirmation": "unconfirmed"
+    }
+  ],
+  "observations": [
+    {
+      "id": "obs_panel_amperage",
+      "entityRef": "eq_electrical_panel",
+      "statement": "Panneau électrique de 200 A (valeur fictive), disjoncteur principal en haut à gauche.",
+      "source": "installer_confirmation",
+      "confirmation": "confirmed",
+      "visibility": "not_assessed",
+      "evidenceKind": "poi_linked_photo",
+      "evidencePhotoFilenames": ["photo_panel_001.jpg"],
+      "needsSiteVerification": false
+    },
+    {
+      "id": "obs_dishwasher_model",
+      "entityRef": "eq_dishwasher",
+      "statement": "Lave-vaisselle encastré, marque supposée FICTIF-Brand, modèle non confirmé.",
+      "source": "installer_entry",
+      "confirmation": "unconfirmed",
+      "visibility": "not_assessed",
+      "evidenceKind": "poi_linked_photo",
+      "evidencePhotoFilenames": ["photo_kitchen_002.jpg"],
+      "needsSiteVerification": true
+    },
+    {
+      "id": "obs_water_shutoff",
+      "entityRef": "eq_water_heater",
+      "statement": "Valve d'arrêt d'eau principale près du chauffe-eau (emplacement approximatif).",
+      "source": "installer_entry",
+      "confirmation": "unconfirmed",
+      "visibility": "uncertain",
+      "evidenceKind": "poi_linked_photo",
+      "evidencePhotoFilenames": ["photo_bathroom_003.jpg"],
+      "needsSiteVerification": true
+    }
+  ],
+  "relationships": [
+    {"from": "eq_electrical_panel", "type": "located_in", "to": "space_kitchen"},
+    {"from": "eq_dishwasher", "type": "located_in", "to": "space_kitchen"},
+    {"from": "eq_thermostat", "type": "controls", "to": "space_living"},
+    {"from": "eq_water_heater", "type": "located_in", "to": "space_bathroom"}
+  ],
+  "derivedValues": [
+    {
+      "id": "paint_kitchen",
+      "space": "space_kitchen",
+      "metric": "wall_paint_area",
+      "value": 38.5,
+      "unit": "m2",
+      "method": "perimeter_x_height_minus_openings",
+      "inputRefs": ["house.spaces.space_kitchen"],
+      "validationStatus": "not_site_verified"
+    },
+    {
+      "id": "gypsum_living",
+      "space": "space_living",
+      "metric": "gypsum_board_area",
+      "value": 61.2,
+      "unit": "m2",
+      "method": "walls_plus_ceiling",
+      "inputRefs": ["house.spaces.space_living"],
+      "validationStatus": "not_site_verified"
+    },
+    {
+      "id": "floor_total",
+      "space": "whole_unit",
+      "metric": "floor_area_footprint",
+      "value": 47.9,
+      "unit": "m2",
+      "method": "sum_of_room_footprints_bounding_rectangle",
+      "inputRefs": ["house.spaces"],
+      "validationStatus": "not_site_verified"
+    }
+  ],
+  "canonicalHouse": {
+    "unitName": "Appartement Démo Érable-514 (FICTIF)",
+    "floorCount": 1,
+    "spaces": {
+      "space_kitchen": {
+        "label": "Cuisine",
+        "dimensionsMeters": {"width": 3.10, "length": 3.40, "height": 2.44},
+        "footprintAreaM2": 10.54,
+        "measurementNote": "rectangle hors tout — emprise, pas le polygone réel"
+      },
+      "space_bathroom": {
+        "label": "Salle de bain",
+        "dimensionsMeters": {"width": 2.10, "length": 2.60, "height": 2.44},
+        "footprintAreaM2": 5.46,
+        "measurementNote": "rectangle hors tout — emprise, pas le polygone réel"
+      },
+      "space_living": {
+        "label": "Aire de séjour",
+        "dimensionsMeters": {"width": 4.20, "length": 5.20, "height": 2.44},
+        "footprintAreaM2": 21.84,
+        "measurementNote": "rectangle hors tout — emprise, pas le polygone réel"
+      }
+    },
+    "openings": {
+      "doors": 5,
+      "windows": 6
+    }
+  },
+  "media": {
+    "photos": [
+      {
+        "type": "photo",
+        "driveId": "FICTIF_photo_panel_001",
+        "filename": "photo_panel_001.jpg",
+        "url": "https://example.com/atlas-fixture-demo/photo_panel_001.jpg",
+        "linkedSpace": "space_kitchen",
+        "evidenceNature": "poi_evidence",
+        "visibility": "not_assessed",
+        "evidenceKind": "poi_linked_photo"
+      },
+      {
+        "type": "photo",
+        "driveId": "FICTIF_photo_kitchen_002",
+        "filename": "photo_kitchen_002.jpg",
+        "url": "https://example.com/atlas-fixture-demo/photo_kitchen_002.jpg",
+        "linkedSpace": "space_kitchen",
+        "evidenceNature": "poi_evidence",
+        "visibility": "not_assessed",
+        "evidenceKind": "poi_linked_photo"
+      },
+      {
+        "type": "photo",
+        "driveId": "FICTIF_photo_bathroom_003",
+        "filename": "photo_bathroom_003.jpg",
+        "url": "https://example.com/atlas-fixture-demo/photo_bathroom_003.jpg",
+        "linkedSpace": "space_bathroom",
+        "evidenceNature": "poi_evidence",
+        "visibility": "uncertain",
+        "evidenceKind": "poi_linked_photo"
+      }
+    ],
+    "plans": [
+      {
+        "type": "floor_plan_2d",
+        "driveId": "FICTIF_plan_floor1",
+        "kind": "floor_plan",
+        "label": "Plan 2D — étage 1 (fictif)",
+        "url": "https://example.com/atlas-fixture-demo/plan_floor1.png"
+      }
+    ],
+    "models": [
+      {
+        "type": "room_model_3d",
+        "driveId": "FICTIF_model_unit",
+        "label": "Modèle 3D du logement (fictif)",
+        "url": "https://example.com/atlas-fixture-demo/model_unit.usdz"
+      }
+    ],
+    "video": null
+  },
+  "history": [
+    {
+      "at": "2026-07-01T09:15:00Z",
+      "event": "scan_created",
+      "detail": "Scan de démonstration créé (fictif)."
+    },
+    {
+      "at": "2026-07-05T14:30:00Z",
+      "event": "equipment_confirmed",
+      "detail": "Panneau électrique confirmé sur place par l'installateur (fictif)."
+    },
+    {
+      "at": "2026-07-10T11:00:00Z",
+      "event": "share_updated",
+      "detail": "Partage mis à jour de façon incrémentale — même lien conservé (fictif)."
+    }
+  ],
+  "limitations": [
+    "Jeu de données synthétique, aucune valeur ne provient d'un bâtiment réel.",
+    "Mesures LiDAR simulées et non certifiées (±2 pouces si elles étaient réelles).",
+    "Aucune coordonnée GPS réelle n'est incluse dans ce partage de test."
+  ],
+  "resources": {
+    "interactiveViewUrl": "https://app.paz.team/atlas/ouvrir?d=FICTIF_demo_zip_0001",
+    "completeEvidencePackageUrl": "https://example.com/atlas-fixture-demo/evidence-package.zip",
+    "completeEvidencePackageNote": "Archive complète au moment de l'export (fictive). Après une mise à jour incrémentale, les couches structurées ci-dessus sont la source à jour ; le ZIP peut être d'une révision antérieure."
+  }
+}
