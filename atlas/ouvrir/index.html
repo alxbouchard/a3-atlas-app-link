@@ -300,7 +300,7 @@
         <a class="btn secondary" id="aiJsonBtn" href="#" target="_blank" rel="noopener" hidden data-i18n="ai_json">Contexte complet pour IA — JSON</a>
         <button class="btn secondary" id="aiBtn" data-i18n="use_ai">Utiliser avec mon assistant IA</button>
       </div>
-      <p class="note" data-i18n="privacy">Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.</p>
+      <p class="note" id="privacyNote">Aperçu depuis le lien. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.</p>
     </section>
 
     <!-- History timeline (history.json, param hy) -->
@@ -396,7 +396,11 @@
       download:"Télécharger l'export", read_context:"Lire le contexte",
       context_json:"Contexte JSON", ai_json:"Contexte complet pour IA — JSON",
       use_ai:"Utiliser avec mon assistant IA",
-      privacy:"Aperçu depuis le lien. Aucune adresse ni position GPS n'est partagée. Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.",
+      privacy_prefix:"Aperçu depuis le lien.",
+      privacy_surfaces:"Les surfaces et détails complets vivent dans le contexte, avec leur niveau de confiance.",
+      gps_absent:"Aucune position GPS précise n'est incluse dans ce partage.",
+      gps_included:"L'aperçu public n'affiche pas la position GPS. Ce partage complet inclut la localisation précise selon les options choisies.",
+      gps_unknown:"L'aperçu public n'affiche pas la position GPS.",
       made_with:"Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.",
       lidar_ok:"Scan LiDAR vérifié", lidar_demo:"Mode démo — mesures indicatives",
       lidar_unverified:"Mesures indicatives — LiDAR non vérifié",
@@ -454,7 +458,11 @@
       download:"Download export", read_context:"Read the context",
       context_json:"Context JSON", ai_json:"Full AI context — JSON",
       use_ai:"Use with my AI assistant",
-      privacy:"Preview from the link. No address or GPS location is shared. Full surfaces and details live in the context, with their confidence level.",
+      privacy_prefix:"Preview from the link.",
+      privacy_surfaces:"Full surfaces and details live in the context, with their confidence level.",
+      gps_absent:"No precise GPS location is included in this share.",
+      gps_included:"The public preview does not show the GPS location. This full share includes precise location per the chosen options.",
+      gps_unknown:"The public preview does not show the GPS location.",
       made_with:"Made with A3 Atlas Scanner — create your property's passport.",
       lidar_ok:"Verified LiDAR scan", lidar_demo:"Demo mode — indicative measurements",
       lidar_unverified:"Indicative measurements — LiDAR not verified",
@@ -602,6 +610,15 @@
   var derivedId = q.get("v");          // derived.json — surfaces & materials (estimated)
   var historyId = q.get("hy");         // history.json — event timeline
   var aiContextId = q.get("a");        // atlas-ai-context.json — single AI aggregate
+  // GPS privacy note — conditional on the AUTHORITATIVE preciseLocationIncluded
+  // (read from the aggregate below), never guessed from the URL. Coordinates are
+  // NEVER shown. Default = neutral until the flag is known.
+  function setPrivacyNote(gps){
+    var gpsText = (gps === true) ? t.gps_included : (gps === false) ? t.gps_absent : t.gps_unknown;
+    var el = document.getElementById("privacyNote");
+    if (el) el.textContent = t.privacy_prefix + " " + gpsText + " " + t.privacy_surfaces;
+  }
+  setPrivacyNote(null);
 
   // ---- BASELINE render (synchronous, never broken) ----
   document.getElementById("fiche").hidden = false;
@@ -825,6 +842,15 @@
       if (!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(txt){ return JSON.parse(txt); });
+  }
+
+  // Authoritative GPS note: read preciseLocationIncluded from the aggregate
+  // (atlas-ai-context.json). Old links without `a` stay neutral. Never guessed.
+  if (DRIVE_API_KEY && validId(aiContextId)){
+    fetchJson(aiContextId).then(function(agg){
+      var pli = agg && agg.shareScope ? agg.shareScope.preciseLocationIncluded : undefined;
+      setPrivacyNote(pli === true ? true : (pli === false ? false : null));
+    }).catch(function(){ /* unreachable → keep the neutral note */ });
   }
 
   if (DRIVE_API_KEY && validId(ctxJson)){
