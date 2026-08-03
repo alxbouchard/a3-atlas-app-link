@@ -329,6 +329,13 @@
   .lightbox.zoomed .lb-img{border-radius:0}
   .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
   .lightbox.zoomed{overflow:hidden}
+  .unit-toggle{display:inline-flex; gap:4px; margin-left:auto}
+  .unit-btn{border:1px solid var(--line); background:transparent; color:var(--muted);
+    border-radius:999px; padding:3px 10px; font:inherit; font-size:11.5px; font-weight:700;
+    cursor:pointer}
+  .unit-btn.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+  .hero-fig .fig-head{display:flex; align-items:center; gap:8px}
+  .hero-fig .fig-est{font-size:10.5px; color:var(--muted); font-weight:600}
   /* Sélecteur d'étage — au-dessus du 3D et en tête des plans, un seul état. */
   .floor-pills{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px}
   .hero-visual .floor-pills{position:absolute; left:12px; bottom:12px; margin:0; z-index:2}
@@ -540,7 +547,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:09Z";
+  var ATLAS_BUILD = "2026-08-03T21:18Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -614,7 +621,9 @@
       surf_floor:"Emprise au sol (rectangle hors tout)", surf_walllen:"Longueur de murs",
       mat_h:"Matériaux (estimés, calculés)",
       mat_paint:"Peinture (2 couches)", mat_drywall:"Gypse (feuilles 4×8, +10 %)",
-      unit_ft2:"pi²", unit_ft:"pi",
+      unit_ft2:"pi²", unit_ft:"pi", unit_in:"po", unit_m2:"m²", unit_m:"m",
+      fig_area:"surface au sol", fig_area_est:"estimée", fig_spaces:"espaces",
+      fig_floors_n:function(n){ return n>1 ? "étages" : "étage"; },
       unit_gallon:function(n){return n>1?"gallons":"gallon";},
       unit_sheet:function(n){return n>1?"feuilles":"feuille";},
       surf_caveat:"Estimations depuis un scan LiDAR (rectangle hors tout), non vérifiées sur site — à confirmer.",
@@ -697,7 +706,9 @@
       surf_floor:"Footprint (bounding rectangle)", surf_walllen:"Wall length",
       mat_h:"Materials (estimated)",
       mat_paint:"Paint (2 coats)", mat_drywall:"Drywall (4×8 sheets, +10%)",
-      unit_ft2:"ft²", unit_ft:"ft",
+      unit_ft2:"ft²", unit_ft:"ft", unit_in:"in", unit_m2:"m²", unit_m:"m",
+      fig_area:"floor area", fig_area_est:"estimated", fig_spaces:"spaces",
+      fig_floors_n:function(n){ return n>1 ? "floors" : "floor"; },
       unit_gallon:function(n){return n>1?"gallons":"gallon";},
       unit_sheet:function(n){return n>1?"sheets":"sheet";},
       surf_caveat:"Estimates from a LiDAR scan (bounding rectangle), not site-verified — confirm on site.",
@@ -1432,6 +1443,12 @@
     if (spaces.length){
       document.getElementById("spaces").innerHTML = buildSpaces(spaces);
       document.getElementById("spacesSection").hidden = false;
+      FIGDATA.spaces = spaces;
+      updateHeroFigures();
+      UNIT.hooks.push(function(){
+        var host = document.getElementById("spaces");
+        if (host) host.innerHTML = buildSpaces(spaces);
+      });
     }
 
     // 4. Equipment & points of interest
@@ -1487,7 +1504,9 @@
       var floorTxt = (typeof s.buildingFloor === "number") ? floorLabel(s.buildingFloor) : null;
       var dim = fmtDimensions(s.dimensions);
       var dimTxt = dim.measured
-        ? (dim.w.toFixed(2)+" × "+dim.l.toFixed(2)+" m" + ((dim.h!==null && dim.h!==undefined) ? " · h "+dim.h.toFixed(2)+" m" : ""))
+        ? (lenTxt(dim.w)+" × "+lenTxt(dim.l)
+           + ((dim.h!==null && dim.h!==undefined) ? " · h "+lenTxt(dim.h) : "")
+           + ((dim.w>0 && dim.l>0) ? " · " + areaTxt(dim.w*dim.l) : ""))
         : t.dims_not_measured;
       var hw = !!(s.quality && s.quality.hardwareScanVerified === true);
 
@@ -1702,6 +1721,94 @@
       setFloor(FLOORS.current);   // état initial cohérent des deux côtés
     }
     document.getElementById("plansSection").hidden = false;
+  }
+
+  // Les chiffres du héros. « 2 zones · 8 photos · 1 étage » disait peu et
+  // se trompait : le nombre d'étages venait du paramètre d'URL, pas du scan
+  // (owner 2026-08-03). On montre maintenant ce qu'on mesure vraiment — la
+  // surface au sol, dite estimée parce qu'elle l'est — et on tire les
+  // comptes des espaces scannés, avec repli sur l'URL si la donnée manque.
+  var FIGDATA = { spaces: null, floorAreaM2: null };
+  function updateHeroFigures(){
+    var figs = document.getElementById("heroFigs");
+    if (!figs) return;
+    figs.innerHTML = "";
+    var items = [];
+    var area = areaTxt(FIGDATA.floorAreaM2);
+    if (area) items.push({ big: area, small: t.fig_area, est: t.fig_area_est, unit: true });
+    var spaces = FIGDATA.spaces;
+    if (spaces && spaces.length) items.push({ big: String(spaces.length), small: t.fig_spaces });
+    else if (q.get("z")) items.push({ big: q.get("z"), small: t.fig_rooms });
+    if (spaces && spaces.length){
+      var floors = {};
+      spaces.forEach(function(sp){
+        if (sp && typeof sp.buildingFloor === "number") floors[sp.buildingFloor] = true;
+      });
+      var n = Object.keys(floors).length;
+      if (n) items.push({ big: String(n), small: t.fig_floors_n(n) });
+    } else if (q.get("floor")) items.push({ big: q.get("floor"), small: t.fig_floor });
+    if (q.get("p")) items.push({ big: q.get("p"), small: t.fig_photos });
+
+    items.forEach(function(it){
+      var f = document.createElement("div"); f.className = "hero-fig";
+      var head = document.createElement("div"); head.className = "fig-head";
+      var b = document.createElement("b"); b.textContent = it.big;
+      head.appendChild(b);
+      if (it.unit) head.appendChild(makeUnitToggle());
+      f.appendChild(head);
+      var sp = document.createElement("span");
+      sp.textContent = it.small + (it.est ? " · " + it.est : "");
+      f.appendChild(sp);
+      figs.appendChild(f);
+    });
+  }
+  UNIT_HOOK_HERO = true;
+
+  // ================= UNITÉS =================
+  // Le terrain est en pieds carrés ici, mais la donnée est en mètres : on
+  // garde les deux, avec un seul réglage pour toute la fiche, retenu d'une
+  // visite à l'autre (owner 2026-08-03). Les mesures affichées restent
+  // celles de la donnée — seule leur écriture change.
+  var UNIT_HOOK_HERO = false;
+  var UNIT = { code: "imp", hooks: [updateHeroFigures] };
+  try {
+    var savedUnit = localStorage.getItem("atlas-unit");
+    if (savedUnit === "si" || savedUnit === "imp") UNIT.code = savedUnit;
+  } catch (e) { /* mode privé : réglage non retenu, rien de plus */ }
+  function setUnit(code){
+    UNIT.code = (code === "si") ? "si" : "imp";
+    try { localStorage.setItem("atlas-unit", UNIT.code); } catch (e) {}
+    UNIT.hooks.forEach(function(fn){ try { fn(UNIT.code); } catch (e) {} });
+  }
+  function areaTxt(m2){
+    if (typeof m2 !== "number" || !isFinite(m2) || m2 <= 0) return null;
+    return (UNIT.code === "si")
+      ? fmtNum(Math.round(m2 * 10) / 10) + " " + t.unit_m2
+      : fmtNum(Math.round(m2 * FT2_PER_M2)) + " " + t.unit_ft2;
+  }
+  function lenTxt(m){
+    if (typeof m !== "number" || !isFinite(m) || m <= 0) return null;
+    if (UNIT.code === "si") return (Math.round(m * 100) / 100).toFixed(2) + " " + t.unit_m;
+    var ft = m * FT_PER_M, whole = Math.floor(ft), inch = Math.round((ft - whole) * 12);
+    if (inch === 12){ whole += 1; inch = 0; }
+    return whole + " " + t.unit_ft + (inch ? " " + inch + " " + t.unit_in : "");
+  }
+  function makeUnitToggle(){
+    var nav = document.createElement("div");
+    nav.className = "unit-toggle";
+    [["imp", t.unit_ft2], ["si", t.unit_m2]].forEach(function(pair){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "unit-btn" + (UNIT.code === pair[0] ? " on" : "");
+      b.textContent = pair[1];
+      b.onclick = function(e){ e.stopPropagation(); setUnit(pair[0]); };
+      nav.appendChild(b);
+    });
+    UNIT.hooks.push(function(code){
+      nav.children[0].classList.toggle("on", code === "imp");
+      nav.children[1].classList.toggle("on", code === "si");
+    });
+    return nav;
   }
 
   // ================= ÉTAGES =================
@@ -2201,15 +2308,9 @@
 
     var figs = document.createElement("div");
     figs.className = "hero-figs";
-    [[q.get("z"), t.fig_rooms], [q.get("p"), t.fig_photos], [q.get("floor"), t.fig_floor]]
-      .forEach(function(pair){
-        if (!pair[0]) return;
-        var f = document.createElement("div"); f.className = "hero-fig";
-        var b = document.createElement("b"); b.textContent = pair[0];
-        var sp = document.createElement("span"); sp.textContent = pair[1];
-        f.appendChild(b); f.appendChild(sp); figs.appendChild(f);
-      });
+    figs.id = "heroFigs";
     hero.appendChild(figs);
+    updateHeroFigures();
     main.insertBefore(hero, first);
     // The original header card keeps the subtitle, badges and stats.
     first.querySelector("#title") && (first.querySelector("#title").hidden = true);
@@ -2757,20 +2858,40 @@
   function applySurfaces(doc){
     var dvs = Array.isArray(doc.derivedValues) ? doc.derivedValues : [];
     if (!dvs.length) return;
+    // derived.json donne une valeur PAR ESPACE (vérifié sur un chalet à deux
+    // étages : deux entrées par type, une par space-id). Garder la première
+    // revenait à n'annoncer que le premier étage — la moitié de la
+    // propriété. On additionne, en ne comptant chaque espace qu'une fois.
+    var sums = {}, counted = {};
+    dvs.forEach(function(dv){
+      if (!dv || !dv.type) return;
+      var v = derivedVal(dv.value);
+      if (v === null) return;
+      var key = dv.type + "|" + (dv.subjectId || "");
+      if (counted[key]) return;
+      counted[key] = 1;
+      sums[dv.type] = (sums[dv.type] || 0) + v;
+    });
     var byType = {};
     dvs.forEach(function(dv){ if (dv && dv.type && byType[dv.type] === undefined) byType[dv.type] = dv; });
 
-    var netWallM2 = byType.net_wall_area ? derivedVal(byType.net_wall_area.value) : null;
-    var ceilM2    = byType.bounding_rectangle_ceiling_area ? derivedVal(byType.bounding_rectangle_ceiling_area.value) : null;
-    var floorM2   = byType.bounding_rectangle_area ? derivedVal(byType.bounding_rectangle_area.value) : null;
-    var wallLenM  = byType.total_wall_segment_length ? derivedVal(byType.total_wall_segment_length.value) : null;
+    var netWallM2 = (sums.net_wall_area !== undefined) ? sums.net_wall_area : null;
+    var ceilM2    = (sums.bounding_rectangle_ceiling_area !== undefined) ? sums.bounding_rectangle_ceiling_area : null;
+    var floorM2   = (sums.bounding_rectangle_area !== undefined) ? sums.bounding_rectangle_area : null;
+    var wallLenM  = (sums.total_wall_segment_length !== undefined) ? sums.total_wall_segment_length : null;
+    // La surface au sol totale alimente aussi le chiffre du héros.
+    FIGDATA.floorAreaM2 = floorM2;
+    updateHeroFigures();
 
     // Surface rows (converted + rounded for display).
     var rows = [];
-    if (netWallM2 !== null) rows.push({ k:t.surf_walls,   v:fmtNum(Math.round(netWallM2*FT2_PER_M2))+" "+t.unit_ft2 });
-    if (ceilM2 !== null)    rows.push({ k:t.surf_ceiling, v:fmtNum(Math.round(ceilM2*FT2_PER_M2))+" "+t.unit_ft2 });
-    if (floorM2 !== null)   rows.push({ k:t.surf_floor,   v:fmtNum(Math.round(floorM2*FT2_PER_M2))+" "+t.unit_ft2 });
-    if (wallLenM !== null)  rows.push({ k:t.surf_walllen, v:fmtNum(Math.round(wallLenM*FT_PER_M))+" "+t.unit_ft });
+    if (netWallM2 !== null) rows.push({ k:t.surf_walls,   v:areaTxt(netWallM2) });
+    if (ceilM2 !== null)    rows.push({ k:t.surf_ceiling, v:areaTxt(ceilM2) });
+    if (floorM2 !== null)   rows.push({ k:t.surf_floor,   v:areaTxt(floorM2) });
+    if (wallLenM !== null)  rows.push({ k:t.surf_walllen, v:(UNIT.code === "si"
+                              ? fmtNum(Math.round(wallLenM*10)/10)+" "+t.unit_m
+                              : fmtNum(Math.round(wallLenM*FT_PER_M))+" "+t.unit_ft) });
+    rows = rows.filter(function(r){ return !!r.v; });
     if (!rows.length) return;   // nothing usable — keep section hidden
 
     var html = '<div class="surf-rows">' + rows.map(function(r){
@@ -2815,6 +2936,10 @@
 
     document.getElementById("surfaces").innerHTML = html;
     document.getElementById("surfacesSection").hidden = false;
+    if (!applySurfaces.__hooked){
+      applySurfaces.__hooked = true;
+      UNIT.hooks.push(function(){ try { applySurfaces(doc); } catch (e) {} });
+    }
   }
 
   // =====================================================================
