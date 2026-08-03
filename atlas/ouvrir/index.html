@@ -548,7 +548,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:30Z";
+  var ATLAS_BUILD = "2026-08-03T21:38Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -616,7 +616,7 @@
       spaces_h:"Espaces / pièces",
       gallery_h:"Photos du site", media_other_room:"Autres photos",
       ba_h:"Avant / Après", before_label:"Avant", after_label:"Après",
-      video_h:"Vidéo du scan",
+      video_h:"Vidéo du scan", video_none_floor:"Aucune vidéo pour cet étage.",
       surfaces_h:"Surfaces & matériaux",
       surf_walls:"Murs (net, ouvertures déduites)", surf_ceiling:"Plafond (rectangle hors tout)",
       surf_floor:"Emprise au sol (rectangle hors tout)", surf_walllen:"Longueur de murs",
@@ -704,7 +704,7 @@
       spaces_h:"Spaces / rooms",
       gallery_h:"Site photos", media_other_room:"Other photos",
       ba_h:"Before / After", before_label:"Before", after_label:"After",
-      video_h:"Scan video",
+      video_h:"Scan video", video_none_floor:"No video for this floor.",
       surfaces_h:"Surfaces & materials",
       surf_walls:"Walls (net)", surf_ceiling:"Ceiling (bounding rectangle)",
       surf_floor:"Footprint (bounding rectangle)", surf_walllen:"Wall length",
@@ -1645,7 +1645,7 @@
     renderBeforeAfter(photos);
     renderPlans(Array.isArray(manifest.plans) ? manifest.plans : []);
     renderModels(Array.isArray(manifest.models) ? manifest.models : []);
-    renderVideo(manifest.video);
+    renderVideo(manifest.video, manifest.videos);
     // Media may arrive AFTER history / equipment — link their photos now.
     if (_historyDoc) { try { applyHistory(_historyDoc); } catch(e){} }
     try { wireEvidenceChips(); } catch(e){}
@@ -2747,7 +2747,36 @@
   // play (no key, refused codec, offline), the visitor gets the old
   // player rather than a broken box.
   var VIDEO_SPEEDS = [1, 1.5, 2], VIDEO_DEFAULT_SPEED = 2;
-  function renderVideo(video){
+  // Une vidéo PAR ÉTAGE quand l'app en fournit plusieurs (`videos`), sinon la
+  // vidéo unique historique (`video`) — une fiche déjà partagée continue de
+  // s'afficher exactement comme avant.
+  function renderVideo(video, videos){
+    var list = Array.isArray(videos)
+      ? videos.filter(function(v){ return v && typeof v === "object" && validId(v.driveId); })
+      : [];
+    if (list.length > 1){
+      list.forEach(function(v){ registerFloor(v.label, { video: v }); });
+      var host = document.getElementById("videoWrap");
+      var shown = null;
+      FLOORS.hooks.push(function(i){
+        var f = FLOORS.list[i];
+        var v = f && f.video;
+        if (v === shown) return;
+        shown = v || null;
+        if (v){ renderVideo(v); }
+        else if (host){
+          // Un étage sans vidéo le dit, au lieu de laisser celle du voisin.
+          host.innerHTML = "";
+          var none = document.createElement("p");
+          none.className = "note";
+          none.textContent = t.video_none_floor;
+          host.appendChild(none);
+          document.getElementById("videoSection").hidden = false;
+        }
+      });
+      var current = FLOORS.list[FLOORS.current];
+      video = (current && current.video) || list[0];
+    }
     setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     if (!video || typeof video !== "object" || !validId(video.driveId)) return;
     var wrap = document.getElementById("videoWrap");
