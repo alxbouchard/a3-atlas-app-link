@@ -548,7 +548,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:23Z";
+  var ATLAS_BUILD = "2026-08-03T21:28Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2760,7 +2760,37 @@
       cap.className = "media-cap"; cap.style.marginTop = "8px"; cap.textContent = label;
       wrap.appendChild(cap);
     }
-    function drivePlayer(){          // the fallback, unchanged
+    // La FORME de la vidéo, connue sans la télécharger : la vignette Drive
+    // a les proportions du fichier (vérifié : 640×853 sur une vidéo de scan)
+    // et se sert sans clé API. Sans elle, le lecteur de repli imposait un
+    // 16:9 à une vidéo filmée en 9:16 — deux bandes noires sur ordinateur
+    // (owner 2026-08-03), là où le lecteur natif tombait juste.
+    var shape = null, playerEl = null;
+    function applyShape(){
+      if (!shape || !playerEl) return;
+      var portrait = shape.h > shape.w;
+      playerEl.style.aspectRatio = shape.w + "/" + shape.h;
+      if (portrait){
+        playerEl.style.height = "min(70vh, 620px)";
+        playerEl.style.width = "auto";
+        playerEl.style.maxWidth = "100%";
+      } else {
+        playerEl.style.width = "100%";
+        playerEl.style.height = "auto";
+        playerEl.style.maxHeight = "min(70vh, 620px)";
+      }
+    }
+    var probe = new Image();
+    probe.onload = function(){
+      if (!(probe.naturalWidth > 0 && probe.naturalHeight > 0)) return;
+      shape = { w: probe.naturalWidth, h: probe.naturalHeight };
+      applyShape();
+    };
+    probe.src = driveThumb(video.driveId, 640);
+
+    function drivePlayer(){          // repli : le lecteur Drive, mais à la bonne forme
+      var box = document.createElement("div");
+      box.className = "video-box";
       var iframe = document.createElement("iframe");
       iframe.src = "https://drive.google.com/file/d/"+encodeURIComponent(video.driveId)+"/preview";
       iframe.setAttribute("allow", "autoplay");
@@ -2769,7 +2799,10 @@
       iframe.style.aspectRatio = "16/9";
       iframe.style.border = "0";
       iframe.style.borderRadius = "14px";
-      wrap.innerHTML = ""; wrap.appendChild(iframe); addLabel();
+      box.appendChild(iframe);
+      wrap.innerHTML = ""; wrap.appendChild(box);
+      playerEl = iframe; applyShape();
+      addLabel();
     }
 
     var box = document.createElement("div");
@@ -2824,6 +2857,7 @@
     tryNextSource();
     box.appendChild(el);
     wrap.appendChild(box);
+    playerEl = el; applyShape();
 
     // Speed picker: 2× by default, said out loud rather than done silently.
     var speeds = document.createElement("div");
