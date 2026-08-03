@@ -330,6 +330,25 @@
   .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
   .lightbox.zoomed{overflow:hidden}
   .surf-row.sub .srk, .surf-row.sub .srv{color:var(--muted); font-size:13px}
+  /* Où se trouve la propriété — affiché seulement si le partage le porte. */
+  .addr{margin:10px 0 4px}
+  .addr-line{display:flex; align-items:baseline; gap:8px; font-size:16px; font-weight:600}
+  .addr-pin{font-size:14px}
+  .addr-txt{line-height:1.35}
+  .addr-acts{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px}
+  .addr-btn{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line);
+    background:var(--accent); color:var(--accent-ink); border-radius:999px; padding:7px 15px;
+    font:inherit; font-size:13.5px; font-weight:700; cursor:pointer; text-decoration:none}
+  .addr-btn.ghost{background:var(--card); color:inherit}
+  .addr-btn:hover{filter:brightness(1.06)}
+  .addr-src{font-size:11.5px; color:var(--muted); font-weight:600}
+  .map-pop{position:fixed; inset:0; z-index:1200; background:rgba(0,0,0,.7);
+    display:flex; align-items:center; justify-content:center; padding:18px}
+  .map-card{width:min(680px,100%); background:var(--card); border:1px solid var(--line);
+    border-radius:18px; overflow:hidden; box-shadow:var(--shadow)}
+  .map-card iframe{display:block; width:100%; height:min(60vh,420px); border:0}
+  .map-foot{display:flex; align-items:center; justify-content:space-between; gap:12px;
+    padding:12px 14px; font-size:14px}
   .unit-toggle{display:inline-flex; gap:4px; margin-left:auto}
   .unit-btn{border:1px solid var(--line); background:transparent; color:var(--muted);
     border-radius:999px; padding:3px 10px; font:inherit; font-size:11.5px; font-weight:700;
@@ -548,7 +567,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:38Z";
+  var ATLAS_BUILD = "2026-08-03T22:09Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -648,6 +667,9 @@
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
       history_h:"Historique",
       lb_close:"Fermer", lb_prev:"Précédent", lb_next:"Suivant",
+      addr_h:"Adresse", addr_maps:"Ouvrir dans Maps", addr_map_view:"Voir la carte",
+      addr_src_gps:"Position relevée sur place", addr_src_geo:"Position déduite de l'adresse",
+      addr_copy:"Adresse copiée.",
       lb_download:"Télécharger", lb_see_before:"Voir l'avant", lb_see_after:"Voir l'après",
       datasem_h:"Comment lire ces données",
       limits_h:"Limites & mise en garde",
@@ -736,6 +758,9 @@
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
       history_h:"History",
       lb_close:"Close", lb_prev:"Previous", lb_next:"Next",
+      addr_h:"Address", addr_maps:"Open in Maps", addr_map_view:"View map",
+      addr_src_gps:"Position taken on site", addr_src_geo:"Position derived from the address",
+      addr_copy:"Address copied.",
       lb_download:"Download", lb_see_before:"See the before", lb_see_after:"See the after",
       datasem_h:"How to read this data",
       limits_h:"Limitations & disclaimer",
@@ -1364,6 +1389,7 @@
       var pli = agg && agg.shareScope ? agg.shareScope.preciseLocationIncluded : undefined;
       setPrivacyNote(pli === true ? true : (pli === false ? false : null));
       try{ collectEquipment(agg); }catch(e){ /* the rest of the page stays intact */ }
+      try{ showLocation(agg); }catch(e){ /* pas d'adresse plutôt qu'une fausse */ }
     }).catch(function(){ /* unreachable → keep the neutral note */ });
   }
 
@@ -1772,6 +1798,136 @@
     });
   }
   UNIT_HOOK_HERO = true;
+
+  // ================= OÙ =================
+  // L'adresse et les coordonnées n'existent dans le partage QUE si l'installateur
+  // a activé les interrupteurs « adresse » et « GPS » au moment de partager —
+  // l'app les efface partout sinon. La fiche se contente donc d'afficher ce
+  // qu'elle reçoit : rien à deviner, rien à recouper ailleurs. Un lien de
+  // partage est public, alors ce bloc n'apparaît que sur décision explicite
+  // (owner 2026-08-03).
+  function readLocation(agg){
+    if (!agg || typeof agg !== "object") return null;
+    var subj = (agg.agentSummary && agg.agentSummary.subject) || {};
+    var prop = (agg.canonicalHouse && agg.canonicalHouse.property) || {};
+    var address = [subj.address, prop.address].map(function(a){
+      return (a != null) ? String(a).trim() : "";
+    }).filter(Boolean)[0] || "";
+    var coords = subj.coordinates || {};
+    var lat = [coords.latitude, prop.latitude].filter(function(v){
+      return typeof v === "number" && isFinite(v) && Math.abs(v) <= 90;
+    })[0];
+    var lng = [coords.longitude, prop.longitude].filter(function(v){
+      return typeof v === "number" && isFinite(v) && Math.abs(v) <= 180;
+    })[0];
+    if (!address && (lat === undefined || lng === undefined)) return null;
+    return { address: address, lat: lat, lng: lng,
+             source: (prop.coordinatesSource != null) ? String(prop.coordinatesSource) : null };
+  }
+
+  function mapsHref(loc){
+    // Google Maps en URL universelle : l'app native s'ouvre là où elle existe,
+    // le navigateur ailleurs. Les coordonnées priment sur le texte quand on les a.
+    var q = (loc.lat !== undefined && loc.lng !== undefined)
+      ? (loc.lat + "," + loc.lng) : loc.address;
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+  }
+
+  function showLocation(agg){
+    var loc = readLocation(agg);
+    if (!loc) return;                       // partage sans adresse : rien du tout
+    var hero = document.querySelector(".hero");
+    var host = document.getElementById("addressBlock");
+    if (!host){
+      host = document.createElement("div");
+      host.id = "addressBlock";
+      host.className = "addr";
+      var figs = document.getElementById("heroFigs");
+      if (hero && figs) hero.insertBefore(host, figs);
+      else if (hero) hero.appendChild(host);
+      else return;
+    }
+    host.innerHTML = "";
+
+    var line = document.createElement("div");
+    line.className = "addr-line";
+    var pin = document.createElement("span");
+    pin.className = "addr-pin"; pin.textContent = "📍";
+    line.appendChild(pin);
+    var txt = document.createElement("span");
+    txt.className = "addr-txt";
+    txt.textContent = loc.address || (loc.lat.toFixed(5) + ", " + loc.lng.toFixed(5));
+    // Un appui copie l'adresse — on la recopie souvent dans un GPS ou un courriel.
+    txt.title = t.addr_h;
+    txt.style.cursor = "copy";
+    txt.onclick = function(){
+      var value = txt.textContent;
+      if (navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(value).then(function(){ showToast(t.addr_copy); },
+                                                  function(){ fallbackCopy(value); });
+      } else { fallbackCopy(value); }
+    };
+    line.appendChild(txt);
+    host.appendChild(line);
+
+    var acts = document.createElement("div");
+    acts.className = "addr-acts";
+    var maps = document.createElement("a");
+    maps.className = "addr-btn";
+    maps.href = mapsHref(loc);
+    maps.target = "_blank"; maps.rel = "noopener";
+    maps.textContent = t.addr_maps;
+    acts.appendChild(maps);
+    if (loc.lat !== undefined && loc.lng !== undefined){
+      var view = document.createElement("button");
+      view.type = "button"; view.className = "addr-btn ghost";
+      view.textContent = t.addr_map_view;
+      view.onclick = function(){ openMapPopup(loc); };
+      acts.appendChild(view);
+      // D'où vient la position : relevée sur place ou déduite de l'adresse.
+      var src = loc.source === "gps_on_site" ? t.addr_src_gps
+              : (loc.source === "address_geocoded" ? t.addr_src_geo : null);
+      if (src){
+        var chip = document.createElement("span");
+        chip.className = "addr-src"; chip.textContent = src;
+        acts.appendChild(chip);
+      }
+    }
+    host.appendChild(acts);
+  }
+
+  // La carte en fenêtre : OpenStreetMap, sans clé API — l'intégration Google
+  // en exige une, et elle tirerait sur le même quota que les photos et le 3D.
+  function openMapPopup(loc){
+    var d = 0.004;                                  // ~400 m autour du point
+    var bbox = [loc.lng - d, loc.lat - d/2, loc.lng + d, loc.lat + d/2].join(",");
+    var back = document.createElement("div");
+    back.className = "map-pop";
+    var card = document.createElement("div");
+    card.className = "map-card";
+    var frame = document.createElement("iframe");
+    frame.src = "https://www.openstreetmap.org/export/embed.html?bbox=" +
+                encodeURIComponent(bbox) + "&layer=mapnik&marker=" +
+                encodeURIComponent(loc.lat + "," + loc.lng);
+    frame.loading = "lazy";
+    card.appendChild(frame);
+    var foot = document.createElement("div");
+    foot.className = "map-foot";
+    var name = document.createElement("span");
+    name.textContent = loc.address || (loc.lat.toFixed(5) + ", " + loc.lng.toFixed(5));
+    foot.appendChild(name);
+    var go = document.createElement("a");
+    go.className = "addr-btn"; go.href = mapsHref(loc);
+    go.target = "_blank"; go.rel = "noopener"; go.textContent = t.addr_maps;
+    foot.appendChild(go);
+    card.appendChild(foot);
+    back.appendChild(card);
+    function close(){ back.remove(); document.removeEventListener("keydown", onKey); }
+    function onKey(e){ if (e.key === "Escape") close(); }
+    back.addEventListener("click", function(e){ if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(back);
+  }
 
   // ================= UNITÉS =================
   // Le terrain est en pieds carrés ici, mais la donnée est en mètres : on
