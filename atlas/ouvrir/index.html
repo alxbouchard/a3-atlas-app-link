@@ -329,6 +329,7 @@
   .lightbox.zoomed .lb-img{border-radius:0}
   .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
   .lightbox.zoomed{overflow:hidden}
+  .surf-row.sub .srk, .surf-row.sub .srv{color:var(--muted); font-size:13px}
   .unit-toggle{display:inline-flex; gap:4px; margin-left:auto}
   .unit-btn{border:1px solid var(--line); background:transparent; color:var(--muted);
     border-radius:999px; padding:3px 10px; font:inherit; font-size:11.5px; font-weight:700;
@@ -547,7 +548,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:20Z";
+  var ATLAS_BUILD = "2026-08-03T21:23Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -619,10 +620,13 @@
       surfaces_h:"Surfaces & matériaux",
       surf_walls:"Murs (net, ouvertures déduites)", surf_ceiling:"Plafond (rectangle hors tout)",
       surf_floor:"Emprise au sol (rectangle hors tout)", surf_walllen:"Longueur de murs",
+      surf_floor_total:"Planchers — total (rectangle hors tout)",
+      surf_ceiling_total:"Plafonds — total (rectangle hors tout)",
       mat_h:"Matériaux (estimés, calculés)",
       mat_paint:"Peinture (2 couches)", mat_drywall:"Gypse (feuilles 4×8, +10 %)",
       unit_ft2:"pi²", unit_ft:"pi", unit_in:"po", unit_m2:"m²", unit_m:"m",
-      fig_area:"surface au sol", fig_area_est:"estimée", fig_spaces:"espaces",
+      fig_area:"surface totale", fig_area_1:"surface au sol", fig_area_est:"estimée",
+      fig_spaces:"espaces", by_floor:"Par étage",
       fig_floors_n:function(n){ return n>1 ? "étages" : "étage"; },
       unit_gallon:function(n){return n>1?"gallons":"gallon";},
       unit_sheet:function(n){return n>1?"feuilles":"feuille";},
@@ -704,10 +708,13 @@
       surfaces_h:"Surfaces & materials",
       surf_walls:"Walls (net)", surf_ceiling:"Ceiling (bounding rectangle)",
       surf_floor:"Footprint (bounding rectangle)", surf_walllen:"Wall length",
+      surf_floor_total:"Floors — total (bounding rectangle)",
+      surf_ceiling_total:"Ceilings — total (bounding rectangle)",
       mat_h:"Materials (estimated)",
       mat_paint:"Paint (2 coats)", mat_drywall:"Drywall (4×8 sheets, +10%)",
       unit_ft2:"ft²", unit_ft:"ft", unit_in:"in", unit_m2:"m²", unit_m:"m",
-      fig_area:"floor area", fig_area_est:"estimated", fig_spaces:"spaces",
+      fig_area:"total floor area", fig_area_1:"floor area", fig_area_est:"estimated",
+      fig_spaces:"spaces", by_floor:"Per floor",
       fig_floors_n:function(n){ return n>1 ? "floors" : "floor"; },
       unit_gallon:function(n){return n>1?"gallons":"gallon";},
       unit_sheet:function(n){return n>1?"sheets":"sheet";},
@@ -1735,7 +1742,9 @@
     figs.innerHTML = "";
     var items = [];
     var area = areaTxt(FIGDATA.floorAreaM2);
-    if (area) items.push({ big: area, small: t.fig_area, est: t.fig_area_est, unit: true });
+    var manyFloors = !!(FIGDATA.spaces && FIGDATA.spaces.length > 1);
+    if (area) items.push({ big: area, small: manyFloors ? t.fig_area : t.fig_area_1,
+                           est: t.fig_area_est, unit: true });
     var spaces = FIGDATA.spaces;
     if (spaces && spaces.length) items.push({ big: String(spaces.length), small: t.fig_spaces });
     else if (q.get("z")) items.push({ big: q.get("z"), small: t.fig_rooms });
@@ -2889,9 +2898,28 @@
 
     // Surface rows (converted + rounded for display).
     var rows = [];
+    // Additionner les planchers de deux étages ne donne pas une « emprise au
+    // sol » : dès qu'il y a plusieurs espaces, le libellé dit « total ».
+    var perSpace = {}, nSpaces = 0;
+    dvs.forEach(function(dv){
+      if (!dv || dv.type !== "bounding_rectangle_area") return;
+      var v = derivedVal(dv.value);
+      if (v === null || perSpace[dv.subjectId] !== undefined) return;
+      perSpace[dv.subjectId] = v; nSpaces++;
+    });
+    var multi = nSpaces > 1;
     if (netWallM2 !== null) rows.push({ k:t.surf_walls,   v:areaTxt(netWallM2) });
-    if (ceilM2 !== null)    rows.push({ k:t.surf_ceiling, v:areaTxt(ceilM2) });
-    if (floorM2 !== null)   rows.push({ k:t.surf_floor,   v:areaTxt(floorM2) });
+    if (ceilM2 !== null)    rows.push({ k:multi ? t.surf_ceiling_total : t.surf_ceiling, v:areaTxt(ceilM2) });
+    if (floorM2 !== null)   rows.push({ k:multi ? t.surf_floor_total : t.surf_floor, v:areaTxt(floorM2) });
+    // …et le détail, pour qu'on voie de quoi le total est fait.
+    if (multi){
+      (FIGDATA.spaces || []).forEach(function(sp){
+        var v = sp && perSpace[sp.id];
+        if (v === undefined || v === null) return;
+        var nm = (sp.label != null && String(sp.label).trim()) ? String(sp.label).trim() : sp.id;
+        rows.push({ k: "· " + nm, v: areaTxt(v), sub: true });
+      });
+    }
     if (wallLenM !== null)  rows.push({ k:t.surf_walllen, v:(UNIT.code === "si"
                               ? fmtNum(Math.round(wallLenM*10)/10)+" "+t.unit_m
                               : fmtNum(Math.round(wallLenM*FT_PER_M))+" "+t.unit_ft) });
@@ -2899,7 +2927,8 @@
     if (!rows.length) return;   // nothing usable — keep section hidden
 
     var html = '<div class="surf-rows">' + rows.map(function(r){
-      return '<div class="surf-row"><span class="srk">'+esc(r.k)+'</span><span class="srv">'+esc(r.v)+'</span></div>';
+      return '<div class="surf-row'+(r.sub ? ' sub' : '')+'"><span class="srk">'+esc(r.k)+
+             '</span><span class="srv">'+esc(r.v)+'</span></div>';
     }).join("") + '</div>';
 
     // Materials — PREFER the canonical values in derived.json (paint_quantity,
