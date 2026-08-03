@@ -2194,13 +2194,10 @@
       wrap.innerHTML = ""; wrap.appendChild(iframe); addLabel();
     }
 
-    if (!DRIVE_API_KEY){ drivePlayer(); document.getElementById("videoSection").hidden = false; return; }
-
     var box = document.createElement("div");
     box.className = "video-box";
     var el = document.createElement("video");
     el.className = "scan-video";
-    el.src = mediaUrl(video.driveId);
     el.controls = true;
     el.preload = "metadata";
     el.setAttribute("playsinline", "");
@@ -2225,7 +2222,25 @@
     });
     // Safari resets the rate on some play() calls — reassert what the visitor chose.
     el.addEventListener("play", function(){ if (el.playbackRate !== wanted) el.playbackRate = wanted; });
-    el.addEventListener("error", function(){ if (!played) drivePlayer(); });
+
+    // WHERE the bytes come from, in order. First Drive's own user-content
+    // host: no API key, so a 200 MB scan video never eats the key's quota.
+    // That matters — streaming the video through the shared key got this
+    // browser throttled by Google today, and the key also feeds the photos,
+    // the plans and the 3D: one heavy video must not take the page down.
+    // Then the API endpoint, then Drive's iframe player as the last resort.
+    var sources = [
+      "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(video.driveId) + "&export=download"
+    ];
+    if (DRIVE_API_KEY) sources.push(mediaUrl(video.driveId));
+    var attempt = 0;
+    function tryNextSource(){
+      if (attempt >= sources.length){ drivePlayer(); return; }
+      el.src = sources[attempt++];
+      el.load();
+    }
+    el.addEventListener("error", function(){ if (!played) tryNextSource(); });
+    tryNextSource();
     box.appendChild(el);
     wrap.appendChild(box);
 
