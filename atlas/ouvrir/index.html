@@ -42,6 +42,7 @@
     display:flex; justify-content:center;
   }
   .wrap{width:100%; max-width:640px}
+  @media (min-width:1000px){ .wrap{max-width:min(1600px, 96vw)} }
   .brand{display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; font-weight:600;
     letter-spacing:.02em; padding:22px 4px 14px}
   .brand .logo{font-size:18px}
@@ -158,9 +159,12 @@
 
   /* ================= 2026 layout: hero + accordion ================= */
   .hero{margin:0 0 18px; padding:0; border:0; background:none}
-  .hero-visual{position:relative; width:100%; aspect-ratio:16/10; border-radius:20px;
+  .hero-visual{position:relative; width:100%; aspect-ratio:4/3; max-height:52vh; border-radius:20px;
     overflow:hidden; background:var(--card); border:1px solid var(--line)}
-  .hero-visual model-viewer, .hero-visual img{width:100%; height:100%; object-fit:cover; display:block}
+  .hero-visual img{width:100%; height:100%; object-fit:cover; display:block}
+  /* A model is not a photo: never crop it — show it whole (owner
+     2026-08-03, « le modèle 3D n'est pas visible au complet »). */
+  .hero-visual model-viewer{width:100%; height:100%; display:block; --poster-color:transparent}
   .hero-title{font-size:clamp(26px,5vw,44px); line-height:1.1; margin:16px 0 6px; letter-spacing:-.02em}
   .hero-figs{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px}
   .hero-fig{flex:1 1 90px; background:var(--card); border:1px solid var(--line);
@@ -196,6 +200,7 @@
 
   /* Desktop: the visual stays put while the content scrolls */
   @media (min-width:1000px){
+    .hero-visual{aspect-ratio:4/3; max-height:min(58vh,520px)}
     .split{display:grid; grid-template-columns:minmax(380px,44%) 1fr; gap:26px; align-items:start}
     .split-left{position:sticky; top:18px}
   }
@@ -210,6 +215,7 @@
   .equip-row{display:flex; gap:8px; font-size:14px}
   .equip-lab{color:var(--muted); min-width:96px}
   .equip-val{font-weight:600; word-break:break-all}
+  .topfoot{margin:2px 0 14px; display:flex; gap:8px; flex-wrap:wrap; align-items:baseline}
   .equip-thumb{margin-top:10px; max-width:220px; width:100%; border-radius:8px; cursor:zoom-in}
 
   /* ---- Phase 2: floor plans (media.json plans[]) ---- */
@@ -262,6 +268,10 @@
 <body>
 <div class="wrap">
   <div class="brand"><span class="logo">🏠</span><span data-i18n="brand">A3 ATLAS SCANNER</span></div>
+  <p class="foot topfoot">
+    <span data-i18n="made_with">Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.</span>
+    <a href="https://apps.apple.com/app/id6787545744" data-i18n="get_app_short">Obtenir l'app</a>
+  </p>
 
   <!-- Empty / broken link state -->
   <section id="empty" class="card empty" hidden>
@@ -400,10 +410,6 @@
       </details>
     </section>
 
-    <p class="foot">
-      <span data-i18n="made_with">Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.</span><br>
-      <a href="https://apps.apple.com/app/id6787545744" data-i18n="get_app_short">Obtenir l'app</a>
-    </p>
   </main>
 </div>
 
@@ -1495,8 +1501,11 @@
     // photos the 4 slots stuck instantly and 102 images never even got a
     // src (field report Alex 2026-08-03: plans blank, lightbox black).
     img.alt = "";
-    // Deferred by default; the fold that owns it triggers the load.
-    _deferredImgs.push({ img: img, id: driveId, w: w || 600, onFail: onFail });
+    // Deferred by default; the fold that owns it triggers the load. The
+    // plans are the exception: they are shown open, so they load at once
+    // (owner 2026-08-03: « le plan 2D doit être affiché d'emblée »).
+    if (w && w >= 1600){ loadDriveImage(img, driveId, w, onFail); }
+    else { _deferredImgs.push({ img: img, id: driveId, w: w || 600, onFail: onFail }); }
     return img;
   }
 
@@ -1727,8 +1736,9 @@
   // above the hero).
   function orderedNodes(){
     var chrome = chromeCards();
-    var nodes = [document.querySelector(".hero"), chrome.summary, chrome.actions];
+    var nodes = [document.querySelector(".hero"), chrome.summary];
     LAYOUT_ORDER.forEach(function(id){ nodes.push(document.getElementById(id)); });
+    nodes.push(chrome.actions);   // downloads & JSON contexts: at the bottom
     nodes.push(chrome.ai);
     return nodes.filter(Boolean);
   }
