@@ -189,8 +189,14 @@
     overflow:hidden; background:var(--card); border:1px solid var(--line)}
   .hero-visual img{width:100%; height:100%; object-fit:cover; display:block}
   /* A model is not a photo: never crop it — show it whole (owner
-     2026-08-03, « le modèle 3D n'est pas visible au complet »). */
-  .hero-visual model-viewer{width:100%; height:100%; display:block; --poster-color:transparent}
+     2026-08-03, « le modèle 3D n'est pas visible au complet »).
+     Calée sur les quatre bords : avec height:100% dans un parent dont la
+     hauteur vient d'un aspect-ratio borné par max-height, la visionneuse
+     se retrouvait plus HAUTE que son cadre — mesuré 386×438 dans un cadre
+     de 390×293 — et le modèle sortait par le bas. C'est ce qui le faisait
+     paraître décentré sur téléphone (owner 2026-08-03). */
+  .hero-visual model-viewer{position:absolute; inset:0; width:100%; height:100%;
+    display:block; --poster-color:transparent}
   /* Le grand titre du Hub : serif, graisse moyenne, chasse resserrée,
      puis le filet orange de 54 px qui sépare le nom du reste. */
   .hero-title{font-family:var(--serif); font-weight:500; font-size:clamp(30px,5.4vw,54px);
@@ -481,7 +487,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T20:22Z";
+  var ATLAS_BUILD = "2026-08-03T20:26Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1579,21 +1585,22 @@
     watchModelBox(mv);
   }
 
-  // model-viewer does NOT re-fire `load` when the element is MOVED, but it
-  // does rebuild its materials — so the styling and the framing silently
-  // vanished when the layout engine put the viewer in the hero (verified
-  // live 2026-08-03: 203 materials back at their original values, camera
-  // back to the 105% framing). A short keeper re-applies whenever that
-  // untouched signature reappears; the layout settles well inside 30 s,
-  // and each pass is a no-op once the model is styled and framed.
+  // We do NOT trust the `load` event. When the layout engine moves the
+  // viewer into the hero, model-viewer rebuilds its model and our listener
+  // is never called again — measured on the deployed page in a phone-shaped
+  // window: 0 materials styled, camera still at the 105 % framing, and the
+  // model spilling out of its frame. So the keeper POLLS instead: it starts
+  // as soon as the element exists, applies the look and the framing the
+  // moment the model is ready, and keeps watching while the layout settles.
+  // Every pass is a no-op once the model is styled and framed.
   function keepModelLook(mv){
     if (mv.__lookKept) return;
     mv.__lookKept = true;
-    var deadline = Date.now() + 30000;
+    var deadline = Date.now() + 60000;
     var timer = setInterval(function(){
       applyModelLook(mv);
       if (Date.now() > deadline) clearInterval(timer);
-    }, 500);
+    }, 400);
   }
   function watchModelBox(mv){
     // Re-fit on REAL size changes only: on a phone the address bar makes
@@ -1659,13 +1666,14 @@
           // viewer into the hero, the move rebuilds its materials, and no
           // second `load` announces it. The keeper below re-applies the look
           // and the framing for as long as the layout is still settling.
-          mv.addEventListener("load", function(){ applyModelLook(mv); keepModelLook(mv); });
+          mv.addEventListener("load", function(){ applyModelLook(mv); });   // voie rapide
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
           });
           mv.setAttribute("tone-mapping", "neutral");
           mv.setAttribute("interaction-prompt", "none");
           root.appendChild(mv);
+          keepModelLook(mv);   // le gardien démarre ici, pas au `load`
         } else {
           var a = document.createElement("a");
           a.className = "btn secondary"; a.href = driveModelUrl(m.driveId);
