@@ -2223,16 +2223,19 @@
     // Safari resets the rate on some play() calls — reassert what the visitor chose.
     el.addEventListener("play", function(){ if (el.playbackRate !== wanted) el.playbackRate = wanted; });
 
-    // WHERE the bytes come from, in order. First Drive's own user-content
-    // host: no API key, so a 200 MB scan video never eats the key's quota.
-    // That matters — streaming the video through the shared key got this
-    // browser throttled by Google today, and the key also feeds the photos,
-    // the plans and the 3D: one heavy video must not take the page down.
-    // Then the API endpoint, then Drive's iframe player as the last resort.
-    var sources = [
-      "https://drive.usercontent.google.com/download?id=" + encodeURIComponent(video.driveId) + "&export=download"
-    ];
+    // WHERE the bytes come from, in order.
+    //   1) the API endpoint — the only one that returns the file's REAL
+    //      media type (verified: 960×1280, video/mp4, Range supported);
+    //   2) drive.usercontent, keyless — but for a big file it answers with
+    //      the virus-scan confirmation PAGE, not the video (verified today:
+    //      content-type text/html), so it only rescues small ones;
+    //   3) Drive's iframe player, which always works and always letterboxes.
+    // `preload="metadata"` keeps this to a few kilobytes until the visitor
+    // actually presses play, so a page view costs almost nothing.
+    var sources = [];
     if (DRIVE_API_KEY) sources.push(mediaUrl(video.driveId));
+    sources.push("https://drive.usercontent.google.com/download?id="
+                 + encodeURIComponent(video.driveId) + "&export=download");
     var attempt = 0;
     function tryNextSource(){
       if (attempt >= sources.length){ drivePlayer(); return; }
