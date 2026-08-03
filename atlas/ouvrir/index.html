@@ -205,6 +205,15 @@
     .split-left{position:sticky; top:18px}
   }
 
+  /* ---- Scan video: the file's own shape, not a forced 16:9 ---- */
+  .video-box{display:flex; justify-content:center; align-items:center; width:100%;
+    background:#000; border-radius:14px; overflow:hidden}
+  .video-box video{display:block; max-width:100%; max-height:min(70vh,620px)}
+  .video-speeds{display:flex; gap:8px; margin-top:10px}
+  .video-speed{border:1px solid var(--line); background:var(--card); color:inherit;
+    border-radius:999px; padding:6px 14px; font-size:14px; font-weight:600; cursor:pointer}
+  .video-speed.on{border-color:var(--accent); color:var(--accent)}
+
   /* ---- Equipment read from nameplates ---- */
   .equip-item{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px}
   .equip-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px}
@@ -1405,6 +1414,67 @@
       else if (++tries > 48){ clearInterval(poll); settle(false); }   // ~12 s
     }, 250);
   }
+  // ---- Framing the 3D model in ITS box, whatever the screen ----
+  // The camera radius model-viewer resolves at first framing does NOT
+  // follow the element afterwards (verified live: the box went from
+  // 665×440 to 378×281 and the radius stayed 24,30 m). And our layout
+  // engine MOVES the viewer into the hero after it loads — so on a phone
+  // the model was framed for a box it no longer lives in, and it came out
+  // cut on the sides and at the bottom (owner 2026-08-03, screenshot).
+  //
+  // So we frame it ourselves: project the model's bounding box onto the
+  // camera axes and take the distance at which its FARTHEST corner still
+  // falls inside the frustum. Exact rather than guessed, and re-run
+  // whenever the box really changes size (rotation, desktop split).
+  var MODEL_THETA = 35, MODEL_PHI = 42, MODEL_FOV = 32, MODEL_MARGIN = 1.08;
+  function fitModel(mv){
+    try {
+      if (mv.__userMoved) return;        // never yank a view the visitor set
+      var s = mv.getDimensions ? mv.getDimensions() : null;
+      var w = mv.clientWidth, h = mv.clientHeight;
+      if (!s || !(s.x > 0) || !(s.y > 0) || !(s.z > 0) || !(w > 0) || !(h > 0)) return;
+      var cur = mv.getCameraOrbit ? mv.getCameraOrbit() : null;
+      var thetaDeg = (cur && isFinite(cur.theta)) ? cur.theta * 180 / Math.PI : MODEL_THETA;
+      var th = thetaDeg * Math.PI / 180, ph = MODEL_PHI * Math.PI / 180,
+          fov = MODEL_FOV * Math.PI / 180;
+      // The camera sits on the orbit; it looks at the bounding box centre.
+      var f = [-Math.sin(ph) * Math.sin(th), -Math.cos(ph), -Math.sin(ph) * Math.cos(th)];
+      var r = [-f[2], 0, f[0]], rn = Math.hypot(r[0], r[2]);
+      if (!(rn > 0)) return;
+      r = [r[0] / rn, 0, r[2] / rn];
+      var u = [r[1]*f[2] - r[2]*f[1], r[2]*f[0] - r[0]*f[2], r[0]*f[1] - r[1]*f[0]];
+      var tanV = Math.tan(fov / 2), tanH = tanV * (w / h);
+      var dot = function(a, b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; };
+      var R = 0;
+      [-1, 1].forEach(function(sx){ [-1, 1].forEach(function(sy){ [-1, 1].forEach(function(sz){
+        var p = [sx * s.x / 2, sy * s.y / 2, sz * s.z / 2];
+        var depth = dot(p, f);
+        R = Math.max(R, Math.abs(dot(p, u)) / tanV - depth,
+                        Math.abs(dot(p, r)) / tanH - depth);
+      }); }); });
+      if (!(R > 0) || !isFinite(R)) return;
+      R = R * MODEL_MARGIN;
+      // An explicit ceiling so nothing clamps the distance we just computed.
+      mv.setAttribute("max-camera-orbit", "auto 88deg " + (R * 3).toFixed(2) + "m");
+      mv.setAttribute("camera-orbit",
+                      thetaDeg.toFixed(1) + "deg " + MODEL_PHI + "deg " + R.toFixed(2) + "m");
+    } catch (e) { /* an older model-viewer: leave its own framing alone */ }
+  }
+  function watchModelBox(mv){
+    // Re-fit on REAL size changes only: on a phone the address bar makes
+    // vh jitter at every scroll, and re-framing on that would make the
+    // model breathe under the finger.
+    if (typeof ResizeObserver !== "function") return;
+    var lastW = 0, lastH = 0, timer = null;
+    new ResizeObserver(function(){
+      var w = mv.clientWidth, h = mv.clientHeight;
+      if (Math.abs(w - lastW) < 24 && Math.abs(h - lastH) < 24) return;
+      lastW = w; lastH = h;
+      clearTimeout(timer);
+      timer = setTimeout(function(){ fitModel(mv); }, 120);
+    }).observe(mv);
+  }
+
   function renderModels(models){
     setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     var valid = (models || []).filter(function(m){ return m && typeof m === "object" && validId(m.driveId); });
@@ -1464,7 +1534,17 @@
                 }
               });
             } catch (e) { /* an older model-viewer: leave the model as-is */ }
+            // Frame it for the box it is IN — now, and again after the
+            // layout engine has finished moving it into the hero.
+            fitModel(mv);
+            watchModelBox(mv);
+            [300, 900, 2000].forEach(function(ms){
+              setTimeout(function(){ fitModel(mv); }, ms);
+            });
           }, { once: true });
+          mv.addEventListener("camera-change", function(e){
+            if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
+          });
           mv.setAttribute("tone-mapping", "neutral");
           mv.setAttribute("interaction-prompt", "none");
           root.appendChild(mv);
@@ -2046,28 +2126,94 @@
     return side;
   }
 
-  // VIDEO — Drive's own player (no CORS, no key). Cross-origin iframes give no
-  // load-error signal, so we only gate on a valid id; Drive shows its own error.
+  // VIDEO — a scan video is filmed PORTRAIT, phone in hand. Drive's iframe
+  // forces every video into a 16:9 letterbox: on a phone that means two
+  // thick black bars and a postage-stamp image (owner 2026-08-03).
+  // So we play it ourselves with a native <video>, which takes the file's
+  // OWN dimensions — portrait stays portrait — and lets us start at 2×,
+  // the speed at which a walkthrough is actually watchable.
+  // Drive's preview stays as the fallback: if the direct stream cannot
+  // play (no key, refused codec, offline), the visitor gets the old
+  // player rather than a broken box.
+  var VIDEO_SPEEDS = [1, 1.5, 2], VIDEO_DEFAULT_SPEED = 2;
   function renderVideo(video){
     setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     if (!video || typeof video !== "object" || !validId(video.driveId)) return;
     var wrap = document.getElementById("videoWrap");
     wrap.innerHTML = "";
-    var iframe = document.createElement("iframe");
-    iframe.src = "https://drive.google.com/file/d/"+encodeURIComponent(video.driveId)+"/preview";
-    iframe.setAttribute("allow", "autoplay");
-    iframe.setAttribute("allowfullscreen", "");
-    iframe.style.width = "100%";
-    iframe.style.aspectRatio = "16/9";
-    iframe.style.border = "0";
-    iframe.style.borderRadius = "14px";
-    wrap.appendChild(iframe);
-    var label = (video.label!=null) ? String(video.label).trim() : "";
-    if (label){
+    var label = (video.label != null) ? String(video.label).trim() : "";
+
+    function addLabel(){
+      if (!label) return;
       var cap = document.createElement("div");
       cap.className = "media-cap"; cap.style.marginTop = "8px"; cap.textContent = label;
       wrap.appendChild(cap);
     }
+    function drivePlayer(){          // the fallback, unchanged
+      var iframe = document.createElement("iframe");
+      iframe.src = "https://drive.google.com/file/d/"+encodeURIComponent(video.driveId)+"/preview";
+      iframe.setAttribute("allow", "autoplay");
+      iframe.setAttribute("allowfullscreen", "");
+      iframe.style.width = "100%";
+      iframe.style.aspectRatio = "16/9";
+      iframe.style.border = "0";
+      iframe.style.borderRadius = "14px";
+      wrap.innerHTML = ""; wrap.appendChild(iframe); addLabel();
+    }
+
+    if (!DRIVE_API_KEY){ drivePlayer(); document.getElementById("videoSection").hidden = false; return; }
+
+    var box = document.createElement("div");
+    box.className = "video-box";
+    var el = document.createElement("video");
+    el.className = "scan-video";
+    el.src = mediaUrl(video.driveId);
+    el.controls = true;
+    el.preload = "metadata";
+    el.setAttribute("playsinline", "");
+    el.setAttribute("webkit-playsinline", "");
+    el.playsInline = true;
+    var wanted = VIDEO_DEFAULT_SPEED;
+    var played = false;
+    el.addEventListener("loadedmetadata", function(){
+      played = true;
+      if (el.videoWidth && el.videoHeight){
+        // The file's own shape decides: portrait fills the height, landscape
+        // fills the width. No letterbox either way.
+        if (el.videoHeight > el.videoWidth){
+          el.style.height = "min(70vh, 620px)"; el.style.width = "auto"; el.style.maxWidth = "100%";
+        } else {
+          el.style.width = "100%"; el.style.height = "auto";
+          el.style.maxHeight = "min(70vh, 620px)";
+        }
+        el.style.aspectRatio = el.videoWidth + "/" + el.videoHeight;
+      }
+      el.playbackRate = wanted;
+    });
+    // Safari resets the rate on some play() calls — reassert what the visitor chose.
+    el.addEventListener("play", function(){ if (el.playbackRate !== wanted) el.playbackRate = wanted; });
+    el.addEventListener("error", function(){ if (!played) drivePlayer(); });
+    box.appendChild(el);
+    wrap.appendChild(box);
+
+    // Speed picker: 2× by default, said out loud rather than done silently.
+    var speeds = document.createElement("div");
+    speeds.className = "video-speeds";
+    var buttons = VIDEO_SPEEDS.map(function(rate){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = String(rate).replace(".", ",") + "×";
+      b.className = "video-speed" + (rate === VIDEO_DEFAULT_SPEED ? " on" : "");
+      b.addEventListener("click", function(){
+        wanted = rate; el.playbackRate = rate;
+        buttons.forEach(function(other){ other.classList.remove("on"); });
+        b.classList.add("on");
+      });
+      speeds.appendChild(b);
+      return b;
+    });
+    wrap.appendChild(speeds);
+    addLabel();
     document.getElementById("videoSection").hidden = false;
   }
 
