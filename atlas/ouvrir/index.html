@@ -1379,7 +1379,9 @@
       if (!byLabel[key]){ byLabel[key] = { label:(p.label!=null?String(p.label).trim():""), variants:[] }; groups.push(byLabel[key]); }
       byLabel[key].variants.push(p);
     });
-    var order = { annotated:0, clean:1 };
+    // Le plan coté passe devant : c'est celui qu'on regarde en premier sur
+    // place (owner 2026-08-03). Le plan annoté reste à un doigt.
+    var order = { clean:0, annotated:1 };
     groups.forEach(function(g){
       g.variants.sort(function(a,b){ return (order[a.kind]!=null?order[a.kind]:9) - (order[b.kind]!=null?order[b.kind]:9); });
       var fig = document.createElement("figure");
@@ -1452,22 +1454,29 @@
   // the model was framed for a box it no longer lives in, and it came out
   // cut on the sides and at the bottom (owner 2026-08-03, screenshot).
   //
-  // So we frame it ourselves: project the model's bounding box onto the
-  // camera axes and take the distance at which its FARTHEST corner still
-  // falls inside the frustum. Exact rather than guessed, and re-run
-  // whenever the box really changes size (rotation, desktop split).
-  var MODEL_THETA = 35, MODEL_PHI = 42, MODEL_FOV = 32, MODEL_MARGIN = 1.08;
+  // So we frame it ourselves. Aiming at the bounding box CENTRE is not
+  // enough — that is what left the model off-centre with a big empty band
+  // (owner 2026-08-03, capture iPhone) : in perspective, the near corners
+  // project bigger than the far ones, so a box centred on the target is
+  // NOT centred on screen. We therefore centre the PROJECTION: the 8
+  // corners are projected onto the camera plane, the camera target is
+  // shifted by the offset of that projected rectangle, and the distance is
+  // scaled until it fills the box. Four passes converge (verified on the
+  // real model: half-extent 1.000, offset 0.0000 in both a 378×284 phone
+  // box and a 660×440 desktop one).
+  var MODEL_THETA = 35, MODEL_PHI = 42, MODEL_FOV = 32, MODEL_MARGIN = 1.12;
   function fitModel(mv){
     try {
       if (mv.__userMoved) return false;  // never yank a view the visitor set
       var s = mv.getDimensions ? mv.getDimensions() : null;
+      var c = mv.getBoundingBoxCenter ? mv.getBoundingBoxCenter() : null;
       var w = mv.clientWidth, h = mv.clientHeight;
-      if (!s || !(s.x > 0) || !(s.y > 0) || !(s.z > 0) || !(w > 0) || !(h > 0)) return false;
+      if (!s || !c || !(s.x > 0) || !(s.y > 0) || !(s.z > 0) || !(w > 0) || !(h > 0)) return false;
       var cur = mv.getCameraOrbit ? mv.getCameraOrbit() : null;
       var thetaDeg = (cur && isFinite(cur.theta)) ? cur.theta * 180 / Math.PI : MODEL_THETA;
       var th = thetaDeg * Math.PI / 180, ph = MODEL_PHI * Math.PI / 180,
           fov = MODEL_FOV * Math.PI / 180;
-      // The camera sits on the orbit; it looks at the bounding box centre.
+      // Camera basis: f looks at the target, r goes right, u goes up.
       var f = [-Math.sin(ph) * Math.sin(th), -Math.cos(ph), -Math.sin(ph) * Math.cos(th)];
       var r = [-f[2], 0, f[0]], rn = Math.hypot(r[0], r[2]);
       if (!(rn > 0)) return false;
@@ -1475,17 +1484,40 @@
       var u = [r[1]*f[2] - r[2]*f[1], r[2]*f[0] - r[0]*f[2], r[0]*f[1] - r[1]*f[0]];
       var tanV = Math.tan(fov / 2), tanH = tanV * (w / h);
       var dot = function(a, b){ return a[0]*b[0] + a[1]*b[1] + a[2]*b[2]; };
-      var R = 0;
+      var corners = [];
       [-1, 1].forEach(function(sx){ [-1, 1].forEach(function(sy){ [-1, 1].forEach(function(sz){
-        var p = [sx * s.x / 2, sy * s.y / 2, sz * s.z / 2];
-        var depth = dot(p, f);
-        R = Math.max(R, Math.abs(dot(p, u)) / tanV - depth,
-                        Math.abs(dot(p, r)) / tanH - depth);
+        corners.push([sx * s.x / 2, sy * s.y / 2, sz * s.z / 2]);
       }); }); });
-      if (!(R > 0) || !isFinite(R)) return false;
+      var R = Math.max(s.x, s.y, s.z) * 2, ox = 0, oy = 0;
+      for (var it = 0; it < 6; it++){
+        var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, dsum = 0;
+        for (var i = 0; i < corners.length; i++){
+          var p = corners[i];
+          var q = [p[0] - ox*r[0] - oy*u[0], p[1] - ox*r[1] - oy*u[1], p[2] - ox*r[2] - oy*u[2]];
+          var depth = dot(q, f) + R;
+          if (!(depth > 0)) return false;              // camera inside the model
+          var x = dot(q, r) / (depth * tanH), y = dot(q, u) / (depth * tanV);
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+          dsum += depth;
+        }
+        var dmean = dsum / corners.length;
+        var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        var half = Math.max((maxX - minX) / 2, (maxY - minY) / 2);
+        if (!isFinite(cx) || !isFinite(cy) || !(half > 0)) return false;
+        ox += cx * tanH * dmean;                       // recentre the projection
+        oy += cy * tanV * dmean;
+        R = R * half;                                  // fill the box
+        if (Math.abs(cx) < 1e-4 && Math.abs(cy) < 1e-4 && Math.abs(half - 1) < 1e-4) break;
+      }
       R = R * MODEL_MARGIN;
+      if (!(R > 0) || !isFinite(R)) return false;
       // An explicit ceiling so nothing clamps the distance we just computed.
       mv.setAttribute("max-camera-orbit", "auto 88deg " + (R * 3).toFixed(2) + "m");
+      mv.setAttribute("camera-target",
+                      (c.x + ox*r[0] + oy*u[0]).toFixed(3) + "m " +
+                      (c.y + ox*r[1] + oy*u[1]).toFixed(3) + "m " +
+                      (c.z + ox*r[2] + oy*u[2]).toFixed(3) + "m");
       mv.setAttribute("camera-orbit",
                       thetaDeg.toFixed(1) + "deg " + MODEL_PHI + "deg " + R.toFixed(2) + "m");
       return true;
@@ -1926,8 +1958,16 @@
   // above the hero).
   function orderedNodes(){
     var chrome = chromeCards();
-    var nodes = [document.querySelector(".hero"), chrome.summary];
-    LAYOUT_ORDER.forEach(function(id){ nodes.push(document.getElementById(id)); });
+    // Les plans passent devant la carte de résumé (étage, badge LiDAR,
+    // chiffres) : c'est le plan qu'on cherche en arrivant, pas le compte
+    // de fenêtres (owner 2026-08-03).
+    var nodes = [document.querySelector(".hero"),
+                 document.getElementById("plansSection"),
+                 chrome.summary];
+    LAYOUT_ORDER.forEach(function(id){
+      if (id === "plansSection") return;
+      nodes.push(document.getElementById(id));
+    });
     nodes.push(chrome.actions);   // downloads & JSON contexts: at the bottom
     nodes.push(chrome.ai);
     return nodes.filter(Boolean);
