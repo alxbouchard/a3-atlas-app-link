@@ -156,6 +156,50 @@
   .assume{margin:12px 0 0; padding-left:18px}
   .assume li{font-size:12.5px; color:var(--muted); line-height:1.45; margin:5px 0}
 
+  /* ================= 2026 layout: hero + accordion ================= */
+  .hero{margin:0 0 18px; padding:0; border:0; background:none}
+  .hero-visual{position:relative; width:100%; aspect-ratio:16/10; border-radius:20px;
+    overflow:hidden; background:var(--card); border:1px solid var(--line)}
+  .hero-visual model-viewer, .hero-visual img{width:100%; height:100%; object-fit:cover; display:block}
+  .hero-title{font-size:clamp(26px,5vw,44px); line-height:1.1; margin:16px 0 6px; letter-spacing:-.02em}
+  .hero-figs{display:flex; flex-wrap:wrap; gap:10px; margin-top:12px}
+  .hero-fig{flex:1 1 90px; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:10px 12px}
+  .hero-fig b{display:block; font-size:20px; line-height:1.2}
+  .hero-fig span{font-size:12px; color:var(--muted)}
+  .navchips{display:flex; gap:8px; overflow-x:auto; padding:14px 0 4px; scrollbar-width:none}
+  .navchips::-webkit-scrollbar{display:none}
+  .navchip{flex:0 0 auto; border:1px solid var(--line); background:var(--card); color:inherit;
+    border-radius:999px; padding:8px 14px; font-size:14px; font-weight:600; cursor:pointer}
+  .navchip:hover{border-color:var(--accent)}
+  .layout-tools{display:flex; justify-content:flex-end; margin:6px 0 10px}
+  .layout-tools button{background:none; border:0; color:var(--accent); font-size:14px;
+    font-weight:600; cursor:pointer; padding:6px}
+
+  /* Collapsible section shell */
+  .fold > summary{list-style:none; cursor:pointer; display:flex; align-items:center; gap:10px;
+    padding:16px 18px; font-size:17px; font-weight:700}
+  .fold > summary::-webkit-details-marker{display:none}
+  .fold > summary::after{content:"⌄"; margin-left:auto; font-size:20px; color:var(--muted);
+    transition:transform .2s ease}
+  .fold[open] > summary::after{transform:rotate(180deg)}
+  .fold-count{font-size:13px; font-weight:600; color:var(--muted);
+    background:var(--bg); border:1px solid var(--line); border-radius:999px; padding:2px 9px}
+  .fold-body{padding:0 18px 18px}
+  @media (prefers-reduced-motion:no-preference){
+    .fold-body{animation:foldIn .22s ease}
+    @keyframes foldIn{from{opacity:0; transform:translateY(-4px)}to{opacity:1; transform:none}}
+  }
+
+  /* History teaser: the most recent event stays visible, the rest folds */
+  .hist-teaser{padding:0 18px 4px}
+
+  /* Desktop: the visual stays put while the content scrolls */
+  @media (min-width:1000px){
+    .split{display:grid; grid-template-columns:minmax(380px,44%) 1fr; gap:26px; align-items:start}
+    .split-left{position:sticky; top:18px}
+  }
+
   /* ---- Equipment read from nameplates ---- */
   .equip-item{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px}
   .equip-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px}
@@ -282,7 +326,7 @@
     </section>
 
     <!-- Equipment read from nameplates (atlas-ai-context.json observations) -->
-    <section class="card" id="equipSection" hidden>
+    <section class="card" id="plateSection" hidden>
       <h2 data-i18n="equip_h">Équipements lus sur les plaques</h2>
       <p class="muted" id="equipNote"></p>
       <div id="equip"></div>
@@ -451,6 +495,9 @@
       plans_h:"Plans",
       equip_h:"Équipements lus sur les plaques",
       revoked_h:"Lien désactivé",
+      fold_all:"Tout replier", unfold_all:"Tout déplier",
+      fig_rooms:"zones", fig_photos:"photos", fig_floor:"étage",
+      hist_more:"Voir tout l'historique",
       revoked_body:"Le propriétaire a désactivé ce partage : les données de la propriété ne sont plus accessibles. Le résumé ci-dessous provient de l'adresse du lien elle-même et n'est plus mis à jour. Demandez-lui un nouveau lien.",
       equip_note:"Texte lu automatiquement sur les plaques signalétiques par l'app, à partir des photos ci-dessous. Chaque valeur indique si un humain l'a confirmée.",
       equip_brand:"Marque", equip_model:"Modèle", equip_serial:"N° de série",
@@ -530,6 +577,9 @@
       plans_h:"Floor plans",
       equip_h:"Equipment read from nameplates",
       revoked_h:"Link disabled",
+      fold_all:"Collapse all", unfold_all:"Expand all",
+      fig_rooms:"zones", fig_photos:"photos", fig_floor:"floor",
+      hist_more:"See the full history",
       revoked_body:"The owner disabled this share: the property data is no longer accessible. The summary below comes from the link's own address and is no longer updated. Ask them for a new link.",
       equip_note:"Text read automatically from equipment nameplates by the app, from the photos below. Each value says whether a human confirmed it.",
       equip_brand:"Brand", equip_model:"Model", equip_serial:"Serial no.",
@@ -1026,6 +1076,7 @@
 
   // ---- enrichment: authoritative upgrade from context.json ----
   function applyContext(doc){
+    setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     ctxDoc = doc;   // keep the parsed context for the AI hand-off
     var spaces = Array.isArray(doc.spaces) ? doc.spaces : [];
     var byId = {};
@@ -1249,6 +1300,7 @@
   var _photoIdByFile = {}, _historyDoc = null;
 
   function applyMedia(manifest){
+    setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     var photos = Array.isArray(manifest.photos) ? manifest.photos.filter(function(p){
       return p && typeof p === "object" && validId(p.driveId);
     }) : [];
@@ -1348,6 +1400,7 @@
     }, 250);
   }
   function renderModels(models){
+    setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     var valid = (models || []).filter(function(m){ return m && typeof m === "object" && validId(m.driveId); });
     if (!valid.length) return;
     loadModelViewer(function(ok){
@@ -1422,6 +1475,18 @@
   }
 
   // <img> whose repeated failure hides its own container — degrades cleanly.
+  var _deferredImgs = [];
+
+  // Load everything a fold holds, once, when it first opens.
+  function loadDeferredIn(root){
+    _deferredImgs = _deferredImgs.filter(function(entry){
+      if (!root.contains(entry.img)) return true;
+      loadDriveImage(entry.img, entry.id, entry.w, entry.onFail);
+      return false;
+    });
+  }
+  window.__atlasLoadDeferred = loadDeferredIn;
+
   function makeMediaImg(driveId, onFail, w){
     var img = document.createElement("img");
     // NO loading="lazy" here: the concurrency gate below already throttles,
@@ -1430,7 +1495,8 @@
     // photos the 4 slots stuck instantly and 102 images never even got a
     // src (field report Alex 2026-08-03: plans blank, lightbox black).
     img.alt = "";
-    loadDriveImage(img, driveId, w || 600, onFail);
+    // Deferred by default; the fold that owns it triggers the load.
+    _deferredImgs.push({ img: img, id: driveId, w: w || 600, onFail: onFail });
     return img;
   }
 
@@ -1444,6 +1510,286 @@
 
   // PHOTO GALLERY — responsive grid, grouped/labeled by room when the photo's
   // roomId maps to a known space label (from context.json). Otherwise flat.
+
+  // ===================================================================
+  // 2026 LAYOUT — hero first, everything else folded.
+  //
+  // Measured before this existed: 21 450 px (22.5 screens), 15 sections,
+  // four of them 79 % of the page, the interactive 3D model buried 2 000 px
+  // down, and 109 images fetched for a reader who scrolls none of them
+  // (owner 2026-08-03). The DATA is untouched — this only reorders and
+  // folds what the renderers already produced, so the honesty contract,
+  // the URL contract and the JSON layers are exactly as before.
+  // ===================================================================
+  var LAYOUT_ORDER = ["plansSection", "gallerySection", "baSection", "plateSection",
+                      "equipSection", "surfacesSection", "spacesSection", "areaSection",
+                      "videoSection", "dataSemSection", "limitsSection", "historySection"];
+  // Sections that stay OPEN: the ones the owner wants seen immediately.
+  var LAYOUT_OPEN = { plansSection: true };
+  var _layoutDone = false;
+
+  function countIn(section){
+    if (!section) return 0;
+    var id = section.id;
+    if (id === "gallerySection") return section.querySelectorAll("#gallery img").length;
+    if (id === "baSection") return section.querySelectorAll("img").length / 2 | 0;
+    if (id === "plateSection") return section.querySelectorAll(".equip-item").length;
+    if (id === "equipSection") return section.querySelectorAll("li,.poi-row,.equip-row").length;
+    if (id === "spacesSection") return section.querySelectorAll(".space,.space-row,li").length;
+    if (id === "historySection") return section.querySelectorAll(".hevent,.hitem,li").length;
+    if (id === "plansSection") return section.querySelectorAll("figure").length;
+    return 0;
+  }
+
+  // Wrap a section's content in a native <details>: keyboard and screen
+  // readers for free, no JS state to get wrong.
+  function fold(section){
+    if (!section || section.dataset.folded === "1") return;
+    var h2 = section.querySelector("h2");
+    if (!h2) return;
+    var details = document.createElement("details");
+    details.className = "fold";
+    if (LAYOUT_OPEN[section.id]) details.open = true;
+    var summary = document.createElement("summary");
+    var label = document.createElement("span");
+    label.textContent = h2.textContent;
+    summary.appendChild(label);
+    var badge = document.createElement("span");
+    badge.className = "fold-count";
+    summary.appendChild(badge);
+    details.appendChild(summary);
+    var body = document.createElement("div");
+    body.className = "fold-body";
+    while (h2.nextSibling) body.appendChild(h2.nextSibling);
+    details.appendChild(body);
+    details.addEventListener("toggle", function(){
+      if (details.open) loadDeferredIn(details);
+    });
+    if (details.open) setTimeout(function(){ loadDeferredIn(details); }, 0);
+    h2.remove();
+    section.appendChild(details);
+    section.dataset.folded = "1";
+    section.style.padding = "0";
+  }
+
+  function refreshCounts(){
+    LAYOUT_ORDER.forEach(function(id){
+      var sec = document.getElementById(id);
+      if (!sec) return;
+      var badge = sec.querySelector(".fold-count");
+      if (!badge) return;
+      var n = countIn(sec);
+      badge.textContent = n > 0 ? String(n) : "";
+      badge.hidden = n <= 0;
+    });
+  }
+
+  // The most recent event stays visible; the rest opens on demand
+  // (owner 2026-08-03) — history alone was 36 % of the page.
+  function teaseHistory(){
+    var sec = document.getElementById("historySection");
+    if (!sec || sec.dataset.teased === "1") return;
+    var body = sec.querySelector(".fold-body");
+    var list = body && body.firstElementChild;
+    if (!list || !list.firstElementChild) return;
+    var teaser = document.createElement("div");
+    teaser.className = "hist-teaser";
+    teaser.appendChild(list.firstElementChild.cloneNode(true));
+    sec.querySelector("details").insertBefore(teaser, body);
+    sec.dataset.teased = "1";
+  }
+
+  function buildHero(){
+    var main = document.getElementById("fiche");
+    var first = main && main.querySelector("section.card");
+    if (!main || !first || document.querySelector(".hero")) return;
+
+    var hero = document.createElement("header");
+    hero.className = "hero";
+    var visual = document.createElement("div");
+    visual.className = "hero-visual";
+    visual.hidden = true;
+    hero.appendChild(visual);
+
+    var h1 = document.createElement("h1");
+    h1.className = "hero-title";
+    h1.textContent = (document.getElementById("title") || {}).textContent || "";
+    hero.appendChild(h1);
+
+    var figs = document.createElement("div");
+    figs.className = "hero-figs";
+    [[q.get("z"), t.fig_rooms], [q.get("p"), t.fig_photos], [q.get("floor"), t.fig_floor]]
+      .forEach(function(pair){
+        if (!pair[0]) return;
+        var f = document.createElement("div"); f.className = "hero-fig";
+        var b = document.createElement("b"); b.textContent = pair[0];
+        var sp = document.createElement("span"); sp.textContent = pair[1];
+        f.appendChild(b); f.appendChild(sp); figs.appendChild(f);
+      });
+    hero.appendChild(figs);
+    main.insertBefore(hero, first);
+    // The original header card keeps the subtitle, badges and stats.
+    first.querySelector("#title") && (first.querySelector("#title").hidden = true);
+  }
+
+  // The 3D model is the hero when there is one; otherwise the exterior
+  // photo, else the first photo (owner 2026-08-03).
+  function fillHeroVisual(){
+    var visual = document.querySelector(".hero-visual");
+    if (!visual || visual.dataset.filled === "1") return;
+    var viewer = document.querySelector("#modelSection model-viewer");
+    if (viewer){
+      visual.appendChild(viewer);
+      visual.hidden = false; visual.dataset.filled = "1";
+      var ms = document.getElementById("modelSection");
+      if (ms && !ms.querySelector("model-viewer")) ms.hidden = true;
+      return;
+    }
+    var figures = [].slice.call(document.querySelectorAll("#gallery figure"));
+    var exterior = figures.filter(function(f){
+      var c = (f.querySelector("figcaption") || {}).textContent || "";
+      return /ext[ée]rieur|outside|exterior/i.test(c);
+    })[0] || figures[0];
+    var img = exterior && exterior.querySelector("img");
+    if (!img || !img.getAttribute("src")) return;
+    var clone = document.createElement("img");
+    clone.src = img.getAttribute("src") || "";
+    if (!clone.src){ loadDriveImage(clone, img.dataset.driveId || "", 1600, null); }
+    clone.alt = "";
+    visual.appendChild(clone);
+    visual.hidden = false; visual.dataset.filled = "1";
+  }
+
+  function buildChips(){
+    var hero = document.querySelector(".hero");
+    if (!hero) return;
+    // Sections appear as their data lands, so the bar is REFILLED on every
+    // pass rather than built once and left half empty.
+    var bar = hero.querySelector(".navchips");
+    if (bar) { bar.innerHTML = ""; } else {
+      bar = document.createElement("nav");
+      bar.className = "navchips";
+    }
+    LAYOUT_ORDER.forEach(function(id){
+      var sec = document.getElementById(id);
+      if (!sec || sec.hidden) return;
+      var own = sec.querySelector(":scope > details.fold > summary > span");
+      var label = (own || sec.querySelector("h2") || {}).textContent;
+      if (!label) return;
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "navchip"; b.textContent = label;
+      b.onclick = function(){
+        var d = sec.querySelector("details"); if (d) d.open = true;
+        sec.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+      bar.appendChild(b);
+    });
+    if (!bar.children.length) { bar.remove(); return; }
+    if (bar.parentElement !== hero) hero.appendChild(bar);
+    if (hero.querySelector(".layout-tools")) return;
+
+    var tools = document.createElement("div");
+    tools.className = "layout-tools";
+    var btn = document.createElement("button");
+    btn.type = "button"; btn.textContent = t.unfold_all;
+    btn.onclick = function(){
+      var all = [].slice.call(document.querySelectorAll("details.fold"));
+      var opening = all.some(function(d){ return !d.open });
+      all.forEach(function(d){ d.open = opening });
+      btn.textContent = opening ? t.fold_all : t.unfold_all;
+    };
+    tools.appendChild(btn);
+    hero.appendChild(tools);
+  }
+
+  function applyLayout(){
+    var main = document.getElementById("fiche");
+    if (!main || main.hidden) return;
+    if (!_layoutDone){ buildHero(); _layoutDone = true; }
+    LAYOUT_ORDER.forEach(function(id){
+      var sec = document.getElementById(id);
+      if (!sec) return;
+      fold(sec);
+      main.appendChild(sec);          // reorder in place
+    });
+    fillHeroVisual();
+    teaseHistory();
+    refreshCounts();
+    buildChips();
+    applySplit();
+  }
+
+  // Wide screens get the visual pinned while the content scrolls — that is
+  // what a big screen is FOR; a stretched single column wastes it.
+  function applySplit(){
+    var main = document.getElementById("fiche");
+    var hero = document.querySelector(".hero");
+    if (!main || !hero) return;
+    var wide = window.matchMedia("(min-width:1000px)").matches;
+    var split = main.querySelector(".split");
+    if (!wide){
+      if (split){   // back to one column
+        var left = split.querySelector(".split-left"), right = split.querySelector(".split-right");
+        while (left.firstChild) main.appendChild(left.firstChild);
+        while (right.firstChild) main.appendChild(right.firstChild);
+        split.remove();
+      }
+      return;
+    }
+    if (split){   // keep newly-arrived sections in the right column
+      var r = split.querySelector(".split-right");
+      LAYOUT_ORDER.forEach(function(id){
+        if (id === "plansSection") return;      // stays pinned on the left
+        var sec = document.getElementById(id);
+        if (sec && sec.parentElement !== r) r.appendChild(sec);
+      });
+      var lateplans = document.getElementById("plansSection");
+      var l = split.querySelector(".split-left");
+      if (lateplans && lateplans.parentElement !== l) l.appendChild(lateplans);
+      return;
+    }
+    split = document.createElement("div");
+    split.className = "split";
+    var left = document.createElement("div"); left.className = "split-left";
+    var right = document.createElement("div"); right.className = "split-right";
+    split.appendChild(left); split.appendChild(right);
+    main.appendChild(split);
+    left.appendChild(hero);
+    var plans = document.getElementById("plansSection");
+    if (plans) left.appendChild(plans);
+    LAYOUT_ORDER.forEach(function(id){
+      if (id === "plansSection") return;
+      var sec = document.getElementById(id);
+      if (sec) right.appendChild(sec);
+    });
+  }
+  window.addEventListener("resize", function(){
+    clearTimeout(window.__splitTimer);
+    window.__splitTimer = setTimeout(function(){ applyLayout(); }, 200);
+  });
+  window.__atlasLayout = applyLayout;
+  setTimeout(applyLayout, 0);
+
+  // The renderers land asynchronously (the 3D model in particular arrives
+  // after its own fetch), and guessing WHEN with timers is how sections
+  // end up in the wrong place. Watch instead: every pass is idempotent
+  // (dataset flags), and the guard keeps our own DOM writes from
+  // re-triggering the observer.
+  (function(){
+    var main = document.getElementById("fiche");
+    if (!main || !window.MutationObserver) return;
+    var pending = null, laying = false;
+    var wrapped = function(){
+      laying = true;
+      try { applyLayout(); } finally { setTimeout(function(){ laying = false; }, 0); }
+    };
+    new MutationObserver(function(){
+      if (laying) return;
+      clearTimeout(pending);
+      pending = setTimeout(wrapped, 150);
+    }).observe(main, { childList: true, subtree: true });
+  })();
+
   // ===================================================================
   // EQUIPMENT READ FROM NAMEPLATES — the app's OCR of an equipment plate,
   // shipped as observations (property "equipment_*", provenance
@@ -1484,6 +1830,7 @@
   // Needs the media manifest for the evidence thumbnail, so it runs when
   // whichever of the two arrives last is in.
   function renderEquipmentIfReady(){
+    setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     if (!_equipGroups || !_equipGroups.length) return;
     var root = document.getElementById("equip");
     if (!root) return;
@@ -1533,7 +1880,7 @@
       }
       root.appendChild(card);
     });
-    document.getElementById("equipSection").hidden = false;
+    document.getElementById("plateSection").hidden = false;
   }
 
   function renderGallery(photos){
@@ -1617,6 +1964,7 @@
   // VIDEO — Drive's own player (no CORS, no key). Cross-origin iframes give no
   // load-error signal, so we only gate on a valid id; Drive shows its own error.
   function renderVideo(video){
+    setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     if (!video || typeof video !== "object" || !validId(video.driveId)) return;
     var wrap = document.getElementById("videoWrap");
     wrap.innerHTML = "";
@@ -1748,6 +2096,7 @@
   }
 
   function applyHistory(doc){
+    setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     var events = Array.isArray(doc.events) ? doc.events : [];
     var parsed = [];
     events.forEach(function(ev){
