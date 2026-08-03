@@ -448,7 +448,15 @@
       copied:"Consigne copiée ✓ — collez-la à votre assistant IA",
       ai_prompt:function(u){return "Voici le contexte Atlas d'une propriété : "+u+"\n\nAide-moi à préparer l'intervention. Distingue clairement les observations, les confirmations et les estimations. Le lien porte l'essentiel; le contexte détaillé (context.md / context.json) et le ZIP de preuves sont accessibles depuis la page.";},
       ai_copy:function(n,url){return "Contexte Atlas complet de « "+n+" » :\n"+url;},
-      ai_copy_page:function(n,url){return "Contexte Atlas de « "+n+" » :\n"+url;}
+      ai_copy_page:function(n,url){return "Contexte Atlas de « "+n+" » :\n"+url;},
+      ai_h_head:function(n){return "Contexte de propriété « "+n+" » — A3 Atlas Scanner (scan LiDAR Apple RoomPlan, ±2 po, mesures non certifiées).";},
+      ai_h_rooms:"Pièces mesurées (Apple RoomPlan LiDAR, ±2 po, non certifié) :",
+      ai_h_ceiling:"plafond", ai_h_total:"Plancher mesuré total :",
+      ai_h_essentials:"L'essentiel :", ai_h_equip:"Équipements repérés :",
+      ai_h_evidence:"Paquet de preuves complet (plans 2D cotés, modèle 3D, photos, rapport PDF), à joindre au besoin :",
+      ai_h_visual:"Fiche visuelle interactive (plans, 3D, galerie) :",
+      ai_h_honesty:"Distingue observations, faits confirmés et estimations dérivées ; recommande une vérification si l'incertitude touche la sécurité, la conformité ou les coûts.",
+      ai_handoff_copied:"Consigne IA + données copiées ✓ — collez-la à votre assistant"
     },
     en:{
       brand:"A3 ATLAS SCANNER",
@@ -512,7 +520,15 @@
       copied:"Prompt copied ✓ — paste it to your AI assistant",
       ai_prompt:function(u){return "Here is the Atlas context of a property: "+u+"\n\nHelp me prepare the visit. Clearly separate observations, confirmations and estimates. The link carries the essentials; the detailed context (context.md / context.json) and the evidence ZIP are reachable from the page.";},
       ai_copy:function(n,url){return "Complete Atlas context for \""+n+"\":\n"+url;},
-      ai_copy_page:function(n,url){return "Atlas context for \""+n+"\":\n"+url;}
+      ai_copy_page:function(n,url){return "Atlas context for \""+n+"\":\n"+url;},
+      ai_h_head:function(n){return "Property context \""+n+"\" — A3 Atlas Scanner (Apple RoomPlan LiDAR scan, ±2 in, measurements not certified).";},
+      ai_h_rooms:"Measured rooms (Apple RoomPlan LiDAR, ±2 in, not certified):",
+      ai_h_ceiling:"ceiling", ai_h_total:"Total measured floor area:",
+      ai_h_essentials:"The essentials:", ai_h_equip:"Equipment found:",
+      ai_h_evidence:"Full evidence pack (dimensioned 2D plans, 3D model, photos, PDF report), attach if needed:",
+      ai_h_visual:"Interactive visual page (plans, 3D, gallery):",
+      ai_h_honesty:"Distinguish observations, confirmed facts and derived estimates; recommend verification when uncertainty affects safety, compliance or cost.",
+      ai_handoff_copied:"AI hand-off + data copied ✓ — paste it to your assistant"
     }
   };
   var t = T[lang];
@@ -696,13 +712,58 @@
   // AI prompt copy
   var toast = document.getElementById("toast");
   function showToast(msg){ toast.textContent = msg; toast.classList.add("show"); setTimeout(function(){toast.classList.remove("show");},2600); }
+  // The COMPLETE readable hand-off any AI (incl. free/no-browsing) understands
+  // from the paste ALONE: property + every measured room (dims, ceiling, area) +
+  // equipment, built from the parsed context.json (fallback: URL essentials). The
+  // public preview NEVER shows coordinates — precise location stays in the ZIP.
+  function feetOf(m){ return (m*3.280839895).toFixed(1); }
+  function sqftOf(m2){ return String(Math.round(m2*10.76391042)); }
+  function buildAiHandoff(){
+    var uft = t.unit_ft || "ft", uft2 = t.unit_ft2 || "sq ft";
+    var nm = (document.getElementById("title").textContent || label || "");
+    var lines = [ t.ai_h_head(nm) ];
+    var spaces = (ctxDoc && Array.isArray(ctxDoc.spaces)) ? ctxDoc.spaces : [];
+    if (spaces.length){
+      lines.push(t.ai_h_rooms);
+      var totalM2 = 0;
+      spaces.forEach(function(s){
+        s = s || {};
+        var tm = SPACE_TYPES[s.type];
+        var typeLabel = tm ? (tm[lang]||tm.fr) : prettifySlug(s.type||"other");
+        var rn = (s.label!=null && String(s.label).length) ? String(s.label) : typeLabel;
+        var dim = fmtDimensions(s.dimensions);
+        var parts = [];
+        if (dim.measured){
+          parts.push(feetOf(dim.w)+" × "+feetOf(dim.l)+" "+uft);
+          if (dim.h!=null && dim.h!==undefined) parts.push(t.ai_h_ceiling+" "+feetOf(dim.h)+" "+uft);
+          var a = dim.w*dim.l; totalM2 += a;
+          parts.push(sqftOf(a)+" "+uft2);
+        } else { parts.push(t.dims_not_measured); }
+        lines.push("• "+rn+" ("+typeLabel+") : "+parts.join(" · ")+".");
+      });
+      if (totalM2>0) lines.push(t.ai_h_total+" "+sqftOf(totalM2)+" "+uft2+".");
+    } else {
+      var facts = [];
+      var flx = floorLabel(floor); if (flx) facts.push(flx);
+      if (rooms!==null) facts.push(rooms+" "+t.rooms.toLowerCase());
+      if (doors!==null) facts.push(doors+" "+t.doors.toLowerCase());
+      if (windows!==null) facts.push(windows+" "+t.windows.toLowerCase());
+      if (facts.length) lines.push(t.ai_h_essentials+" "+facts.join(" · ")+".");
+    }
+    if (eq.length){
+      var seen = {}, names = [];
+      eq.forEach(function(slug){ var m = EQ[slug]; var n = m ? (m[lang]||m.fr) : prettifySlug(slug); if (!seen[n]){ seen[n]=1; names.push(n); } });
+      if (names.length) lines.push(t.ai_h_equip+" "+names.join(", ")+".");
+    }
+    lines.push(t.ai_h_evidence+" https://drive.usercontent.google.com/download?id="+encodeURIComponent(d)+"&export=download&confirm=t");
+    lines.push(t.ai_h_visual+" "+location.href);
+    lines.push(t.ai_h_honesty);
+    return lines.join("\n");
+  }
   document.getElementById("aiBtn").addEventListener("click", function(){
-    // ALWAYS copy the HTML property PAGE url (this fiche), never the raw Drive
-    // JSON — a browsing AI (ChatGPT) refuses drive.usercontent but reads this
-    // HTML page. The raw aggregate stays available via the advanced JSON button.
-    var text = t.ai_copy_page(label, location.href);
+    var text = buildAiHandoff();
     if (navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(text).then(function(){ showToast(t.page_copied); }, function(){ fallbackCopy(text); });
+      navigator.clipboard.writeText(text).then(function(){ showToast(t.ai_handoff_copied); }, function(){ fallbackCopy(text); });
     } else { fallbackCopy(text); }
   });
   function fallbackCopy(text){
@@ -731,7 +792,14 @@
   var lbPrevFocus = null;
 
   function setLightboxContent(item){
-    loadDriveImage(lbImg, item.driveId, 2048, null);
+    // UNGATED on purpose: the lightbox is one image the reader just asked
+    // for. Queueing it behind 46 thumbnails is what made fullscreen show
+    // a black overlay (field report Alex 2026-08-03).
+    lbImg.onerror = function(){
+      lbImg.onerror = null;
+      lbImg.src = lh3(item.driveId, 2048);
+    };
+    lbImg.src = driveThumb(item.driveId, 2048);
     var c = (item.caption!=null) ? String(item.caption).trim() : "";
     lbCap.textContent = c; lbCap.hidden = !c;
     var many = lbItems.length > 1;
@@ -822,6 +890,7 @@
   var enriched = false;
   var evidenceRows = [];   // [{id, filenames}] populated by buildEquipment
   var spaceLabelsById = {};// id -> label, populated by applyContext; reused for media room grouping
+  var ctxDoc = null;       // parsed context.json — powers the AI hand-off (complete inline data)
 
   function showFallbackNote(){
     if (enriched) return;
@@ -893,6 +962,7 @@
 
   // ---- enrichment: authoritative upgrade from context.json ----
   function applyContext(doc){
+    ctxDoc = doc;   // keep the parsed context for the AI hand-off
     var spaces = Array.isArray(doc.spaces) ? doc.spaces : [];
     var byId = {};
     spaces.forEach(function(s){ if (s && s.id) byId[s.id] = (s.label!=null ? String(s.label) : ""); });
@@ -1263,10 +1333,17 @@
   function _imgPump(){
     while (_imgActive < IMG_CONCURRENCY && _imgQueue.length){ _imgActive++; (_imgQueue.shift())(); }
   }
+  // A slot must never be held for ever: if an image neither loads nor
+  // errors within this window (a hung request, a paused decode, a tab in
+  // the background), we free the slot and let it finish on its own. One
+  // stuck image must not blank the whole page.
+  var IMG_SLOT_WATCHDOG_MS = 8000;
+
   function loadDriveImage(img, id, w, onFail){
     var order = [driveThumb(id, w), lh3(id, w)], n = 0, MAX = 5, settled = false;
     function release(){ if (settled) return; settled = true; _imgActive--; _imgPump(); }
     function start(){
+      setTimeout(release, IMG_SLOT_WATCHDOG_MS);
       img.onload = release;
       img.onerror = function(){
         n++;
@@ -1282,7 +1359,12 @@
   // <img> whose repeated failure hides its own container — degrades cleanly.
   function makeMediaImg(driveId, onFail, w){
     var img = document.createElement("img");
-    img.loading = "lazy"; img.alt = "";
+    // NO loading="lazy" here: the concurrency gate below already throttles,
+    // and lazy DEADLOCKED it — an off-screen image never fetches, so it
+    // never fires load/error, so its slot was never released. With 46
+    // photos the 4 slots stuck instantly and 102 images never even got a
+    // src (field report Alex 2026-08-03: plans blank, lightbox black).
+    img.alt = "";
     loadDriveImage(img, driveId, w || 600, onFail);
     return img;
   }
@@ -1558,7 +1640,7 @@
           var thumbWrap = document.createElement("div");
           thumbWrap.className = "hthumb";
           var img = document.createElement("img");
-          img.loading = "lazy"; img.alt = "";
+          img.alt = ""; // gated: never lazy (see makeMediaImg)
           (function(container){ loadDriveImage(img, ev.photoDriveId, 400, function(){ container.style.display = "none"; }); })(thumbWrap);
           bindLightbox(img, ev.photoDriveId, lab.textContent);
           thumbWrap.appendChild(img);
