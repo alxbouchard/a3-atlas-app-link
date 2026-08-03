@@ -1438,9 +1438,9 @@
           // materials (verified: 203 materials, no textures, flat colours)
           // — so greying the white through baseColorFactor flattened the
           // whole model and killed the wood. Lowering the exposure greys
-          // the whites while keeping the warmth: 0.82 after trying 0.72
-          // (too dim for the owner) and 0.9 (still burnt).
-          mv.setAttribute("exposure", "0.82");
+          // the whites while keeping the warmth: 0.74 after trying 0.72
+          // (too dim for the owner), 0.9 and 0.82 (« éclairage trop fort »).
+          mv.setAttribute("exposure", "0.74");
           // A RoomPlan model gives walls, floors and furniture ONE material
           // (verified live: 203 materials, no names, two signatures) — so
           // furniture cannot be tinted apart from the walls here. What CAN
@@ -1454,10 +1454,11 @@
               (mv.model ? mv.model.materials : []).forEach(function(m){
                 var pbr = m.pbrMetallicRoughness;
                 if (pbr.roughnessFactor < 0.5){
-                  // Assez foncé pour dessiner, assez clair pour ne pas
-                  // trouer l'image : le charbon d'abord essayé écrasait
-                  // les cadres ET les électroménagers (owner 2026-08-03).
-                  pbr.setBaseColorFactor([0.52, 0.54, 0.58, 1]);
+                  // Un gris clair suffit à détacher les ouvertures du mur :
+                  // le charbon (0,20) puis le gris moyen (0,52) écrasaient
+                  // encore les cadres et les électroménagers (owner
+                  // 2026-08-03, deux fois « trop foncé »).
+                  pbr.setBaseColorFactor([0.68, 0.70, 0.74, 1]);
                   pbr.setMetallicFactor(0);
                   pbr.setRoughnessFactor(0.55);
                 }
