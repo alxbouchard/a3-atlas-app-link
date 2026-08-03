@@ -1464,7 +1464,8 @@
     // Re-fit on REAL size changes only: on a phone the address bar makes
     // vh jitter at every scroll, and re-framing on that would make the
     // model breathe under the finger.
-    if (typeof ResizeObserver !== "function") return;
+    if (typeof ResizeObserver !== "function" || mv.__boxWatched) return;
+    mv.__boxWatched = true;
     var lastW = 0, lastH = 0, timer = null;
     new ResizeObserver(function(){
       var w = mv.clientWidth, h = mv.clientHeight;
@@ -1519,6 +1520,12 @@
           // back, and the wood tones of the floors stay untouched — an
           // earlier attempt at a global grey wash killed them (owner
           // 2026-08-03, « le 3D est très blanc »).
+          // NOT `once`: our layout engine moves the viewer into the hero,
+          // and a moved custom element reloads its model with BRAND-NEW
+          // material objects — a one-shot listener left the reloaded model
+          // untouched, white and mis-framed, depending on which won the race
+          // (verified live 2026-08-03: 203 materials back at their original
+          // values after the move). Both passes below are idempotent.
           mv.addEventListener("load", function(){
             try {
               (mv.model ? mv.model.materials : []).forEach(function(m){
@@ -1541,7 +1548,7 @@
             [300, 900, 2000].forEach(function(ms){
               setTimeout(function(){ fitModel(mv); }, ms);
             });
-          }, { once: true });
+          });
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
           });
