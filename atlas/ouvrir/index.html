@@ -548,7 +548,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:28Z";
+  var ATLAS_BUILD = "2026-08-03T21:30Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2766,19 +2766,20 @@
     // 16:9 à une vidéo filmée en 9:16 — deux bandes noires sur ordinateur
     // (owner 2026-08-03), là où le lecteur natif tombait juste.
     var shape = null, playerEl = null;
+    // UNE seule dimension pilotée, le rapport fait le reste : en fixant la
+    // hauteur ET en bornant la largeur, la colonne étroite du bureau écrasait
+    // le cadre (mesuré 328×530 pour un rapport qui en demandait 397×530) et
+    // le lecteur reletterboxait dedans. On borne donc la LARGEUR par les deux
+    // contraintes — place disponible et budget de hauteur — et la hauteur
+    // découle du rapport.
     function applyShape(){
-      if (!shape || !playerEl) return;
-      var portrait = shape.h > shape.w;
+      if (!shape || !playerEl || !(shape.w > 0) || !(shape.h > 0)) return;
+      var ratio = shape.w / shape.h;
       playerEl.style.aspectRatio = shape.w + "/" + shape.h;
-      if (portrait){
-        playerEl.style.height = "min(70vh, 620px)";
-        playerEl.style.width = "auto";
-        playerEl.style.maxWidth = "100%";
-      } else {
-        playerEl.style.width = "100%";
-        playerEl.style.height = "auto";
-        playerEl.style.maxHeight = "min(70vh, 620px)";
-      }
+      playerEl.style.height = "auto";
+      playerEl.style.maxWidth = "100%";
+      playerEl.style.maxHeight = "none";
+      playerEl.style.width = "min(100%, calc(min(70vh, 620px) * " + ratio.toFixed(4) + "))";
     }
     var probe = new Image();
     probe.onload = function(){
@@ -2819,15 +2820,10 @@
     el.addEventListener("loadedmetadata", function(){
       played = true;
       if (el.videoWidth && el.videoHeight){
-        // The file's own shape decides: portrait fills the height, landscape
-        // fills the width. No letterbox either way.
-        if (el.videoHeight > el.videoWidth){
-          el.style.height = "min(70vh, 620px)"; el.style.width = "auto"; el.style.maxWidth = "100%";
-        } else {
-          el.style.width = "100%"; el.style.height = "auto";
-          el.style.maxHeight = "min(70vh, 620px)";
-        }
-        el.style.aspectRatio = el.videoWidth + "/" + el.videoHeight;
+        // Les dimensions réelles du fichier remplacent celles de la vignette.
+        shape = { w: el.videoWidth, h: el.videoHeight };
+        playerEl = el;
+        applyShape();
       }
       el.playbackRate = wanted;
     });
