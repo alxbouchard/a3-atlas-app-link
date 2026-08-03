@@ -235,10 +235,15 @@
   /* History teaser: the most recent event stays visible, the rest folds */
   .hist-teaser{padding:0 18px 4px}
 
-  /* Desktop: the visual stays put while the content scrolls */
+  /* Desktop: the visual stays put while the content scrolls.
+     La priorité va à GAUCHE (owner 2026-08-03) : le 3D, le nom et les plans
+     prennent toute la place gagnée quand l'écran s'élargit, tandis que la
+     colonne des sections devient un rail de largeur de lecture — au-delà de
+     480 px, ces lignes repliées ne gagnaient plus rien à s'étirer. */
   @media (min-width:1000px){
-    .hero-visual{aspect-ratio:4/3; max-height:min(58vh,520px)}
-    .split{display:grid; grid-template-columns:minmax(380px,44%) 1fr; gap:26px; align-items:start}
+    .hero-visual{aspect-ratio:4/3; max-height:min(64vh,620px)}
+    .split{display:grid; grid-template-columns:minmax(0,1fr) clamp(340px,30%,480px);
+      gap:28px; align-items:start}
     .split-left{position:sticky; top:18px}
   }
 
@@ -488,7 +493,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T20:28Z";
+  var ATLAS_BUILD = "2026-08-03T20:41Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
