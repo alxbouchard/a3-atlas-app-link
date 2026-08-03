@@ -314,6 +314,20 @@
     font-size:24px; border-radius:12px}
   .lb-nav:hover{background:rgba(255,255,255,.22)}
   .lb-nav.prev{left:12px} .lb-nav.next{right:12px}
+  .applink{display:inline-flex; align-items:center; gap:6px; white-space:nowrap}
+  .apple{width:1em; height:1.15em; flex:0 0 auto; margin-top:-.12em}
+  /* Où l'on en est dans la série — « 12 / 45 ». */
+  .lb-count{position:fixed; top:calc(env(safe-area-inset-top) + 18px); left:0; right:0;
+    text-align:center; color:rgba(255,255,255,.72); font-size:13px; font-weight:600;
+    letter-spacing:.04em; z-index:1001; pointer-events:none}
+  /* Zoom : l'image se déplace sous le doigt, rien ne doit la rogner. */
+  .lb-img{touch-action:none; transform-origin:center center; will-change:transform}
+  .lightbox.zoomed .lb-img{max-height:none; max-width:none; border-radius:0}
+  .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
+  .lightbox.zoomed{overflow:hidden}
+  /* Quand la photo a été prise, sous chaque volet d'un avant/après. */
+  .ba-when{font-size:11.5px; color:var(--muted); margin-top:6px; font-weight:600;
+    letter-spacing:.01em}
 </style>
 </head>
 <body>
@@ -321,7 +335,7 @@
   <div class="brand"><img class="logo" src="data:image/png;base64,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" alt="" width="34" height="34"><span data-i18n="brand">A3 ATLAS SCANNER</span></div>
   <p class="foot topfoot">
     <span data-i18n="made_with">Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.</span>
-    <a href="https://apps.apple.com/app/id6787545744" data-i18n="get_app_short">Obtenir l'app</a>
+    <a class="applink" href="https://apps.apple.com/app/id6787545744"><svg class="apple" viewBox="0 0 17 21" aria-hidden="true" focusable="false"><path fill="currentColor" d="M14.06 11.14c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.29-.88-2.31-3.5zM11.87 4.6c.6-.74 1.01-1.76.9-2.78-.87.04-1.93.58-2.56 1.31-.56.65-1.06 1.69-.93 2.69.97.07 1.97-.49 2.59-1.22z"/></svg><span data-i18n="get_app_short">Obtenir l'app gratuitement</span></a>
   </p>
 
   <!-- Empty / broken link state -->
@@ -330,7 +344,7 @@
     <h1 data-i18n="empty_title">Lien incomplet</h1>
     <p class="sub" data-i18n="empty_body">Ce lien Atlas ne contient pas de propriété à afficher. Demandez à l'expéditeur de regénérer le lien de partage.</p>
     <div class="btns" style="margin-top:20px">
-      <a class="btn secondary" id="empty_appstore" href="https://apps.apple.com/app/id6787545744" data-i18n="get_app">Obtenir A3 Atlas Scanner</a>
+      <a class="btn secondary" id="empty_appstore" href="https://apps.apple.com/app/id6787545744"><svg class="apple" viewBox="0 0 17 21" aria-hidden="true" focusable="false"><path fill="currentColor" d="M14.06 11.14c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.29-.88-2.31-3.5zM11.87 4.6c.6-.74 1.01-1.76.9-2.78-.87.04-1.93.58-2.56 1.31-.56.65-1.06 1.69-.93 2.69.97.07 1.97-.49 2.59-1.22z"/></svg><span data-i18n="get_app">Obtenir A3 Atlas Scanner — gratuitement</span></a>
     </div>
   </section>
 
@@ -471,6 +485,7 @@
   <button class="lb-nav prev" id="lbPrev" type="button" aria-label="Précédent" hidden>‹</button>
   <button class="lb-nav next" id="lbNext" type="button" aria-label="Suivant" hidden>›</button>
   <button class="lb-close" id="lbClose" type="button" aria-label="Fermer">✕</button>
+  <div class="lb-count" id="lbCount" hidden></div>
   <img class="lb-img" id="lbImg" alt="">
   <div class="lb-cap" id="lbCap"></div>
 </div>
@@ -493,7 +508,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T20:41Z";
+  var ATLAS_BUILD = "2026-08-03T20:53Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -539,7 +554,7 @@
       brand:"A3 ATLAS SCANNER",
       empty_title:"Lien incomplet",
       empty_body:"Ce lien Atlas ne contient pas de propriété à afficher. Demandez à l'expéditeur de regénérer le lien de partage.",
-      get_app:"Obtenir A3 Atlas Scanner", get_app_short:"Obtenir l'app",
+      get_app:"Obtenir A3 Atlas Scanner — gratuitement", get_app_short:"Obtenir l'app gratuitement",
       equip:"Équipements & points d'intérêt", areas:"Zones fonctionnelles",
       areas_note:"Déduites des objets détectés par RoomPlan — jamais confirmées sur place.",
       download:"Télécharger l'export", read_context:"Lire le contexte",
@@ -621,7 +636,7 @@
       brand:"A3 ATLAS SCANNER",
       empty_title:"Incomplete link",
       empty_body:"This Atlas link carries no property to show. Ask the sender to regenerate the share link.",
-      get_app:"Get A3 Atlas Scanner", get_app_short:"Get the app",
+      get_app:"Get A3 Atlas Scanner — free", get_app_short:"Get the app — free",
       equip:"Equipment & points of interest", areas:"Functional areas",
       areas_note:"Inferred from objects RoomPlan detected — never confirmed on site.",
       download:"Download export", read_context:"Read the context",
@@ -953,6 +968,7 @@
   var lbClose = document.getElementById("lbClose");
   var lbPrev = document.getElementById("lbPrev");
   var lbNext = document.getElementById("lbNext");
+  var lbCount = document.getElementById("lbCount");
   lbClose.setAttribute("aria-label", t.lb_close);
   lbPrev.setAttribute("aria-label", t.lb_prev);
   lbNext.setAttribute("aria-label", t.lb_next);
@@ -964,15 +980,35 @@
     // UNGATED on purpose: the lightbox is one image the reader just asked
     // for. Queueing it behind 46 thumbnails is what made fullscreen show
     // a black overlay (field report Alex 2026-08-03).
+    lbResetZoom();
     lbImg.onerror = function(){
       lbImg.onerror = null;
       lbImg.src = lh3(item.driveId, 2048);
     };
     lbImg.src = driveThumb(item.driveId, 2048);
     var c = (item.caption!=null) ? String(item.caption).trim() : "";
-    lbCap.textContent = c; lbCap.hidden = !c;
+    var parts = [];
+    if (c) parts.push(c);
+    if (item.stamp) parts.push(item.stamp);
+    lbCap.textContent = parts.join(" · ");
+    lbCap.hidden = !parts.length;
     var many = lbItems.length > 1;
     lbPrev.hidden = !many; lbNext.hidden = !many;
+    lbCount.textContent = many ? (lbIndex + 1) + " / " + lbItems.length : "";
+    lbCount.hidden = !many;
+    lbPreloadNeighbours();
+  }
+  // La suivante et la précédente arrivent avant qu'on les demande : en
+  // plein écran, l'attente entre deux photos est ce qui casse le geste.
+  function lbPreloadNeighbours(){
+    if (lbItems.length < 2) return;
+    [1, -1].forEach(function(d){
+      var n = lbItems[(lbIndex + d + lbItems.length) % lbItems.length];
+      if (!n || n.__warm) return;
+      n.__warm = true;
+      var img = new Image();
+      img.src = driveThumb(n.driveId, 2048);
+    });
   }
   function openLightboxAt(i){
     if (i < 0 || i >= lbItems.length) return;
@@ -996,20 +1032,140 @@
     setLightboxContent(lbItems[lbIndex]);
   }
   function lbKey(e){
-    if (e.key === "Escape"){ closeLightbox(); }
+    if (e.key === "Escape"){ if (lbZoom > 1){ lbResetZoom(); } else { closeLightbox(); } }
     else if (e.key === "ArrowRight"){ lbNav(1); }
     else if (e.key === "ArrowLeft"){ lbNav(-1); }
+    else if (e.key === "+" || e.key === "="){ lbSetZoom(lbZoom * 1.4); }
+    else if (e.key === "-"){ lbSetZoom(lbZoom / 1.4); }
+    else if (e.key === "0"){ lbResetZoom(); }
   }
   lbClose.addEventListener("click", closeLightbox);
-  lbEl.addEventListener("click", function(e){ if (e.target === lbEl || e.target === lbImg) closeLightbox(); });
+  lbEl.addEventListener("click", function(e){
+    if (lbZoom > 1) return;                       // zoomé : le clic ne ferme pas
+    if (e.target === lbEl || e.target === lbImg) closeLightbox();
+  });
   lbPrev.addEventListener("click", function(e){ e.stopPropagation(); lbNav(-1); });
   lbNext.addEventListener("click", function(e){ e.stopPropagation(); lbNav(1); });
 
+  // ---- Zoom, déplacement et balayage, comme Photos sur iOS ----
+  // Pincer pour zoomer, double-taper pour aller et venir entre 1× et 2,5×,
+  // faire glisser pour se promener dans l'image zoomée, balayer pour changer
+  // de photo quand elle ne l'est pas. Sans ça, une plaque signalétique ou un
+  // numéro de série est illisible en plein écran.
+  var lbZoom = 1, lbPanX = 0, lbPanY = 0, LB_ZOOM_MAX = 5, LB_TAP_ZOOM = 2.5;
+  var lbDrag = null, lbPinch = null, lbLastTap = 0;
+
+  function lbApply(){
+    lbImg.style.transform = "translate(" + lbPanX + "px," + lbPanY + "px) scale(" + lbZoom + ")";
+    lbImg.style.cursor = lbZoom > 1 ? "grab" : "zoom-in";
+    lbEl.classList.toggle("zoomed", lbZoom > 1);
+  }
+  function lbResetZoom(){ lbZoom = 1; lbPanX = 0; lbPanY = 0; lbImg.style.transition = "none"; lbApply(); }
+  function lbClampPan(){
+    // On ne s'éloigne jamais de l'image : la promenade s'arrête à ses bords.
+    var r = lbImg.getBoundingClientRect();
+    var maxX = Math.max(0, (r.width - Math.min(r.width, window.innerWidth)) / 2 + (lbZoom - 1) * 6);
+    var maxY = Math.max(0, (r.height - Math.min(r.height, window.innerHeight)) / 2 + (lbZoom - 1) * 6);
+    lbPanX = Math.max(-maxX, Math.min(maxX, lbPanX));
+    lbPanY = Math.max(-maxY, Math.min(maxY, lbPanY));
+  }
+  function lbSetZoom(next, cx, cy){
+    next = Math.max(1, Math.min(LB_ZOOM_MAX, next));
+    if (next === 1){ lbPanX = 0; lbPanY = 0; }
+    else if (cx != null){
+      // On zoome SUR le point visé, pas sur le centre de l'écran.
+      var r = lbImg.getBoundingClientRect();
+      var ox = cx - (r.left + r.width / 2), oy = cy - (r.top + r.height / 2);
+      var k = next / lbZoom;
+      lbPanX = lbPanX - ox * (k - 1);
+      lbPanY = lbPanY - oy * (k - 1);
+    }
+    lbZoom = next;
+    lbClampPan();
+    lbApply();
+  }
+  lbImg.addEventListener("dblclick", function(e){
+    e.preventDefault(); e.stopPropagation();
+    lbImg.style.transition = "transform .18s ease";
+    lbSetZoom(lbZoom > 1 ? 1 : LB_TAP_ZOOM, e.clientX, e.clientY);
+  });
+  lbEl.addEventListener("wheel", function(e){
+    if (lbEl.hidden) return;
+    e.preventDefault();
+    lbImg.style.transition = "none";
+    lbSetZoom(lbZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), e.clientX, e.clientY);
+  }, { passive: false });
+
+  function touchDist(t){ return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+  lbEl.addEventListener("touchstart", function(e){
+    var ts = e.touches;
+    if (ts.length === 2){
+      lbPinch = { d: touchDist(ts), z: lbZoom,
+                  cx: (ts[0].clientX + ts[1].clientX) / 2,
+                  cy: (ts[0].clientY + ts[1].clientY) / 2 };
+      lbDrag = null;
+    } else if (ts.length === 1){
+      lbDrag = { x: ts[0].clientX, y: ts[0].clientY, px: lbPanX, py: lbPanY, moved: 0 };
+      var now = Date.now();
+      if (now - lbLastTap < 300){          // double-tap
+        lbImg.style.transition = "transform .18s ease";
+        lbSetZoom(lbZoom > 1 ? 1 : LB_TAP_ZOOM, ts[0].clientX, ts[0].clientY);
+        lbDrag = null;
+      }
+      lbLastTap = now;
+    }
+  }, { passive: true });
+  lbEl.addEventListener("touchmove", function(e){
+    if (lbPinch && e.touches.length === 2){
+      e.preventDefault();
+      lbImg.style.transition = "none";
+      lbSetZoom(lbPinch.z * (touchDist(e.touches) / lbPinch.d), lbPinch.cx, lbPinch.cy);
+    } else if (lbDrag && e.touches.length === 1){
+      var dx = e.touches[0].clientX - lbDrag.x, dy = e.touches[0].clientY - lbDrag.y;
+      lbDrag.moved = Math.max(lbDrag.moved, Math.hypot(dx, dy));
+      if (lbZoom > 1){
+        e.preventDefault();
+        lbImg.style.transition = "none";
+        lbPanX = lbDrag.px + dx; lbPanY = lbDrag.py + dy;
+        lbClampPan(); lbApply();
+      }
+    }
+  }, { passive: false });
+  lbEl.addEventListener("touchend", function(e){
+    if (lbPinch && e.touches.length < 2) lbPinch = null;
+    if (lbDrag && !e.touches.length){
+      var dx = (e.changedTouches[0] || {}).clientX - lbDrag.x;
+      var dy = (e.changedTouches[0] || {}).clientY - lbDrag.y;
+      if (lbZoom === 1 && Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5){
+        lbNav(dx < 0 ? 1 : -1);              // balayage : photo suivante / précédente
+      } else if (lbZoom === 1 && dy > 90 && Math.abs(dy) > Math.abs(dx) * 1.5){
+        closeLightbox();                     // glisser vers le bas pour fermer
+      }
+      lbDrag = null;
+    }
+  }, { passive: true });
+  // À la souris, on tire l'image zoomée.
+  lbImg.addEventListener("pointerdown", function(e){
+    if (e.pointerType === "touch" || lbZoom === 1) return;
+    e.preventDefault();
+    lbDrag = { x: e.clientX, y: e.clientY, px: lbPanX, py: lbPanY, moved: 0 };
+    lbImg.setPointerCapture(e.pointerId);
+    lbImg.style.cursor = "grabbing";
+  });
+  lbImg.addEventListener("pointermove", function(e){
+    if (!lbDrag || e.pointerType === "touch" || lbZoom === 1) return;
+    lbImg.style.transition = "none";
+    lbPanX = lbDrag.px + (e.clientX - lbDrag.x);
+    lbPanY = lbDrag.py + (e.clientY - lbDrag.y);
+    lbClampPan(); lbApply();
+  });
+  lbImg.addEventListener("pointerup", function(){ lbDrag = null; lbApply(); });
+
   // Register an <img> (or any element) as a lightbox trigger.
-  function bindLightbox(el, driveId, caption){
+  function bindLightbox(el, driveId, caption, stamp){
     if (!el || !validId(driveId)) return;
     var i = lbItems.length;
-    lbItems.push({ driveId: driveId, caption: caption });
+    lbItems.push({ driveId: driveId, caption: caption, stamp: stamp || null });
     el.style.cursor = "zoom-in";
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
@@ -1786,9 +1942,9 @@
   // folds what the renderers already produced, so the honesty contract,
   // the URL contract and the JSON layers are exactly as before.
   // ===================================================================
-  var LAYOUT_ORDER = ["plansSection", "gallerySection", "baSection", "plateSection",
-                      "equipSection", "surfacesSection", "spacesSection", "areaSection",
-                      "videoSection", "dataSemSection", "limitsSection", "historySection"];
+  var LAYOUT_ORDER = ["plansSection", "gallerySection", "baSection", "videoSection",
+                      "plateSection", "equipSection", "surfacesSection", "spacesSection",
+                      "areaSection", "dataSemSection", "limitsSection", "historySection"];
   // Sections that stay OPEN: the ones the owner wants seen immediately.
   var LAYOUT_OPEN = { plansSection: true };
   var _layoutDone = false;
@@ -2230,6 +2386,28 @@
     document.getElementById("gallerySection").hidden = false;
   }
 
+  // QUAND la photo a été prise. L'app nomme chaque fichier avec sa date et
+  // son heure LOCALES de capture — `photo_2026-07-13_20h28_001.jpg`,
+  // `visite_…`, `apres_…` (PhotoStore.swift, format yyyy-MM-dd_HH'h'mm).
+  // C'est la seule source disponible ici : media.json ne transporte pas
+  // encore `capturedAt`. Précision à la minute, heure locale de la prise —
+  // rien de plus n'est affiché, et un nom qui ne se lit pas ne donne AUCUNE
+  // date plutôt qu'une date inventée.
+  var MONTHS_FR = ["janvier","février","mars","avril","mai","juin","juillet",
+                   "août","septembre","octobre","novembre","décembre"];
+  var MONTHS_EN = ["January","February","March","April","May","June","July",
+                   "August","September","October","November","December"];
+  function capturedAtFromFilename(filename){
+    var m = /(\d{4})-(\d{2})-(\d{2})_(\d{2})h(\d{2})/.exec(String(filename || ""));
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3], hh = +m[4], mm = +m[5];
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || hh > 23 || mm > 59) return null;
+    var months = (lang === "en") ? MONTHS_EN : MONTHS_FR;
+    return (lang === "en")
+      ? months[mo-1] + " " + d + ", " + y + " · " + m[4] + ":" + m[5]
+      : d + " " + months[mo-1] + " " + y + " · " + m[4] + " h " + m[5];
+  }
+
   // AVANT / APRÈS — a photo whose beforeRef names another photo's filename is
   // the "after" that re-frames that "before"; render the (before → after) pair.
   function renderBeforeAfter(photos){
@@ -2262,8 +2440,17 @@
     badge.className = "ba-badge"; badge.textContent = labelTxt;
     side.appendChild(badge);
     var im = makeMediaImg(p.driveId, function(){ side.style.display = "none"; });
-    bindLightbox(im, p.driveId, p.captionFR);
+    var stamp = capturedAtFromFilename(p.filename);
+    bindLightbox(im, p.driveId, p.captionFR, stamp);
     side.appendChild(im);
+    // Quand — sous chaque photo de la paire (owner 2026-08-03) : dans un
+    // avant/après, l'écart entre les deux prises est l'information.
+    if (stamp){
+      var when = document.createElement("div");
+      when.className = "ba-when";
+      when.textContent = stamp;
+      side.appendChild(when);
+    }
     var cap = makeCaption(p.captionFR);
     if (cap) side.appendChild(cap);
     return side;
