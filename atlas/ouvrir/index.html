@@ -329,6 +329,14 @@
   .lightbox.zoomed .lb-img{border-radius:0}
   .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
   .lightbox.zoomed{overflow:hidden}
+  /* Sélecteur d'étage — au-dessus du 3D et en tête des plans, un seul état. */
+  .floor-pills{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px}
+  .hero-visual .floor-pills{position:absolute; left:12px; bottom:12px; margin:0; z-index:2}
+  .floor-pill{border:1px solid var(--line); background:var(--card); color:inherit;
+    border-radius:999px; padding:7px 15px; font:inherit; font-size:13.5px; font-weight:700;
+    cursor:pointer; backdrop-filter:blur(10px)}
+  .floor-pill:hover{border-color:var(--accent)}
+  .floor-pill.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
   /* Télécharger l'original, et sauter à l'autre volet d'un avant/après. */
   .lb-tool{position:fixed; top:calc(env(safe-area-inset-top) + 10px); left:14px; z-index:1001;
     display:inline-flex; align-items:center; gap:7px; height:44px; padding:0 15px;
@@ -532,7 +540,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:02Z";
+  var ATLAS_BUILD = "2026-08-03T21:09Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1638,6 +1646,11 @@
     // Le plan coté passe devant : c'est celui qu'on regarde en premier sur
     // place (owner 2026-08-03). Le plan annoté reste à un doigt.
     var order = { clean:0, annotated:1 };
+    // Le libellé d'un plan est le MÊME que celui de son modèle 3D (« Rc »,
+    // « 2ieme étage ») : c'est ce qui relie les deux, et ce qui permet au
+    // sélecteur d'étage de commander l'un et l'autre.
+    groups.forEach(function(g){ registerFloor(g.label, {}); });
+    var figByFloor = {};
     groups.forEach(function(g){
       g.variants.sort(function(a,b){ return (order[a.kind]!=null?order[a.kind]:9) - (order[b.kind]!=null?order[b.kind]:9); });
       var fig = document.createElement("figure");
@@ -1670,9 +1683,68 @@
       });
       var cap = makeCaption(g.label || planKindLabel(g.variants[0].kind));
       if (cap) fig.appendChild(cap);
+      figByFloor[(g.label != null ? String(g.label).trim() : "") || "—"] = fig;
       root.appendChild(fig);
     });
+    // Plusieurs étages : les mêmes pastilles qu'au-dessus du 3D, et un seul
+    // plan à l'écran — celui de l'étage choisi. Empilés, on ne savait plus
+    // lequel on regardait.
+    var pills = makeFloorPills();
+    if (pills){
+      root.insertBefore(pills, root.firstChild);
+      FLOORS.hooks.push(function(i){
+        var cur = FLOORS.list[i];
+        FLOORS.list.forEach(function(f){
+          var fig = figByFloor[f.key];
+          if (fig) fig.style.display = (f === cur) ? "" : "none";
+        });
+      });
+      setFloor(FLOORS.current);   // état initial cohérent des deux côtés
+    }
     document.getElementById("plansSection").hidden = false;
+  }
+
+  // ================= ÉTAGES =================
+  // Une propriété à plusieurs étages sort un modèle 3D ET une paire de plans
+  // PAR étage, tous étiquetés du même libellé (« Rc », « 2ieme étage »).
+  // Avant, chaque modèle créait sa propre visionneuse : la première partait
+  // dans le héros, la seconde atterrissait en toute fin de page, pleine
+  // largeur, hors des colonnes et sans titre — invisible en pratique
+  // (owner 2026-08-03, « les 2 plans et modèles 3D ne sont pas regroupés »).
+  // Désormais le libellé est la clé qui réunit le modèle et les plans d'un
+  // même étage, et UN sélecteur commande les deux.
+  var FLOORS = { list: [], current: 0, hooks: [] };
+  function registerFloor(label, patch){
+    var key = (label != null ? String(label).trim() : "") || "—";
+    var f = null;
+    for (var i = 0; i < FLOORS.list.length; i++){ if (FLOORS.list[i].key === key) f = FLOORS.list[i]; }
+    if (!f){ f = { key: key, label: key }; FLOORS.list.push(f); }
+    for (var k in patch){ if (Object.prototype.hasOwnProperty.call(patch, k)) f[k] = patch[k]; }
+    return f;
+  }
+  function makeFloorPills(){
+    if (FLOORS.list.length < 2) return null;
+    var nav = document.createElement("div");
+    nav.className = "floor-pills";
+    FLOORS.list.forEach(function(f, i){
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "floor-pill" + (i === FLOORS.current ? " on" : "");
+      b.textContent = f.label;
+      b.onclick = function(e){ e.stopPropagation(); setFloor(i); };
+      nav.appendChild(b);
+    });
+    FLOORS.hooks.push(function(cur){
+      for (var i = 0; i < nav.children.length; i++){
+        nav.children[i].classList.toggle("on", i === cur);
+      }
+    });
+    return nav;
+  }
+  function setFloor(i){
+    if (i < 0 || i >= FLOORS.list.length) return;
+    FLOORS.current = i;
+    FLOORS.hooks.forEach(function(fn){ try { fn(i); } catch (e) {} });
   }
 
   // 3D MODEL — media.json models[] (.glb per room). <model-viewer> renders glTF
@@ -1849,10 +1921,15 @@
     setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     var valid = (models || []).filter(function(m){ return m && typeof m === "object" && validId(m.driveId); });
     if (!valid.length) return;
+    valid.forEach(function(m){ registerFloor(m.label, { model: m }); });
     loadModelViewer(function(ok){
       var root = document.getElementById("models");
       root.innerHTML = "";
-      valid.forEach(function(m){
+      // UNE seule visionneuse, même avec plusieurs étages : elle change de
+      // source quand on change d'étage. Deux visionneuses, c'était deux
+      // contextes WebGL, et la seconde échouait dans le bas de la page.
+      var first = valid[0];
+      (function(m){
         if (ok){
           var mv = document.createElement("model-viewer");
           mv.className = "model3d";
@@ -1901,15 +1978,32 @@
           mv.setAttribute("interaction-prompt", "none");
           root.appendChild(mv);
           keepModelLook(mv);   // le gardien démarre ici, pas au `load`
+          // Changer d'étage = changer la source, puis tout recadrer : le
+          // nouveau modèle n'a ni la même taille ni le même centre.
+          FLOORS.hooks.push(function(i){
+            var f = FLOORS.list[i];
+            if (!f || !f.model || mv.__floor === i) return;
+            mv.__floor = i;
+            mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
+            mv.setAttribute("src", driveModelUrl(f.model.driveId));
+            keepModelLook(mv);
+          });
+          mv.__floor = 0;
         } else {
-          var a = document.createElement("a");
-          a.className = "btn secondary"; a.href = driveModelUrl(m.driveId);
-          a.setAttribute("download", ""); a.textContent = t.model_download;
-          root.appendChild(a);
+          // Sans visionneuse : un lien de téléchargement PAR étage, sinon
+          // les étages suivants disparaîtraient purement et simplement.
+          valid.forEach(function(each){
+            var a = document.createElement("a");
+            a.className = "btn secondary"; a.href = driveModelUrl(each.driveId);
+            a.setAttribute("download", "");
+            a.textContent = t.model_download + (each.label ? " — " + each.label : "");
+            root.appendChild(a);
+          });
         }
-        if (m.label){ var cap = makeCaption(m.label); if (cap) root.appendChild(cap); }
-      });
+      })(first);
       if (ok){
+        var pills = makeFloorPills();
+        if (pills){ pills.id = "floorPills"; root.appendChild(pills); }
         var hint = document.createElement("div");
         hint.className = "model-hint"; hint.textContent = t.model_hint;
         root.appendChild(hint);
@@ -2133,6 +2227,10 @@
     if (viewer){
       if (visual.dataset.filled === "photo") visual.innerHTML = "";
       visual.appendChild(viewer);
+      // Le sélecteur d'étage suit son modèle dans le héros : c'est là qu'on
+      // le cherche, pas au fond de la page.
+      var pills = document.getElementById("floorPills");
+      if (pills) visual.appendChild(pills);
       visual.hidden = false; visual.dataset.filled = "3d";
       var ms = document.getElementById("modelSection");
       if (ms && !ms.querySelector("model-viewer")) ms.hidden = true;
