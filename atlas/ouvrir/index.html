@@ -1432,9 +1432,29 @@
           mv.setAttribute("min-camera-orbit", "auto 5deg auto");
           mv.setAttribute("max-camera-orbit", "auto 88deg auto");
           mv.setAttribute("field-of-view", "32deg");
-          mv.setAttribute("shadow-intensity", "1.6");
-          mv.setAttribute("shadow-softness", "0.85");
-          mv.setAttribute("exposure", "1.15");
+          mv.setAttribute("shadow-intensity", "2.4");
+          mv.setAttribute("shadow-softness", "0.3");
+          mv.setAttribute("exposure", "0.9");
+          // A RoomPlan model gives walls, floors and furniture ONE material
+          // (verified live: 203 materials, no names, two signatures) — so
+          // furniture cannot be tinted apart from the walls here. What CAN
+          // be separated is the openings' frames (the only low-roughness
+          // group): drawing them in charcoal gives the model its structure
+          // back, and the wood tones of the floors stay untouched — an
+          // earlier attempt at a global grey wash killed them (owner
+          // 2026-08-03, « le 3D est très blanc »).
+          mv.addEventListener("load", function(){
+            try {
+              (mv.model ? mv.model.materials : []).forEach(function(m){
+                var pbr = m.pbrMetallicRoughness;
+                if (pbr.roughnessFactor < 0.5){
+                  pbr.setBaseColorFactor([0.20, 0.22, 0.26, 1]);
+                  pbr.setMetallicFactor(0);
+                  pbr.setRoughnessFactor(0.55);
+                }
+              });
+            } catch (e) { /* an older model-viewer: leave the model as-is */ }
+          }, { once: true });
           mv.setAttribute("tone-mapping", "neutral");
           mv.setAttribute("interaction-prompt", "none");
           root.appendChild(mv);
