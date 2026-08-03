@@ -1419,10 +1419,24 @@
           mv.setAttribute("src", driveModelUrl(m.driveId));
           mv.setAttribute("camera-controls", "");
           mv.setAttribute("auto-rotate", "");
+          mv.setAttribute("auto-rotate-delay", "1200");
+          mv.setAttribute("rotation-per-second", "12deg");
           mv.setAttribute("environment-image", "neutral");
-          mv.setAttribute("shadow-intensity", "1");
           mv.setAttribute("loading", "eager");
           mv.setAttribute("reveal", "auto");
+          // Owner 2026-08-03 — a floor plan in 3D reads best seen from
+          // ABOVE: a raised three-quarter view (phi 42°) frames the whole
+          // unit, and a real contact shadow gives the walls their volume
+          // instead of a flat white cutout.
+          mv.setAttribute("camera-orbit", "35deg 42deg 105%");
+          mv.setAttribute("min-camera-orbit", "auto 5deg auto");
+          mv.setAttribute("max-camera-orbit", "auto 88deg auto");
+          mv.setAttribute("field-of-view", "32deg");
+          mv.setAttribute("shadow-intensity", "1.6");
+          mv.setAttribute("shadow-softness", "0.85");
+          mv.setAttribute("exposure", "1.15");
+          mv.setAttribute("tone-mapping", "neutral");
+          mv.setAttribute("interaction-prompt", "none");
           root.appendChild(mv);
         } else {
           var a = document.createElement("a");
