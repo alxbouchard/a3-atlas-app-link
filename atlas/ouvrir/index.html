@@ -156,6 +156,18 @@
   .assume{margin:12px 0 0; padding-left:18px}
   .assume li{font-size:12.5px; color:var(--muted); line-height:1.45; margin:5px 0}
 
+  /* ---- Equipment read from nameplates ---- */
+  .equip-item{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px}
+  .equip-head{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px}
+  .equip-chip{font-size:12px; padding:2px 8px; border-radius:999px; white-space:nowrap}
+  .equip-chip.ok{background:rgba(40,160,90,.14); color:#1e7a45}
+  .equip-chip.warn{background:rgba(230,150,20,.16); color:#9a6600}
+  .equip-fields{display:flex; flex-direction:column; gap:2px}
+  .equip-row{display:flex; gap:8px; font-size:14px}
+  .equip-lab{color:var(--muted); min-width:96px}
+  .equip-val{font-weight:600; word-break:break-all}
+  .equip-thumb{margin-top:10px; max-width:220px; width:100%; border-radius:8px; cursor:zoom-in}
+
   /* ---- Phase 2: floor plans (media.json plans[]) ---- */
   .plans-grid{display:flex; flex-direction:column; gap:14px}
   .plan-fig{margin:0; min-width:0}
@@ -263,6 +275,13 @@
     </section>
 
     <!-- Media: photo gallery (media.json, Complet shares only) -->
+    <!-- Equipment read from nameplates (atlas-ai-context.json observations) -->
+    <section class="card" id="equipSection" hidden>
+      <h2 data-i18n="equip_h">Équipements lus sur les plaques</h2>
+      <p class="muted" id="equipNote"></p>
+      <div id="equip"></div>
+    </section>
+
     <section class="card" id="gallerySection" hidden>
       <h2 data-i18n="gallery_h">Photos du site</h2>
       <div id="gallery"></div>
@@ -424,6 +443,11 @@
       surf_caveat:"Estimations depuis un scan LiDAR (rectangle hors tout), non vérifiées sur site — à confirmer.",
       surf_assumptions_h:"Hypothèses", surf_needs_verify:"À vérifier sur site",
       plans_h:"Plans",
+      equip_h:"Équipements lus sur les plaques",
+      equip_note:"Texte lu automatiquement sur les plaques signalétiques par l'app, à partir des photos ci-dessous. Chaque valeur indique si un humain l'a confirmée.",
+      equip_brand:"Marque", equip_model:"Modèle", equip_serial:"N° de série",
+      equip_capacity:"Capacité",
+      equip_confirmed:"confirmé par l'installateur", equip_unconfirmed:"non confirmé",
       model_h:"Modèle 3D", model_hint:"Glissez pour pivoter · molette pour zoomer.",
       model_download:"Télécharger le modèle 3D (.glb)",
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
@@ -496,6 +520,11 @@
       surf_caveat:"Estimates from a LiDAR scan (bounding rectangle), not site-verified — confirm on site.",
       surf_assumptions_h:"Assumptions", surf_needs_verify:"To verify on site",
       plans_h:"Floor plans",
+      equip_h:"Equipment read from nameplates",
+      equip_note:"Text read automatically from equipment nameplates by the app, from the photos below. Each value says whether a human confirmed it.",
+      equip_brand:"Brand", equip_model:"Model", equip_serial:"Serial no.",
+      equip_capacity:"Capacity",
+      equip_confirmed:"confirmed by the installer", equip_unconfirmed:"unconfirmed",
       model_h:"3D model", model_hint:"Drag to rotate · scroll to zoom.",
       model_download:"Download the 3D model (.glb)",
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
@@ -923,6 +952,7 @@
     fetchJson(aiContextId).then(function(agg){
       var pli = agg && agg.shareScope ? agg.shareScope.preciseLocationIncluded : undefined;
       setPrivacyNote(pli === true ? true : (pli === false ? false : null));
+      try{ collectEquipment(agg); }catch(e){ /* the rest of the page stays intact */ }
     }).catch(function(){ /* unreachable → keep the neutral note */ });
   }
 
@@ -1189,6 +1219,7 @@
       return p && typeof p === "object" && validId(p.driveId);
     }) : [];
     photos.forEach(function(p){ if (p.filename) _photoIdByFile[p.filename] = p.driveId; });
+    renderEquipmentIfReady(); // thumbnails need the filename -> id map
     renderGallery(photos);
     renderBeforeAfter(photos);
     renderPlans(Array.isArray(manifest.plans) ? manifest.plans : []);
@@ -1379,6 +1410,98 @@
 
   // PHOTO GALLERY — responsive grid, grouped/labeled by room when the photo's
   // roomId maps to a known space label (from context.json). Otherwise flat.
+  // ===================================================================
+  // EQUIPMENT READ FROM NAMEPLATES — the app's OCR of an equipment plate,
+  // shipped as observations (property "equipment_*", provenance
+  // "photo_label_ocr"). Rendered with its confirmation status, never as
+  // a plain fact, and always next to the photo it was read from.
+  // ===================================================================
+  var _equipGroups = null;
+
+  var EQUIP_CATEGORY = {
+    fr: { water_heater:"Chauffe-eau", electrical_panel:"Panneau électrique",
+          water_valve:"Valve d'eau", router:"Routeur/modem", thermostat:"Thermostat",
+          washing_machine:"Laveuse", dishwasher:"Lave-vaisselle", sink:"Évier",
+          main_entry_door:"Porte d'entrée", fireplace:"Foyer", other:"Autre" },
+    en: { water_heater:"Water heater", electrical_panel:"Electrical panel",
+          water_valve:"Water valve", router:"Router/modem", thermostat:"Thermostat",
+          washing_machine:"Washer", dishwasher:"Dishwasher", sink:"Sink",
+          main_entry_door:"Entry door", fireplace:"Fireplace", other:"Other" }
+  };
+
+  function collectEquipment(agg){
+    var obs = agg && Array.isArray(agg.observations) ? agg.observations
+            : (agg && agg.observations && Array.isArray(agg.observations.observations)
+               ? agg.observations.observations : []);
+    var groups = [], byPhoto = {};
+    obs.forEach(function(o){
+      if (!o || typeof o.property !== "string") return;
+      if (o.property.indexOf("equipment_") !== 0) return;
+      var file = (Array.isArray(o.evidencePhotoFilenames) && o.evidencePhotoFilenames[0]) || "";
+      var key = file || ("_" + groups.length);
+      if (!byPhoto[key]){ byPhoto[key] = { file:file, fields:{}, confirmed:true }; groups.push(byPhoto[key]); }
+      byPhoto[key].fields[o.property.slice("equipment_".length)] = String(o.value);
+      if (!(o.confirmation && o.confirmation.status === "confirmed")) byPhoto[key].confirmed = false;
+    });
+    _equipGroups = groups;
+    renderEquipmentIfReady();
+  }
+
+  // Needs the media manifest for the evidence thumbnail, so it runs when
+  // whichever of the two arrives last is in.
+  function renderEquipmentIfReady(){
+    if (!_equipGroups || !_equipGroups.length) return;
+    var root = document.getElementById("equip");
+    if (!root) return;
+    root.innerHTML = "";
+    document.getElementById("equipNote").textContent = t.equip_note;
+    var labels = { brand:t.equip_brand, model:t.equip_model,
+                   serial:t.equip_serial, capacity:t.equip_capacity };
+    var cats = EQUIP_CATEGORY[lang === "en" ? "en" : "fr"] || EQUIP_CATEGORY.fr;
+
+    _equipGroups.forEach(function(g){
+      var card = document.createElement("div");
+      card.className = "equip-item";
+
+      var head = document.createElement("div");
+      head.className = "equip-head";
+      var title = document.createElement("strong");
+      title.textContent = (g.fields.category && cats[g.fields.category])
+        ? cats[g.fields.category]
+        : (g.fields.brand || t.equip_h);
+      head.appendChild(title);
+      var chip = document.createElement("span");
+      chip.className = "equip-chip " + (g.confirmed ? "ok" : "warn");
+      chip.textContent = g.confirmed ? t.equip_confirmed : t.equip_unconfirmed;
+      head.appendChild(chip);
+      card.appendChild(head);
+
+      var dl = document.createElement("div");
+      dl.className = "equip-fields";
+      ["brand","model","serial","capacity"].forEach(function(k){
+        if (!g.fields[k]) return;
+        var row = document.createElement("div");
+        row.className = "equip-row";
+        var lab = document.createElement("span"); lab.className = "equip-lab";
+        lab.textContent = labels[k];
+        var val = document.createElement("span"); val.className = "equip-val";
+        val.textContent = g.fields[k];
+        row.appendChild(lab); row.appendChild(val); dl.appendChild(row);
+      });
+      card.appendChild(dl);
+
+      var id = g.file ? _photoIdByFile[g.file] : null;
+      if (validId(id)){
+        var im = makeMediaImg(id, function(){}, 600);
+        im.className = "equip-thumb";
+        bindLightbox(im, id, title.textContent);
+        card.appendChild(im);
+      }
+      root.appendChild(card);
+    });
+    document.getElementById("equipSection").hidden = false;
+  }
+
   function renderGallery(photos){
     if (!photos.length) return;
     var groups = [], idx = {};
