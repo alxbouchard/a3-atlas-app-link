@@ -1429,10 +1429,10 @@
   var MODEL_THETA = 35, MODEL_PHI = 42, MODEL_FOV = 32, MODEL_MARGIN = 1.08;
   function fitModel(mv){
     try {
-      if (mv.__userMoved) return;        // never yank a view the visitor set
+      if (mv.__userMoved) return false;  // never yank a view the visitor set
       var s = mv.getDimensions ? mv.getDimensions() : null;
       var w = mv.clientWidth, h = mv.clientHeight;
-      if (!s || !(s.x > 0) || !(s.y > 0) || !(s.z > 0) || !(w > 0) || !(h > 0)) return;
+      if (!s || !(s.x > 0) || !(s.y > 0) || !(s.z > 0) || !(w > 0) || !(h > 0)) return false;
       var cur = mv.getCameraOrbit ? mv.getCameraOrbit() : null;
       var thetaDeg = (cur && isFinite(cur.theta)) ? cur.theta * 180 / Math.PI : MODEL_THETA;
       var th = thetaDeg * Math.PI / 180, ph = MODEL_PHI * Math.PI / 180,
@@ -1440,7 +1440,7 @@
       // The camera sits on the orbit; it looks at the bounding box centre.
       var f = [-Math.sin(ph) * Math.sin(th), -Math.cos(ph), -Math.sin(ph) * Math.cos(th)];
       var r = [-f[2], 0, f[0]], rn = Math.hypot(r[0], r[2]);
-      if (!(rn > 0)) return;
+      if (!(rn > 0)) return false;
       r = [r[0] / rn, 0, r[2] / rn];
       var u = [r[1]*f[2] - r[2]*f[1], r[2]*f[0] - r[0]*f[2], r[0]*f[1] - r[1]*f[0]];
       var tanV = Math.tan(fov / 2), tanH = tanV * (w / h);
@@ -1452,13 +1452,63 @@
         R = Math.max(R, Math.abs(dot(p, u)) / tanV - depth,
                         Math.abs(dot(p, r)) / tanH - depth);
       }); }); });
-      if (!(R > 0) || !isFinite(R)) return;
+      if (!(R > 0) || !isFinite(R)) return false;
       R = R * MODEL_MARGIN;
       // An explicit ceiling so nothing clamps the distance we just computed.
       mv.setAttribute("max-camera-orbit", "auto 88deg " + (R * 3).toFixed(2) + "m");
       mv.setAttribute("camera-orbit",
                       thetaDeg.toFixed(1) + "deg " + MODEL_PHI + "deg " + R.toFixed(2) + "m");
-    } catch (e) { /* an older model-viewer: leave its own framing alone */ }
+      return true;
+    } catch (e) { return false; }   // an older model-viewer: leave its framing alone
+  }
+
+  // The look: the openings' frames drawn a shade darker than the walls.
+  // Returns how many materials it actually touched — 0 means the model is
+  // not ready (or was already styled), which is what drives the keeper.
+  function styleModelMaterials(mv){
+    var touched = 0;
+    try {
+      var mats = (mv.model && mv.model.materials) ? mv.model.materials : [];
+      for (var i = 0; i < mats.length; i++){
+        var pbr = mats[i].pbrMetallicRoughness;
+        if (pbr.roughnessFactor < 0.5){
+          // Un gris clair suffit à détacher les ouvertures du mur : le
+          // charbon (0,20) puis le gris moyen (0,52) écrasaient encore les
+          // cadres et les électroménagers (owner 2026-08-03, deux fois).
+          pbr.setBaseColorFactor([0.68, 0.70, 0.74, 1]);
+          pbr.setMetallicFactor(0);
+          pbr.setRoughnessFactor(0.55);
+          touched++;
+        }
+      }
+    } catch (e) { /* an older model-viewer: leave the materials as they are */ }
+    return touched;
+  }
+
+  function applyModelLook(mv){
+    var touched = styleModelMaterials(mv);
+    var box = mv.clientWidth + "x" + mv.clientHeight;
+    if (touched > 0 || mv.__fitBox !== box){
+      if (fitModel(mv)) mv.__fitBox = box;
+    }
+    watchModelBox(mv);
+  }
+
+  // model-viewer does NOT re-fire `load` when the element is MOVED, but it
+  // does rebuild its materials — so the styling and the framing silently
+  // vanished when the layout engine put the viewer in the hero (verified
+  // live 2026-08-03: 203 materials back at their original values, camera
+  // back to the 105% framing). A short keeper re-applies whenever that
+  // untouched signature reappears; the layout settles well inside 30 s,
+  // and each pass is a no-op once the model is styled and framed.
+  function keepModelLook(mv){
+    if (mv.__lookKept) return;
+    mv.__lookKept = true;
+    var deadline = Date.now() + 30000;
+    var timer = setInterval(function(){
+      applyModelLook(mv);
+      if (Date.now() > deadline) clearInterval(timer);
+    }, 500);
   }
   function watchModelBox(mv){
     // Re-fit on REAL size changes only: on a phone the address bar makes
@@ -1520,35 +1570,11 @@
           // back, and the wood tones of the floors stay untouched — an
           // earlier attempt at a global grey wash killed them (owner
           // 2026-08-03, « le 3D est très blanc »).
-          // NOT `once`: our layout engine moves the viewer into the hero,
-          // and a moved custom element reloads its model with BRAND-NEW
-          // material objects — a one-shot listener left the reloaded model
-          // untouched, white and mis-framed, depending on which won the race
-          // (verified live 2026-08-03: 203 materials back at their original
-          // values after the move). Both passes below are idempotent.
-          mv.addEventListener("load", function(){
-            try {
-              (mv.model ? mv.model.materials : []).forEach(function(m){
-                var pbr = m.pbrMetallicRoughness;
-                if (pbr.roughnessFactor < 0.5){
-                  // Un gris clair suffit à détacher les ouvertures du mur :
-                  // le charbon (0,20) puis le gris moyen (0,52) écrasaient
-                  // encore les cadres et les électroménagers (owner
-                  // 2026-08-03, deux fois « trop foncé »).
-                  pbr.setBaseColorFactor([0.68, 0.70, 0.74, 1]);
-                  pbr.setMetallicFactor(0);
-                  pbr.setRoughnessFactor(0.55);
-                }
-              });
-            } catch (e) { /* an older model-viewer: leave the model as-is */ }
-            // Frame it for the box it is IN — now, and again after the
-            // layout engine has finished moving it into the hero.
-            fitModel(mv);
-            watchModelBox(mv);
-            [300, 900, 2000].forEach(function(ms){
-              setTimeout(function(){ fitModel(mv); }, ms);
-            });
-          });
+          // NOT `once`, and not on `load` alone: the layout engine moves the
+          // viewer into the hero, the move rebuilds its materials, and no
+          // second `load` announces it. The keeper below re-applies the look
+          // and the framing for as long as the layout is still settling.
+          mv.addEventListener("load", function(){ applyModelLook(mv); keepModelLook(mv); });
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
           });
