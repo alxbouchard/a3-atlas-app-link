@@ -1432,9 +1432,15 @@
           mv.setAttribute("min-camera-orbit", "auto 5deg auto");
           mv.setAttribute("max-camera-orbit", "auto 88deg auto");
           mv.setAttribute("field-of-view", "32deg");
-          mv.setAttribute("shadow-intensity", "2.4");
+          mv.setAttribute("shadow-intensity", "2.5");
           mv.setAttribute("shadow-softness", "0.3");
-          mv.setAttribute("exposure", "0.9");
+          // The warm tint of the floors comes from the LIGHT, not from the
+          // materials (verified: 203 materials, no textures, flat colours)
+          // — so greying the white through baseColorFactor flattened the
+          // whole model and killed the wood. Lowering the exposure greys
+          // the whites while keeping the warmth: 0.82 after trying 0.72
+          // (too dim for the owner) and 0.9 (still burnt).
+          mv.setAttribute("exposure", "0.82");
           // A RoomPlan model gives walls, floors and furniture ONE material
           // (verified live: 203 materials, no names, two signatures) — so
           // furniture cannot be tinted apart from the walls here. What CAN
