@@ -275,6 +275,12 @@
     </section>
 
     <!-- Media: photo gallery (media.json, Complet shares only) -->
+    <!-- Revoked share: the owner cut the link -->
+    <section class="card" id="revokedSection" hidden>
+      <h2 data-i18n="revoked_h">Lien désactivé</h2>
+      <p id="revokedBody"></p>
+    </section>
+
     <!-- Equipment read from nameplates (atlas-ai-context.json observations) -->
     <section class="card" id="equipSection" hidden>
       <h2 data-i18n="equip_h">Équipements lus sur les plaques</h2>
@@ -444,6 +450,8 @@
       surf_assumptions_h:"Hypothèses", surf_needs_verify:"À vérifier sur site",
       plans_h:"Plans",
       equip_h:"Équipements lus sur les plaques",
+      revoked_h:"Lien désactivé",
+      revoked_body:"Le propriétaire a désactivé ce partage : les données de la propriété ne sont plus accessibles. Le résumé ci-dessous provient de l'adresse du lien elle-même et n'est plus mis à jour. Demandez-lui un nouveau lien.",
       equip_note:"Texte lu automatiquement sur les plaques signalétiques par l'app, à partir des photos ci-dessous. Chaque valeur indique si un humain l'a confirmée.",
       equip_brand:"Marque", equip_model:"Modèle", equip_serial:"N° de série",
       equip_capacity:"Capacité",
@@ -521,6 +529,8 @@
       surf_assumptions_h:"Assumptions", surf_needs_verify:"To verify on site",
       plans_h:"Floor plans",
       equip_h:"Equipment read from nameplates",
+      revoked_h:"Link disabled",
+      revoked_body:"The owner disabled this share: the property data is no longer accessible. The summary below comes from the link's own address and is no longer updated. Ask them for a new link.",
       equip_note:"Text read automatically from equipment nameplates by the app, from the photos below. Each value says whether a human confirmed it.",
       equip_brand:"Brand", equip_model:"Model", equip_serial:"Serial no.",
       equip_capacity:"Capacity",
@@ -944,6 +954,30 @@
       if (!r.ok) throw new Error("http "+r.status);
       return r.text();
     }).then(function(txt){ return JSON.parse(txt); });
+  }
+
+  // A revoked share must LOOK revoked. Drive answers a definite 404 for a
+  // capability whose public permission was removed (or whose file is
+  // gone); a network failure looks different, so a 404 is a fact, not a
+  // guess. One HEAD-ish call, only when we have the API key.
+  if (DRIVE_API_KEY && validId(d)){
+    fetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(d)
+          + "?fields=id&key=" + encodeURIComponent(DRIVE_API_KEY))
+      .then(function(r){
+        if (r.status !== 404) return;
+        var sec = document.getElementById("revokedSection");
+        var body = document.getElementById("revokedBody");
+        if (!sec || !body) return;
+        body.textContent = t.revoked_body;
+        sec.hidden = false;
+        // Everything that would have been fetched is gone anyway: hide the
+        // sections that would sit there empty and look broken.
+        ["gallerySection","plansSection","equipSection","modelsSection",
+         "videoSection","historySection"].forEach(function(id){
+          var el = document.getElementById(id); if (el) el.hidden = true;
+        });
+      })
+      .catch(function(){ /* offline or blocked — never claim a revocation */ });
   }
 
   // Authoritative GPS note: read preciseLocationIncluded from the aggregate
