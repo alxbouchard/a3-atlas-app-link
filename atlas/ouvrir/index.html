@@ -1454,7 +1454,10 @@
               (mv.model ? mv.model.materials : []).forEach(function(m){
                 var pbr = m.pbrMetallicRoughness;
                 if (pbr.roughnessFactor < 0.5){
-                  pbr.setBaseColorFactor([0.20, 0.22, 0.26, 1]);
+                  // Assez foncé pour dessiner, assez clair pour ne pas
+                  // trouer l'image : le charbon d'abord essayé écrasait
+                  // les cadres ET les électroménagers (owner 2026-08-03).
+                  pbr.setBaseColorFactor([0.52, 0.54, 0.58, 1]);
                   pbr.setMetallicFactor(0);
                   pbr.setRoughnessFactor(0.55);
                 }
