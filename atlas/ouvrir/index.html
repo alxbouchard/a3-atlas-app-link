@@ -547,7 +547,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T21:18Z";
+  var ATLAS_BUILD = "2026-08-03T21:20Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1788,7 +1788,11 @@
   }
   function lenTxt(m){
     if (typeof m !== "number" || !isFinite(m) || m <= 0) return null;
-    if (UNIT.code === "si") return (Math.round(m * 100) / 100).toFixed(2) + " " + t.unit_m;
+    if (UNIT.code === "si"){
+      // Virgule décimale en français, comme partout ailleurs sur la fiche.
+      var v = (Math.round(m * 100) / 100).toFixed(2);
+      return (lang === "fr" ? v.replace(".", ",") : v) + " " + t.unit_m;
+    }
     var ft = m * FT_PER_M, whole = Math.floor(ft), inch = Math.round((ft - whole) * 12);
     if (inch === 12){ whole += 1; inch = 0; }
     return whole + " " + t.unit_ft + (inch ? " " + inch + " " + t.unit_in : "");
