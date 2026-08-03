@@ -330,6 +330,21 @@
   .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
   .lightbox.zoomed{overflow:hidden}
   .surf-row.sub .srk, .surf-row.sub .srv{color:var(--muted); font-size:13px}
+  /* Partager — en haut de la fiche, et dans le plein écran. */
+  .share-top{display:inline-flex; align-items:center; gap:7px; margin:0 4px 10px;
+    border:1px solid var(--line); background:var(--card); color:inherit; border-radius:999px;
+    padding:7px 15px; font:inherit; font-size:13.5px; font-weight:700; cursor:pointer}
+  .share-top:hover{border-color:var(--accent); color:var(--accent)}
+  .share-top svg{width:16px; height:16px}
+  .lb-share{left:auto; right:70px}
+  .lb-share svg{width:18px; height:18px}
+  .share-card{width:min(420px,100%); background:var(--card); border:1px solid var(--line);
+    border-radius:20px; padding:18px; box-shadow:var(--shadow)}
+  .share-h{font-family:var(--serif); font-size:22px; font-weight:500; margin-bottom:12px}
+  .share-list{display:flex; flex-direction:column; gap:8px}
+  .share-list .addr-btn{justify-content:center}
+  .share-card .note{margin-top:12px}
+  @media (max-width:520px){ .lb-share span{display:none} }
   /* Où se trouve la propriété — affiché seulement si le partage le porte. */
   .addr{margin:10px 0 4px}
   .addr-line{display:flex; align-items:baseline; gap:8px; font-size:16px; font-weight:600}
@@ -386,6 +401,11 @@
 <body>
 <div class="wrap">
   <div class="brand"><img class="logo" src="data:image/png;base64,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" alt="" width="34" height="34"><span data-i18n="brand">A3 ATLAS SCANNER</span></div>
+  <button type="button" class="share-top" id="shareTop">
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor"
+      d="M10 2.6l3.5 3.5-1.4 1.4L11 6.4V13H9V6.4L7.9 7.5 6.5 6.1 10 2.6zM4 11h2v5h8v-5h2v7H4v-7z"/></svg>
+    <span data-i18n="share_h">Partager</span>
+  </button>
   <p class="foot topfoot">
     <span data-i18n="made_with">Créé avec A3 Atlas Scanner — créez le passeport de votre propriété.</span>
     <a class="applink" href="https://apps.apple.com/app/id6787545744"><svg class="apple" viewBox="0 0 17 21" aria-hidden="true" focusable="false"><path fill="currentColor" d="M14.06 11.14c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.29-.88-2.31-3.5zM11.87 4.6c.6-.74 1.01-1.76.9-2.78-.87.04-1.93.58-2.56 1.31-.56.65-1.06 1.69-.93 2.69.97.07 1.97-.49 2.59-1.22z"/></svg><span data-i18n="get_app_short">Obtenir l'app gratuitement</span></a>
@@ -544,6 +564,11 @@
       d="M10 3v8.2l3-3 1.4 1.4L10 14 5.6 9.6 7 8.2l3 3V3h0zM4 15h12v2H4z"/></svg>
     <span id="lbDownloadTxt">Télécharger</span>
   </a>
+  <button class="lb-tool lb-share" id="lbShare" type="button">
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor"
+      d="M10 2.6l3.5 3.5-1.4 1.4L11 6.4V13H9V6.4L7.9 7.5 6.5 6.1 10 2.6zM4 11h2v5h8v-5h2v7H4v-7z"/></svg>
+    <span id="lbShareTxt">Partager</span>
+  </button>
   <button class="lb-pair" id="lbPair" type="button" hidden></button>
   <img class="lb-img" id="lbImg" alt="">
   <div class="lb-cap" id="lbCap"></div>
@@ -567,7 +592,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T22:09Z";
+  var ATLAS_BUILD = "2026-08-03T23:02Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -667,6 +692,10 @@
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
       history_h:"Historique",
       lb_close:"Fermer", lb_prev:"Précédent", lb_next:"Suivant",
+      share_h:"Partager", share_copy_link:"Copier le lien", share_link_copied:"Lien copié.",
+      share_photo:"Partager cette photo", share_email:"Courriel", share_sms:"Message",
+      share_more:"Autres applications", share_insta_note:"Instagram n'accepte pas le partage depuis le web : copiez le lien, ou passez par « Autres applications » sur téléphone.",
+      share_text:"Fiche de propriété — %@",
       addr_h:"Adresse", addr_maps:"Ouvrir dans Maps", addr_map_view:"Voir la carte",
       addr_src_gps:"Position relevée sur place", addr_src_geo:"Position déduite de l'adresse",
       addr_copy:"Adresse copiée.",
@@ -758,6 +787,10 @@
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
       history_h:"History",
       lb_close:"Close", lb_prev:"Previous", lb_next:"Next",
+      share_h:"Share", share_copy_link:"Copy link", share_link_copied:"Link copied.",
+      share_photo:"Share this photo", share_email:"Email", share_sms:"Message",
+      share_more:"More apps", share_insta_note:"Instagram does not accept sharing from the web: copy the link, or use “More apps” on a phone.",
+      share_text:"Property file — %@",
       addr_h:"Address", addr_maps:"Open in Maps", addr_map_view:"View map",
       addr_src_gps:"Position taken on site", addr_src_geo:"Position derived from the address",
       addr_copy:"Address copied.",
@@ -1046,10 +1079,20 @@
   var lbPrev = document.getElementById("lbPrev");
   var lbNext = document.getElementById("lbNext");
   var lbCount = document.getElementById("lbCount");
+  var lbShare = document.getElementById("lbShare");
+  var lbShareTxt = document.getElementById("lbShareTxt");
   var lbDownload = document.getElementById("lbDownload");
   var lbDownloadTxt = document.getElementById("lbDownloadTxt");
   var lbPair = document.getElementById("lbPair");
   lbDownloadTxt.textContent = t.lb_download;
+  lbShareTxt.textContent = t.share_h;
+  lbShare.setAttribute("aria-label", t.share_photo);
+  lbShare.addEventListener("click", function(e){
+    e.stopPropagation();
+    var item = lbItems[lbIndex];
+    if (item) sharePhoto(item);
+  });
+  document.getElementById("shareTop").addEventListener("click", function(){ shareFiche(); });
   lbDownload.setAttribute("aria-label", t.lb_download);
   lbClose.setAttribute("aria-label", t.lb_close);
   lbPrev.setAttribute("aria-label", t.lb_prev);
@@ -1798,6 +1841,128 @@
     });
   }
   UNIT_HOOK_HERO = true;
+
+  // ================= PARTAGER =================
+  // Sur téléphone, la bonne réponse en 2026 n'est pas une rangée de logos :
+  // c'est la feuille native. Elle liste ce qui est VRAIMENT installé —
+  // Instagram, WhatsApp, Messages, AirDrop — et elle sait envoyer un
+  // FICHIER, donc la photo elle-même et pas seulement son lien (vérifié :
+  // la CDN autorise le CORS et canShare({files}) répond oui).
+  // Les boutons par réseau ne servent que de repli, là où la feuille
+  // n'existe pas — un ordinateur, typiquement.
+  function shareTitle(){
+    var el = document.getElementById("title");
+    var name = (el && el.textContent || "").trim();
+    return name || "A3 Atlas";
+  }
+  function shareText(){
+    return (t.share_text || "%@").replace("%@", shareTitle());
+  }
+  function copyLink(url){
+    var value = url || location.href;
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(value).then(function(){ showToast(t.share_link_copied); },
+                                                function(){ fallbackCopy(value); });
+    } else { fallbackCopy(value); }
+  }
+
+  // Le repli : les seuls réseaux qui acceptent VRAIMENT un partage depuis le
+  // web. Instagram n'en fait pas partie — il n'a pas d'adresse de partage, et
+  // un bouton qui n'aboutit pas vaut moins que la vérité.
+  function fallbackTargets(url, text){
+    var u = encodeURIComponent(url), x = encodeURIComponent(text);
+    return [
+      { label: "WhatsApp", href: "https://wa.me/?text=" + encodeURIComponent(text + " " + url) },
+      { label: "X",        href: "https://x.com/intent/post?text=" + x + "&url=" + u },
+      { label: "Facebook", href: "https://www.facebook.com/sharer/sharer.php?u=" + u },
+      { label: t.share_sms,   href: "sms:?&body=" + encodeURIComponent(text + " " + url) },
+      { label: t.share_email, href: "mailto:?subject=" + x + "&body=" + encodeURIComponent(text + "\n\n" + url) }
+    ];
+  }
+
+  function openSharePopup(url, text){
+    var back = document.createElement("div");
+    back.className = "map-pop";
+    var card = document.createElement("div");
+    card.className = "share-card";
+    var h = document.createElement("div");
+    h.className = "share-h"; h.textContent = t.share_h;
+    card.appendChild(h);
+    var list = document.createElement("div");
+    list.className = "share-list";
+    fallbackTargets(url, text).forEach(function(target){
+      var a = document.createElement("a");
+      a.className = "addr-btn ghost"; a.href = target.href;
+      a.target = "_blank"; a.rel = "noopener"; a.textContent = target.label;
+      list.appendChild(a);
+    });
+    var copy = document.createElement("button");
+    copy.type = "button"; copy.className = "addr-btn";
+    copy.textContent = t.share_copy_link;
+    copy.onclick = function(){ copyLink(url); close(); };
+    list.appendChild(copy);
+    card.appendChild(list);
+    if (navigator.share){
+      var more = document.createElement("button");
+      more.type = "button"; more.className = "addr-btn ghost";
+      more.textContent = t.share_more;
+      more.onclick = function(){ navigator.share({ title: shareTitle(), text: text, url: url })
+                                   .catch(function(){}); close(); };
+      card.appendChild(more);
+    }
+    var note = document.createElement("p");
+    note.className = "note"; note.textContent = t.share_insta_note;
+    card.appendChild(note);
+    back.appendChild(card);
+    function close(){ back.remove(); document.removeEventListener("keydown", onKey); }
+    function onKey(e){ if (e.key === "Escape") close(); }
+    back.addEventListener("click", function(e){ if (e.target === back) close(); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(back);
+  }
+
+  // La fiche : feuille native si elle existe, sinon la fenêtre de repli.
+  function shareFiche(){
+    var url = location.href, text = shareText();
+    if (navigator.share){
+      navigator.share({ title: shareTitle(), text: text, url: url })
+        .catch(function(err){
+          // Un refus de l'utilisateur n'est pas une panne : on ne rouvre rien.
+          if (err && err.name === "AbortError") return;
+          openSharePopup(url, text);
+        });
+      return;
+    }
+    openSharePopup(url, text);
+  }
+
+  // Une PHOTO : on envoie le fichier lui-même quand le système l'accepte —
+  // c'est ce qui permet de la déposer dans Instagram ou Messages. Sinon on
+  // partage le lien de la fiche, jamais une image qu'on ne peut pas joindre.
+  async function sharePhoto(item){
+    var url = location.href, text = shareText();
+    try {
+      if (navigator.share && navigator.canShare){
+        var response = await fetch(driveThumb(item.driveId, 2048), { mode: "cors" });
+        if (response.ok){
+          var blob = await response.blob();
+          var name = ((item.caption || "photo").replace(/[^\w\-]+/g, "-").slice(0, 40) || "photo") + ".jpg";
+          var file = new File([blob], name, { type: blob.type || "image/jpeg" });
+          if (navigator.canShare({ files: [file] })){
+            await navigator.share({ files: [file], title: shareTitle(), text: text });
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return;   // l'utilisateur a annulé
+    }
+    if (navigator.share){
+      navigator.share({ title: shareTitle(), text: text, url: url }).catch(function(){});
+      return;
+    }
+    openSharePopup(url, text);
+  }
 
   // ================= OÙ =================
   // L'adresse et les coordonnées n'existent dans le partage QUE si l'installateur
