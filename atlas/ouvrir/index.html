@@ -475,6 +475,29 @@
   // It is read-only, reaches ONLY already anyone-with-link files, and is
   // NOT a secret — treat any "private" assumption as false.
   // =====================================================================
+  // GitHub Pages sert cette page avec max-age=600 : une fiche rouverte dans
+  // les dix minutes reste l'ANCIENNE version, rafraîchissement compris —
+  // c'est ce qui a fait croire à un correctif sans effet (owner 2026-08-03,
+  // « le refresh ne change rien »). On revalide donc la page en arrière-plan
+  // et on recharge UNE seule fois par session si la version a bougé, pour
+  // qu'un lien partagé montre toujours la fiche à jour.
+  var ATLAS_BUILD = "2026-08-03T20:22Z";
+  (function freshness(){
+    try {
+      if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
+      fetch(location.pathname, { cache: "reload" })
+        .then(function(r){ return r.ok ? r.text() : null; })
+        .then(function(html){
+          if (!html) return;
+          var m = /ATLAS_BUILD\s*=\s*"([^"]+)"/.exec(html);
+          if (!m || m[1] === ATLAS_BUILD) return;
+          sessionStorage.setItem("atlas-build", m[1]);   // pas deux fois
+          location.reload();
+        })
+        .catch(function(){});
+    } catch (e) { /* mode privé sans sessionStorage : on ne fait rien */ }
+  })();
+
   var DRIVE_API_KEY = "AIzaSyCwKNvKziIRtDMGWw_bWKBVDOtvwtX_c_A";
 
   var FETCH_TIMEOUT_MS = 8000;
