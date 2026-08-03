@@ -329,6 +329,20 @@
   .lightbox.zoomed .lb-img{border-radius:0}
   .lightbox.zoomed .lb-cap, .lightbox.zoomed .lb-nav{opacity:0; pointer-events:none}
   .lightbox.zoomed{overflow:hidden}
+  /* Télécharger l'original, et sauter à l'autre volet d'un avant/après. */
+  .lb-tool{position:fixed; top:calc(env(safe-area-inset-top) + 10px); left:14px; z-index:1001;
+    display:inline-flex; align-items:center; gap:7px; height:44px; padding:0 15px;
+    border-radius:999px; background:rgba(255,255,255,.14); color:#fff; font-size:14px;
+    font-weight:600; text-decoration:none}
+  .lb-tool:hover{background:rgba(255,255,255,.24)}
+  .lb-tool svg{width:18px; height:18px}
+  .lb-pair{position:fixed; left:50%; transform:translateX(-50%); z-index:1001;
+    bottom:calc(env(safe-area-inset-bottom) + 66px); border:0; cursor:pointer;
+    padding:10px 20px; border-radius:999px; background:var(--accent); color:var(--accent-ink);
+    font:inherit; font-size:14px; font-weight:700}
+  .lb-pair:hover{filter:brightness(1.06)}
+  .lightbox.zoomed .lb-pair, .lightbox.zoomed .lb-tool{opacity:0; pointer-events:none}
+  @media (max-width:520px){ .lb-tool span{display:none} .lb-tool{padding:0 13px} }
   /* Quand la photo a été prise, sous chaque volet d'un avant/après. */
   .ba-when{font-size:11.5px; color:var(--muted); margin-top:6px; font-weight:600;
     letter-spacing:.01em}
@@ -490,6 +504,12 @@
   <button class="lb-nav next" id="lbNext" type="button" aria-label="Suivant" hidden>›</button>
   <button class="lb-close" id="lbClose" type="button" aria-label="Fermer">✕</button>
   <div class="lb-count" id="lbCount" hidden></div>
+  <a class="lb-tool" id="lbDownload" target="_blank" rel="noopener" download>
+    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor"
+      d="M10 3v8.2l3-3 1.4 1.4L10 14 5.6 9.6 7 8.2l3 3V3h0zM4 15h12v2H4z"/></svg>
+    <span id="lbDownloadTxt">Télécharger</span>
+  </a>
+  <button class="lb-pair" id="lbPair" type="button" hidden></button>
   <img class="lb-img" id="lbImg" alt="">
   <div class="lb-cap" id="lbCap"></div>
 </div>
@@ -512,7 +532,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T20:56Z";
+  var ATLAS_BUILD = "2026-08-03T21:02Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -607,6 +627,7 @@
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
       history_h:"Historique",
       lb_close:"Fermer", lb_prev:"Précédent", lb_next:"Suivant",
+      lb_download:"Télécharger", lb_see_before:"Voir l'avant", lb_see_after:"Voir l'après",
       datasem_h:"Comment lire ces données",
       limits_h:"Limites & mise en garde",
       limits_verbatim:"Mise en garde du fabricant, affichée telle quelle (en anglais).",
@@ -689,6 +710,7 @@
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
       history_h:"History",
       lb_close:"Close", lb_prev:"Previous", lb_next:"Next",
+      lb_download:"Download", lb_see_before:"See the before", lb_see_after:"See the after",
       datasem_h:"How to read this data",
       limits_h:"Limitations & disclaimer",
       limits_verbatim:"Manufacturer disclaimer, shown verbatim.",
@@ -973,6 +995,11 @@
   var lbPrev = document.getElementById("lbPrev");
   var lbNext = document.getElementById("lbNext");
   var lbCount = document.getElementById("lbCount");
+  var lbDownload = document.getElementById("lbDownload");
+  var lbDownloadTxt = document.getElementById("lbDownloadTxt");
+  var lbPair = document.getElementById("lbPair");
+  lbDownloadTxt.textContent = t.lb_download;
+  lbDownload.setAttribute("aria-label", t.lb_download);
   lbClose.setAttribute("aria-label", t.lb_close);
   lbPrev.setAttribute("aria-label", t.lb_prev);
   lbNext.setAttribute("aria-label", t.lb_next);
@@ -1000,6 +1027,19 @@
     lbPrev.hidden = !many; lbNext.hidden = !many;
     lbCount.textContent = many ? (lbIndex + 1) + " / " + lbItems.length : "";
     lbCount.hidden = !many;
+    // L'ORIGINAL, pas la vignette : l'hôte de contenu de Drive sert le
+    // fichier tel quel, sans clé API donc sans toucher au quota de la
+    // fiche, et garde son nom (vérifié : content-disposition attachment
+    // avec photo_2026-07-13_20h28_001.jpg).
+    lbDownload.href = "https://drive.usercontent.google.com/download?id="
+                      + encodeURIComponent(item.driveId) + "&export=download";
+    // Passer d'un volet à l'autre d'un avant/après sans ressortir.
+    if (item.pair && lbIndexOfDriveId(item.pair.driveId) >= 0){
+      lbPair.hidden = false;
+      lbPair.textContent = (item.pair.role === "before") ? t.lb_see_before : t.lb_see_after;
+    } else {
+      lbPair.hidden = true;
+    }
     lbPreloadNeighbours();
   }
   // La suivante et la précédente arrivent avant qu'on les demande : en
@@ -1014,6 +1054,26 @@
       img.src = driveThumb(n.driveId, 2048);
     });
   }
+  // Retrouve une photo par son id Drive. Une même photo peut être reliée
+  // plusieurs fois (galerie ET avant/après) : on préfère le volet de la
+  // paire, pour que le va-et-vient reste dans l'avant/après.
+  function lbIndexOfDriveId(driveId){
+    var fallback = -1;
+    for (var i = 0; i < lbItems.length; i++){
+      if (lbItems[i].driveId !== driveId) continue;
+      if (lbItems[i].pair) return i;
+      if (fallback < 0) fallback = i;
+    }
+    return fallback;
+  }
+  lbPair.addEventListener("click", function(e){
+    e.stopPropagation();
+    var cur = lbItems[lbIndex];
+    if (!cur || !cur.pair) return;
+    var j = lbIndexOfDriveId(cur.pair.driveId);
+    if (j >= 0){ lbIndex = j; setLightboxContent(lbItems[j]); }
+  });
+
   function openLightboxAt(i){
     if (i < 0 || i >= lbItems.length) return;
     lbIndex = i;
@@ -1166,10 +1226,11 @@
   lbImg.addEventListener("pointerup", function(){ lbDrag = null; lbApply(); });
 
   // Register an <img> (or any element) as a lightbox trigger.
-  function bindLightbox(el, driveId, caption, stamp){
+  function bindLightbox(el, driveId, caption, stamp, pair){
     if (!el || !validId(driveId)) return;
     var i = lbItems.length;
-    lbItems.push({ driveId: driveId, caption: caption, stamp: stamp || null });
+    lbItems.push({ driveId: driveId, caption: caption, stamp: stamp || null,
+                   pair: pair || null });
     el.style.cursor = "zoom-in";
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
@@ -2431,13 +2492,17 @@
     pairs.forEach(function(pair){
       var wrap = document.createElement("div");
       wrap.className = "ba-pair";
-      wrap.appendChild(makeBASide(pair.before, t.before_label));
-      wrap.appendChild(makeBASide(pair.after,  t.after_label));
+      // Chaque volet connaît l'autre : en plein écran, un bouton fait le
+      // va-et-vient entre l'avant et l'après (owner 2026-08-03).
+      wrap.appendChild(makeBASide(pair.before, t.before_label,
+                                  { driveId: pair.after.driveId, role: "after" }));
+      wrap.appendChild(makeBASide(pair.after, t.after_label,
+                                  { driveId: pair.before.driveId, role: "before" }));
       root.appendChild(wrap);
     });
     document.getElementById("baSection").hidden = false;
   }
-  function makeBASide(p, labelTxt){
+  function makeBASide(p, labelTxt, twin){
     var side = document.createElement("figure");
     side.className = "ba-side";
     var badge = document.createElement("div");
@@ -2445,7 +2510,7 @@
     side.appendChild(badge);
     var im = makeMediaImg(p.driveId, function(){ side.style.display = "none"; });
     var stamp = capturedAtFromFilename(p.filename);
-    bindLightbox(im, p.driveId, p.captionFR, stamp);
+    bindLightbox(im, p.driveId, p.captionFR, stamp, twin);
     side.appendChild(im);
     // Quand — sous chaque photo de la paire (owner 2026-08-03) : dans un
     // avant/après, l'écart entre les deux prises est l'information.
