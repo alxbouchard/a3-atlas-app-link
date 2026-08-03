@@ -1636,11 +1636,15 @@
   // photo, else the first photo (owner 2026-08-03).
   function fillHeroVisual(){
     var visual = document.querySelector(".hero-visual");
-    if (!visual || visual.dataset.filled === "1") return;
-    var viewer = document.querySelector("#modelSection model-viewer");
+    // "3d" is final; a photo is only a PLACEHOLDER until the model lands —
+    // the gallery renders before the 3D fetch finishes, and the first pass
+    // used to lock the hero on a photo for ever.
+    if (!visual || visual.dataset.filled === "3d") return;
+    var viewer = document.querySelector("model-viewer");
     if (viewer){
+      if (visual.dataset.filled === "photo") visual.innerHTML = "";
       visual.appendChild(viewer);
-      visual.hidden = false; visual.dataset.filled = "1";
+      visual.hidden = false; visual.dataset.filled = "3d";
       var ms = document.getElementById("modelSection");
       if (ms && !ms.querySelector("model-viewer")) ms.hidden = true;
       return;
@@ -1656,8 +1660,9 @@
     clone.src = img.getAttribute("src") || "";
     if (!clone.src){ loadDriveImage(clone, img.dataset.driveId || "", 1600, null); }
     clone.alt = "";
+    if (visual.dataset.filled === "photo") return;
     visual.appendChild(clone);
-    visual.hidden = false; visual.dataset.filled = "1";
+    visual.hidden = false; visual.dataset.filled = "photo";
   }
 
   function buildChips(){
@@ -1702,73 +1707,99 @@
     hero.appendChild(tools);
   }
 
+  // The three cards the redesign does not own: the summary figures, the
+  // action buttons (download / contexts / copy for AI) and the AI note.
+  // They have no ids of their own, so they are found by what they contain.
+  function chromeCards(){
+    var stats = document.getElementById("stats");
+    var actions = document.getElementById("ctxBtn");
+    var ai = document.querySelector("details.ai");
+    return {
+      summary: stats && stats.closest("section.card"),
+      actions: actions && actions.closest("section.card"),
+      ai: ai && ai.closest("section.card")
+    };
+  }
+
+  // ONE owner for placement: when the split exists it decides, otherwise
+  // main does. Both used to move the hero on every pass and fought over it
+  // (field report Alex 2026-08-03: the summary and the action buttons sat
+  // above the hero).
+  function orderedNodes(){
+    var chrome = chromeCards();
+    var nodes = [document.querySelector(".hero"), chrome.summary, chrome.actions];
+    LAYOUT_ORDER.forEach(function(id){ nodes.push(document.getElementById(id)); });
+    nodes.push(chrome.ai);
+    return nodes.filter(Boolean);
+  }
+
   function applyLayout(){
     var main = document.getElementById("fiche");
     if (!main || main.hidden) return;
     if (!_layoutDone){ buildHero(); _layoutDone = true; }
+
     LAYOUT_ORDER.forEach(function(id){
       var sec = document.getElementById(id);
-      if (!sec) return;
-      fold(sec);
-      main.appendChild(sec);          // reorder in place
+      if (sec) fold(sec);
     });
+
+    var wide = window.matchMedia("(min-width:1000px)").matches;
+    if (wide) { applySplit(); }
+    else {
+      dismantleSplit();
+      orderedNodes().forEach(function(node){ main.appendChild(node); });
+    }
+
     fillHeroVisual();
     teaseHistory();
     refreshCounts();
     buildChips();
-    applySplit();
   }
 
-  // Wide screens get the visual pinned while the content scrolls — that is
-  // what a big screen is FOR; a stretched single column wastes it.
+  function dismantleSplit(){
+    var main = document.getElementById("fiche");
+    var split = main && main.querySelector(".split");
+    if (!split) return;
+    orderedNodes().forEach(function(node){ main.appendChild(node); });
+    split.remove();
+  }
+
+  // Wide screens: the visual and the plans stay pinned while the rest
+  // scrolls — that is what a big screen is FOR.
   function applySplit(){
     var main = document.getElementById("fiche");
     var hero = document.querySelector(".hero");
     if (!main || !hero) return;
-    var wide = window.matchMedia("(min-width:1000px)").matches;
     var split = main.querySelector(".split");
-    if (!wide){
-      if (split){   // back to one column
-        var left = split.querySelector(".split-left"), right = split.querySelector(".split-right");
-        while (left.firstChild) main.appendChild(left.firstChild);
-        while (right.firstChild) main.appendChild(right.firstChild);
-        split.remove();
-      }
-      return;
+    if (!split){
+      split = document.createElement("div");
+      split.className = "split";
+      var l = document.createElement("div"); l.className = "split-left";
+      var r = document.createElement("div"); r.className = "split-right";
+      split.appendChild(l); split.appendChild(r);
+      main.insertBefore(split, main.firstChild);
     }
-    if (split){   // keep newly-arrived sections in the right column
-      var r = split.querySelector(".split-right");
-      LAYOUT_ORDER.forEach(function(id){
-        if (id === "plansSection") return;      // stays pinned on the left
-        var sec = document.getElementById(id);
-        if (sec && sec.parentElement !== r) r.appendChild(sec);
-      });
-      var lateplans = document.getElementById("plansSection");
-      var l = split.querySelector(".split-left");
-      if (lateplans && lateplans.parentElement !== l) l.appendChild(lateplans);
-      return;
-    }
-    split = document.createElement("div");
-    split.className = "split";
-    var left = document.createElement("div"); left.className = "split-left";
-    var right = document.createElement("div"); right.className = "split-right";
-    split.appendChild(left); split.appendChild(right);
-    main.appendChild(split);
-    left.appendChild(hero);
+    var left = split.querySelector(".split-left");
+    var right = split.querySelector(".split-right");
     var plans = document.getElementById("plansSection");
-    if (plans) left.appendChild(plans);
-    LAYOUT_ORDER.forEach(function(id){
-      if (id === "plansSection") return;
-      var sec = document.getElementById(id);
-      if (sec) right.appendChild(sec);
+    [hero, plans].forEach(function(n){ if (n) left.appendChild(n); });
+    orderedNodes().forEach(function(n){
+      if (n === hero || n === plans) return;
+      right.appendChild(n);
     });
   }
-  window.addEventListener("resize", function(){
-    clearTimeout(window.__splitTimer);
-    window.__splitTimer = setTimeout(function(){ applyLayout(); }, 200);
-  });
+
   window.__atlasLayout = applyLayout;
   setTimeout(applyLayout, 0);
+  // Catch-up passes: a renderer that lands DURING a layout pass has its
+  // mutation swallowed by the observer's re-entry guard, and the 3D model
+  // (which arrives after its own fetch) was the one that lost. Every pass
+  // is idempotent, so these cost nothing once everything is in place.
+  [600, 1500, 3000, 6000, 10000].forEach(function(ms){ setTimeout(applyLayout, ms); });
+  window.addEventListener("resize", function(){
+    clearTimeout(window.__splitTimer);
+    window.__splitTimer = setTimeout(applyLayout, 200);
+  });
 
   // The renderers land asynchronously (the 3D model in particular arrives
   // after its own fetch), and guessing WHEN with timers is how sections
