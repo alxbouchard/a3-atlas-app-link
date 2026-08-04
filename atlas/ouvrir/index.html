@@ -592,7 +592,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-03T23:02Z";
+  var ATLAS_BUILD = "2026-08-04T00:52Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3078,6 +3078,15 @@
     if (list.length > 1){
       list.forEach(function(v){ registerFloor(v.label, { video: v }); });
       var host = document.getElementById("videoWrap");
+      // Les mêmes pastilles qu'au-dessus du 3D et en tête des plans : sans
+      // elles, on ne devinait pas que la vidéo suivait l'étage — on croyait
+      // qu'il n'y en avait qu'une (owner 2026-08-03). Posées AVANT #videoWrap,
+      // donc elles survivent au re-rendu du lecteur.
+      var videoPills = makeFloorPills();
+      if (videoPills && host && host.parentElement
+          && !host.parentElement.querySelector(".floor-pills")){
+        host.parentElement.insertBefore(videoPills, host);
+      }
       var shown = null;
       FLOORS.hooks.push(function(i){
         var f = FLOORS.list[i];
