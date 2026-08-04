@@ -592,7 +592,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T00:52Z";
+  var ATLAS_BUILD = "2026-08-04T01:05Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1389,16 +1389,30 @@
   // Simple GET: key in query string, NO Authorization/custom headers,
   // mode:'cors', AbortController timeout. googleapis alt=media is the ONLY
   // endpoint measured CORS-clean AND API-key-only for anyone-with-link files.
-  function fetchJson(id){
+  // D'ABORD l'hôte de contenu de Drive, SANS clé API. La clé partagée se fait
+  // brider par Google quand une machine consulte beaucoup — mesuré sur le Mac
+  // de l'owner le 2026-08-03 : 403 sur googleapis pour media.json ET
+  // context.json, 200 sur le même fichier via l'hôte sans clé, au même
+  // instant. La fiche devenait presque vide sur cet ordinateur pendant qu'elle
+  // s'affichait normalement sur un téléphone. L'endpoint API reste en repli.
+  function fetchOnce(url, ctrlTimeoutMs){
     var ctrl = ("AbortController" in window) ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, FETCH_TIMEOUT_MS) : null;
+    var timer = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, ctrlTimeoutMs) : null;
     var opts = { mode:"cors", credentials:"omit" };
     if (ctrl) opts.signal = ctrl.signal;
-    return fetch(mediaUrl(id), opts).then(function(r){
+    return fetch(url, opts).then(function(r){
       if (timer) clearTimeout(timer);
-      if (!r.ok) throw new Error("http "+r.status);
+      if (!r.ok) throw new Error("http " + r.status);
       return r.text();
-    }).then(function(txt){ return JSON.parse(txt); });
+    });
+  }
+  function fetchJson(id){
+    return fetchOnce(driveRaw(id), FETCH_TIMEOUT_MS)
+      .catch(function(){
+        if (!DRIVE_API_KEY) throw new Error("indisponible");
+        return fetchOnce(mediaUrl(id), FETCH_TIMEOUT_MS);
+      })
+      .then(function(txt){ return JSON.parse(txt); });
   }
 
   // A revoked share must LOOK revoked. Drive answers a definite 404 for a
@@ -2194,6 +2208,11 @@
   // endpoint (referrer-restricted key). Graceful: if the viewer library can't
   // load, we fall back to a download link.
   function driveModelUrl(id){
+    // Sans clé d'abord, comme les compagnons JSON — un .glb pèse quelques Mo,
+    // donc l'hôte de contenu le sert directement (pas de page antivirus).
+    return driveRaw(id);
+  }
+  function driveModelFallbackUrl(id){
     return "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) +
            "?alt=media" + (DRIVE_API_KEY ? ("&key=" + DRIVE_API_KEY) : "");
   }
@@ -2412,6 +2431,13 @@
           // second `load` announces it. The keeper below re-applies the look
           // and the framing for as long as the layout is still settling.
           mv.addEventListener("load", function(){ applyModelLook(mv); });   // voie rapide
+          mv.addEventListener("error", function(){
+            if (mv.__triedApiFallback) return;
+            mv.__triedApiFallback = true;
+            var current = FLOORS.list[FLOORS.current];
+            var id = (current && current.model && current.model.driveId) || first.driveId;
+            mv.setAttribute("src", driveModelFallbackUrl(id));
+          });
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
           });
