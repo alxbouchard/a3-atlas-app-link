@@ -618,7 +618,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T03:03Z";
+  var ATLAS_BUILD = "2026-08-04T09:05Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -712,8 +712,9 @@
       equip_note:"Texte lu automatiquement sur les plaques signalétiques par l'app, à partir des photos ci-dessous. Chaque valeur indique si un humain l'a confirmée.",
       equip_brand:"Marque", equip_model:"Modèle", equip_serial:"N° de série",
       equip_capacity:"Capacité",
-      equip_confirmed:"confirmé par l'installateur", equip_unconfirmed:"non confirmé",
+      equip_confirmed:"confirmé par le visiteur", equip_unconfirmed:"non confirmé",
       model_h:"Modèle 3D", model_hint:"Glissez pour pivoter · molette pour zoomer.",
+      model_walls:"Épaisseur des murs : représentation (10 cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.",
       model_download:"Télécharger le modèle 3D (.glb)",
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
       history_h:"Historique",
@@ -739,7 +740,7 @@
       generated_label:"Généré le",
       fallback_hint:"Détails complets (espaces mesurés, statut, limites) dans le contexte — utilisez les boutons ci-dessous.",
       legend_obs_t:"Observation", legend_obs_d:"détecté automatiquement, non confirmé par un humain.",
-      legend_fact_t:"Fait confirmé", legend_fact_d:"validé sur place par l'installateur.",
+      legend_fact_t:"Fait confirmé", legend_fact_d:"validé sur place par le visiteur.",
       legend_deriv_t:"Valeur dérivée", legend_deriv_d:"calculée à partir des mesures (ex. surfaces) — vit dans derived.json, pas ici.",
       legend_absence:"Absence déclarée ≠ absence d'information : « rien de signalé » ne veut pas dire « rien présent ».",
       copied:"Consigne copiée ✓ — collez-la à votre assistant IA",
@@ -807,8 +808,9 @@
       equip_note:"Text read automatically from equipment nameplates by the app, from the photos below. Each value says whether a human confirmed it.",
       equip_brand:"Brand", equip_model:"Model", equip_serial:"Serial no.",
       equip_capacity:"Capacity",
-      equip_confirmed:"confirmed by the installer", equip_unconfirmed:"unconfirmed",
+      equip_confirmed:"confirmed by the visitor", equip_unconfirmed:"unconfirmed",
       model_h:"3D model", model_hint:"Drag to rotate · scroll to zoom.",
+      model_walls:"Wall thickness: a representation (10 cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.",
       model_download:"Download the 3D model (.glb)",
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
       history_h:"History",
@@ -834,7 +836,7 @@
       generated_label:"Generated",
       fallback_hint:"Full details (measured spaces, status, limitations) are in the context — use the buttons below.",
       legend_obs_t:"Observation", legend_obs_d:"auto-detected, not human-confirmed.",
-      legend_fact_t:"Confirmed fact", legend_fact_d:"validated on site by the installer.",
+      legend_fact_t:"Confirmed fact", legend_fact_d:"validated on site by the visitor.",
       legend_deriv_t:"Derived value", legend_deriv_d:"computed from measurements (e.g. areas) — lives in derived.json, not here.",
       legend_absence:"Declared absence ≠ missing information: “nothing reported” is not “nothing there.”",
       copied:"Prompt copied ✓ — paste it to your AI assistant",
@@ -2515,6 +2517,13 @@
         var hint = document.createElement("div");
         hint.className = "model-hint"; hint.textContent = t.model_hint;
         root.appendChild(hint);
+        // Le scan ne mesure PAS l'épaisseur des murs — RoomPlan ne voit un mur
+        // que d'un côté. Les 10 cm affichés sont une convention de dessin, et
+        // la fiche le dit plutôt que de laisser croire à une mesure.
+        var wallNote = document.createElement("p");
+        wallNote.className = "note"; wallNote.id = "wallThicknessNote";
+        wallNote.textContent = t.model_walls;
+        root.appendChild(wallNote);
       }
       document.getElementById("modelSection").hidden = false;
     });
