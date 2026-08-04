@@ -282,6 +282,21 @@
     border:1px solid var(--line); background:var(--chip); display:block; --poster-color:transparent}
   .model-hint{font-size:12px; color:var(--muted); margin-top:8px}
   .view-btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+  /* Banc d'essai de l'éclairage — visible UNIQUEMENT avec ?light=1.
+     Un visiteur ne doit jamais tomber dessus. */
+  .light-lab{position:fixed; left:12px; bottom:12px; z-index:60; width:min(300px,calc(100vw - 24px));
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:12px 14px; box-shadow:0 8px 28px rgba(0,0,0,.22); font-size:13px}
+  .light-lab h4{margin:0 0 10px; font-size:13px; letter-spacing:.02em; text-transform:uppercase;
+    color:var(--muted)}
+  .light-lab label{display:block; margin:9px 0 3px; color:var(--muted); font-size:12px}
+  .light-lab input[type=range]{width:100%; margin:0}
+  .light-lab select{width:100%; font:inherit; padding:5px 8px; border-radius:8px;
+    border:1px solid var(--line); background:var(--chip); color:inherit}
+  .light-lab .ll-val{float:right; font-variant-numeric:tabular-nums; color:inherit; font-weight:600}
+  .light-lab .ll-out{margin-top:12px; font-size:11px; line-height:1.5; color:var(--muted);
+    word-break:break-all}
+  .light-lab .ll-copy{margin-top:8px; width:100%}
   .view-btn{font:inherit; font-size:13px; font-weight:600; color:var(--accent);
     background:var(--chip); border:1px solid var(--line); border-radius:999px;
     padding:7px 14px; cursor:pointer; min-height:36px}
@@ -627,7 +642,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T18:05Z";
+  var ATLAS_BUILD = "2026-08-04T19:15Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2343,6 +2358,95 @@
     return row;
   }
 
+  /// Banc d'essai de l'éclairage (owner 2026-08-04 : « moyen d'ajuster
+  /// l'éclairage de la scène 3D, pour que je teste »).
+  ///
+  /// Caché derrière `?light=1` : c'est un instrument de réglage, pas une
+  /// fonction. Un visiteur ne doit jamais le voir. On lit les valeurs à
+  /// l'écran, on les copie, et on les fige ensuite dans le code.
+  var LIGHT_SLIDERS = [
+    { attr:"exposure",         label:"Exposition",       min:0.2, max:2,   step:0.02 },
+    { attr:"shadow-intensity", label:"Ombre — intensité",min:0,   max:5,   step:0.1  },
+    { attr:"shadow-softness",  label:"Ombre — douceur",  min:0,   max:1,   step:0.05 }
+  ];
+  var LIGHT_PICKS = [
+    { attr:"environment-image", label:"Ambiance",
+      options:[["neutral","Neutre (actuel)"],["legacy","Ancienne"],["","Aucune"]] },
+    { attr:"tone-mapping", label:"Rendu des couleurs",
+      options:[["neutral","Neutre (actuel)"],["aces","ACES"],["agx","AgX"],["commerce","Commerce"]] }
+  ];
+  function lightingLab(mv){
+    if (!mv || q.get("light") !== "1" || document.querySelector(".light-lab")) return;
+    var lab = document.createElement("div");
+    lab.className = "light-lab";
+    var title = document.createElement("h4");
+    title.textContent = "Éclairage — banc d'essai";
+    lab.appendChild(title);
+
+    var out = document.createElement("div");
+    out.className = "ll-out";
+    function refresh(){
+      var parts = [];
+      LIGHT_SLIDERS.concat(LIGHT_PICKS).forEach(function(c){
+        var v = mv.getAttribute(c.attr);
+        parts.push(c.attr + '="' + (v === null ? "" : v) + '"');
+      });
+      out.textContent = parts.join("  ");
+    }
+
+    LIGHT_SLIDERS.forEach(function(c){
+      var lab2 = document.createElement("label");
+      var val = document.createElement("span");
+      val.className = "ll-val";
+      var current = parseFloat(mv.getAttribute(c.attr));
+      if (!isFinite(current)) current = c.min;
+      lab2.textContent = c.label;
+      val.textContent = current.toFixed(2);
+      lab2.appendChild(val);
+      var range = document.createElement("input");
+      range.type = "range"; range.min = c.min; range.max = c.max;
+      range.step = c.step; range.value = current;
+      range.addEventListener("input", function(){
+        mv.setAttribute(c.attr, range.value);
+        val.textContent = parseFloat(range.value).toFixed(2);
+        refresh();
+      });
+      lab.appendChild(lab2); lab.appendChild(range);
+    });
+
+    LIGHT_PICKS.forEach(function(c){
+      var lab2 = document.createElement("label");
+      lab2.textContent = c.label;
+      var sel = document.createElement("select");
+      c.options.forEach(function(o){
+        var opt = document.createElement("option");
+        opt.value = o[0]; opt.textContent = o[1];
+        sel.appendChild(opt);
+      });
+      sel.value = mv.getAttribute(c.attr) || "";
+      sel.addEventListener("change", function(){
+        if (sel.value) mv.setAttribute(c.attr, sel.value);
+        else mv.removeAttribute(c.attr);
+        refresh();
+      });
+      lab.appendChild(lab2); lab.appendChild(sel);
+    });
+
+    lab.appendChild(out);
+    var copy = document.createElement("button");
+    copy.type = "button"; copy.className = "view-btn ll-copy";
+    copy.textContent = "Copier les réglages";
+    copy.addEventListener("click", function(){
+      var text = out.textContent;
+      if (navigator.clipboard) navigator.clipboard.writeText(text);
+      copy.textContent = "Copié";
+      setTimeout(function(){ copy.textContent = "Copier les réglages"; }, 1400);
+    });
+    lab.appendChild(copy);
+    refresh();
+    document.body.appendChild(lab);
+  }
+
   function fitModel(mv){
     try {
       if (mv.__userMoved) return false;  // never yank a view the visitor set
@@ -2575,9 +2679,13 @@
         // Deux points d'entrée pour qui ne sait pas piloter une 3D : sans eux,
         // le visiteur n'a que le glissement à l'aveugle. « Vue de dessus » est
         // aussi le pont avec le plan 2D — c'est le même objet, vu d'aplomb.
-        var views = makeViewButtons(document.querySelector("model-viewer"));
+        var viewer = document.querySelector("model-viewer");
+        var views = makeViewButtons(viewer);
         views.id = "viewButtons";
         root.appendChild(views);
+        // Position fixe, hors de la carte : le banc survit au déplacement du
+        // modèle dans le héros, qui masque la carte « Modèle 3D ».
+        lightingLab(viewer);
         var hint = document.createElement("div");
         hint.className = "model-hint"; hint.textContent = t.model_hint;
         root.appendChild(hint);
