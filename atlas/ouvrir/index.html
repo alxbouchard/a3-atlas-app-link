@@ -281,6 +281,12 @@
   model-viewer.model3d{width:100%; height:min(62vh,440px); border-radius:12px;
     border:1px solid var(--line); background:var(--chip); display:block; --poster-color:transparent}
   .model-hint{font-size:12px; color:var(--muted); margin-top:8px}
+  .view-btns{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+  .view-btn{font:inherit; font-size:13px; font-weight:600; color:var(--accent);
+    background:var(--chip); border:1px solid var(--line); border-radius:999px;
+    padding:7px 14px; cursor:pointer; min-height:36px}
+  .view-btn:hover{border-color:var(--accent)}
+  .view-btn:active{transform:translateY(1px)}
 
   /* ---- Phase 2: history timeline (history.json) ---- */
   .hist{display:flex; flex-direction:column; gap:16px}
@@ -374,6 +380,9 @@
   /* Sélecteur d'étage — au-dessus du 3D et en tête des plans, un seul état. */
   .floor-pills{display:flex; gap:8px; flex-wrap:wrap; margin:0 0 12px}
   .hero-visual .floor-pills{position:absolute; left:12px; bottom:12px; margin:0; z-index:2}
+  .hero-visual .view-btns{position:absolute; right:12px; bottom:12px; margin:0; z-index:2}
+  /* Sur le modèle, le fond de puce ne suffit plus à détacher le bouton. */
+  .hero-visual .view-btn{background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.18)}
   .floor-pill{border:1px solid var(--line); background:var(--card); color:inherit;
     border-radius:999px; padding:7px 15px; font:inherit; font-size:13.5px; font-weight:700;
     cursor:pointer; backdrop-filter:blur(10px)}
@@ -618,7 +627,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T09:25Z";
+  var ATLAS_BUILD = "2026-08-04T18:05Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -713,7 +722,9 @@
       equip_brand:"Marque", equip_model:"Modèle", equip_serial:"N° de série",
       equip_capacity:"Capacité",
       equip_confirmed:"confirmé par le visiteur", equip_unconfirmed:"non confirmé",
-      model_h:"Modèle 3D", model_hint:"Glissez pour pivoter · molette pour zoomer.",
+      model_h:"Modèle 3D",
+      model_hint:"Glissez pour pivoter · molette ou pincement pour zoomer · deux doigts (ou clic droit) pour déplacer.",
+      view_overview:"Vue d'ensemble", view_top:"Vue de dessus",
       model_walls:function(cm){return "Épaisseur des murs : représentation ("+cm+" cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.";},
       model_download:"Télécharger le modèle 3D (.glb)",
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
@@ -809,7 +820,9 @@
       equip_brand:"Brand", equip_model:"Model", equip_serial:"Serial no.",
       equip_capacity:"Capacity",
       equip_confirmed:"confirmed by the visitor", equip_unconfirmed:"unconfirmed",
-      model_h:"3D model", model_hint:"Drag to rotate · scroll to zoom.",
+      model_h:"3D model",
+      model_hint:"Drag to rotate · scroll or pinch to zoom · two fingers (or right-click) to pan.",
+      view_overview:"Overview", view_top:"Top view",
       model_walls:function(cm){return "Wall thickness: a representation ("+cm+" cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.";},
       model_download:"Download the 3D model (.glb)",
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
@@ -2296,6 +2309,40 @@
   // real model: half-extent 1.000, offset 0.0000 in both a 378×284 phone
   // box and a 660×440 desktop one).
   var MODEL_THETA = 35, MODEL_PHI = 42, MODEL_FOV = 32, MODEL_MARGIN = 1.12;
+  // Bornes du zoom, en multiples de la distance de cadrage : on peut
+  // s'approcher jusqu'à un peu plus du quart (assez pour entrer dans une
+  // pièce) et reculer d'un peu plus de moitié (assez d'air autour du modèle,
+  // pas assez pour le réduire à un timbre-poste).
+  var MODEL_ZOOM_IN = 0.28, MODEL_ZOOM_OUT = 1.7;
+  // Vue de dessus : phi proche de la verticale. Vu d'aplomb l'empreinte est
+  // plus large qu'en trois-quarts, d'où le léger recul.
+  var MODEL_TOP_PHI = 6, MODEL_TOP_RADIUS = 1.2;
+  /// Les vues prêtes. Elles s'appuient sur le cadrage mémorisé par `fitModel` :
+  /// pas de valeur absolue, donc elles marchent quelle que soit la taille du
+  /// modèle et quel que soit l'étage affiché.
+  function makeViewButtons(mv){
+    var row = document.createElement("div");
+    row.className = "view-btns";
+    function add(label, phi, factor){
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "view-btn"; b.textContent = label;
+      b.addEventListener("click", function(){
+        var fit = mv && mv.__fit;
+        if (!fit) return;
+        // Le visiteur reprend la main : on ne veut pas qu'un recadrage
+        // automatique lui reprenne la vue qu'il vient de demander.
+        mv.__userMoved = true;
+        mv.setAttribute("camera-orbit", fit.theta.toFixed(1) + "deg " +
+                        phi + "deg " + (fit.radius * factor).toFixed(2) + "m");
+      });
+      row.appendChild(b);
+      return b;
+    }
+    add(t.view_overview, MODEL_PHI, 1);
+    add(t.view_top, MODEL_TOP_PHI, MODEL_TOP_RADIUS);
+    return row;
+  }
+
   function fitModel(mv){
     try {
       if (mv.__userMoved) return false;  // never yank a view the visitor set
@@ -2343,14 +2390,25 @@
       }
       R = R * MODEL_MARGIN;
       if (!(R > 0) || !isFinite(R)) return false;
-      // An explicit ceiling so nothing clamps the distance we just computed.
-      mv.setAttribute("max-camera-orbit", "auto 88deg " + (R * 3).toFixed(2) + "m");
+      // Les DEUX bornes du zoom, exprimées à partir de la distance de cadrage
+      // qu'on vient de calculer — donc adaptées à la taille du modèle.
+      //
+      // Avant : le plafond était à 3 × R et le plancher restait sur « auto »
+      // (owner 2026-08-04 : « le zoom out zoome trop out et le zoom in ne
+      // zoome pas assez »). L'auto de model-viewer, c'est en gros « le modèle
+      // remplit le cadre » : impossible de s'approcher plus près que la vue de
+      // départ, ce qui interdisait d'entrer dans une pièce.
+      mv.setAttribute("min-camera-orbit", "auto 5deg " + (R * MODEL_ZOOM_IN).toFixed(2) + "m");
+      mv.setAttribute("max-camera-orbit", "auto 88deg " + (R * MODEL_ZOOM_OUT).toFixed(2) + "m");
       mv.setAttribute("camera-target",
                       (c.x + ox*r[0] + oy*u[0]).toFixed(3) + "m " +
                       (c.y + ox*r[1] + oy*u[1]).toFixed(3) + "m " +
                       (c.z + ox*r[2] + oy*u[2]).toFixed(3) + "m");
       mv.setAttribute("camera-orbit",
                       thetaDeg.toFixed(1) + "deg " + MODEL_PHI + "deg " + R.toFixed(2) + "m");
+      // Mémorisé pour les vues prêtes : sans ça, « Vue d'ensemble » ne saurait
+      // pas où revenir une fois que le visiteur a tourné le modèle.
+      mv.__fit = { theta: thetaDeg, radius: R };
       return true;
     } catch (e) { return false; }   // an older model-viewer: leave its framing alone
   }
@@ -2514,6 +2572,12 @@
       if (ok){
         var pills = makeFloorPills();
         if (pills){ pills.id = "floorPills"; root.appendChild(pills); }
+        // Deux points d'entrée pour qui ne sait pas piloter une 3D : sans eux,
+        // le visiteur n'a que le glissement à l'aveugle. « Vue de dessus » est
+        // aussi le pont avec le plan 2D — c'est le même objet, vu d'aplomb.
+        var views = makeViewButtons(document.querySelector("model-viewer"));
+        views.id = "viewButtons";
+        root.appendChild(views);
         var hint = document.createElement("div");
         hint.className = "model-hint"; hint.textContent = t.model_hint;
         root.appendChild(hint);
@@ -2751,6 +2815,10 @@
       // le cherche, pas au fond de la page.
       var pills = document.getElementById("floorPills");
       if (pills) visual.appendChild(pills);
+      // Les vues prêtes suivent aussi : la carte « Modèle 3D » est masquée
+      // juste en dessous, et elle emporterait les boutons avec elle.
+      var views = document.getElementById("viewButtons");
+      if (views) visual.appendChild(views);
       visual.hidden = false; visual.dataset.filled = "3d";
       var ms = document.getElementById("modelSection");
       if (ms && !ms.querySelector("model-viewer")) ms.hidden = true;
