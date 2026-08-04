@@ -642,7 +642,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T19:15Z";
+  var ATLAS_BUILD = "2026-08-04T19:45Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2373,8 +2373,42 @@
     { attr:"environment-image", label:"Ambiance",
       options:[["neutral","Neutre (actuel)"],["legacy","Ancienne"],["","Aucune"]] },
     { attr:"tone-mapping", label:"Rendu des couleurs",
-      options:[["neutral","Neutre (actuel)"],["aces","ACES"],["agx","AgX"],["commerce","Commerce"]] }
+      options:[["neutral","Neutre (actuel)"],["auto","Auto"],["aces","ACES"],
+               ["agx","AgX"],["commerce","Commerce"]] }
   ];
+  // La moitié de ce qu'on prend pour « l'éclairage » vient des MATÉRIAUX :
+  // à rugosité 0,82 un mur est mat comme du plâtre, à 0,30 il devient satiné
+  // et accroche la lumière. Ces trois-là se règlent depuis le navigateur, sur
+  // le modèle chargé — ils ne passent par aucun attribut.
+  var MAT_TUNING = { wallLight: 0.93, wallRough: 0.82, floorRough: 0.55, on: false };
+  var MAT_SLIDERS = [
+    { key:"wallLight",  label:"Murs — clarté",    min:0.6, max:1,   step:0.01 },
+    { key:"wallRough",  label:"Murs — rugosité",  min:0.1, max:1,   step:0.02 },
+    { key:"floorRough", label:"Sol — rugosité",   min:0.1, max:1,   step:0.02 }
+  ];
+  /// Repeint les murs et le sol avec les valeurs du banc. On reconnaît un mur
+  /// à sa teinte quasi neutre et claire, le sol à sa dominante chaude — le
+  /// modèle n'a pas de textures, seulement des couleurs à plat (203 matériaux
+  /// vérifiés), donc la teinte suffit à les distinguer.
+  function applyMaterialTuning(mv){
+    if (!MAT_TUNING.on) return;
+    try {
+      var mats = (mv.model && mv.model.materials) ? mv.model.materials : [];
+      for (var i = 0; i < mats.length; i++){
+        var pbr = mats[i].pbrMetallicRoughness;
+        var c = pbr.baseColorFactor || [0,0,0,1];
+        var warm = c[0] - c[2];                    // rouge moins bleu
+        if (warm > 0.12 && c[0] > 0.4){            // bois / sol
+          pbr.setRoughnessFactor(MAT_TUNING.floorRough);
+        } else if (warm < 0.05 && c[0] > 0.75){    // peinture claire / murs
+          var v = MAT_TUNING.wallLight;
+          pbr.setBaseColorFactor([v, v, v, 1]);
+          pbr.setRoughnessFactor(MAT_TUNING.wallRough);
+        }
+      }
+    } catch (e) { /* viewer plus ancien : on laisse les matériaux tranquilles */ }
+  }
+
   function lightingLab(mv){
     if (!mv || q.get("light") !== "1" || document.querySelector(".light-lab")) return;
     var lab = document.createElement("div");
@@ -2391,6 +2425,11 @@
         var v = mv.getAttribute(c.attr);
         parts.push(c.attr + '="' + (v === null ? "" : v) + '"');
       });
+      if (MAT_TUNING.on){
+        MAT_SLIDERS.forEach(function(c){
+          parts.push(c.key + "=" + MAT_TUNING[c.key].toFixed(2));
+        });
+      }
       out.textContent = parts.join("  ");
     }
 
@@ -2409,6 +2448,26 @@
       range.addEventListener("input", function(){
         mv.setAttribute(c.attr, range.value);
         val.textContent = parseFloat(range.value).toFixed(2);
+        refresh();
+      });
+      lab.appendChild(lab2); lab.appendChild(range);
+    });
+
+    MAT_SLIDERS.forEach(function(c){
+      var lab2 = document.createElement("label");
+      var val = document.createElement("span");
+      val.className = "ll-val";
+      lab2.textContent = c.label;
+      val.textContent = MAT_TUNING[c.key].toFixed(2);
+      lab2.appendChild(val);
+      var range = document.createElement("input");
+      range.type = "range"; range.min = c.min; range.max = c.max;
+      range.step = c.step; range.value = MAT_TUNING[c.key];
+      range.addEventListener("input", function(){
+        MAT_TUNING[c.key] = parseFloat(range.value);
+        MAT_TUNING.on = true;                      // dès le premier geste
+        val.textContent = MAT_TUNING[c.key].toFixed(2);
+        applyMaterialTuning(mv);
         refresh();
       });
       lab.appendChild(lab2); lab.appendChild(range);
@@ -2542,6 +2601,9 @@
 
   function applyModelLook(mv){
     var touched = styleModelMaterials(mv);
+    // Le banc d'essai passe APRÈS le style d'origine : sinon le gardien, qui
+    // repasse toutes les 400 ms, effacerait les réglages sous les doigts.
+    applyMaterialTuning(mv);
     var box = mv.clientWidth + "x" + mv.clientHeight;
     if (touched > 0 || mv.__fitBox !== box){
       if (fitModel(mv)) mv.__fitBox = box;
