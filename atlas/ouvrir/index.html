@@ -618,7 +618,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T09:05Z";
+  var ATLAS_BUILD = "2026-08-04T09:25Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -714,7 +714,7 @@
       equip_capacity:"Capacité",
       equip_confirmed:"confirmé par le visiteur", equip_unconfirmed:"non confirmé",
       model_h:"Modèle 3D", model_hint:"Glissez pour pivoter · molette pour zoomer.",
-      model_walls:"Épaisseur des murs : représentation (10 cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.",
+      model_walls:function(cm){return "Épaisseur des murs : représentation ("+cm+" cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.";},
       model_download:"Télécharger le modèle 3D (.glb)",
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
       history_h:"Historique",
@@ -810,7 +810,7 @@
       equip_capacity:"Capacity",
       equip_confirmed:"confirmed by the visitor", equip_unconfirmed:"unconfirmed",
       model_h:"3D model", model_hint:"Drag to rotate · scroll to zoom.",
-      model_walls:"Wall thickness: a representation (10 cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.",
+      model_walls:function(cm){return "Wall thickness: a representation ("+cm+" cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.";},
       model_download:"Download the 3D model (.glb)",
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
       history_h:"History",
@@ -2518,12 +2518,21 @@
         hint.className = "model-hint"; hint.textContent = t.model_hint;
         root.appendChild(hint);
         // Le scan ne mesure PAS l'épaisseur des murs — RoomPlan ne voit un mur
-        // que d'un côté. Les 10 cm affichés sont une convention de dessin, et
-        // la fiche le dit plutôt que de laisser croire à une mesure.
-        var wallNote = document.createElement("p");
-        wallNote.className = "note"; wallNote.id = "wallThicknessNote";
-        wallNote.textContent = t.model_walls;
-        root.appendChild(wallNote);
+        // que d'un côté. Quand l'app en a déclaré une, elle l'écrit dans
+        // media.json ; on n'annonce QUE ce que le fichier porte vraiment,
+        // sinon un partage plus ancien (murs sans volume) hériterait d'une
+        // phrase fausse.
+        var declared = null;
+        valid.forEach(function(each){
+          var v = Number(each.wallThicknessM);
+          if (declared === null && isFinite(v) && v > 0) declared = v;
+        });
+        if (declared !== null){
+          var wallNote = document.createElement("p");
+          wallNote.className = "note"; wallNote.id = "wallThicknessNote";
+          wallNote.textContent = t.model_walls(Math.round(declared * 100));
+          root.appendChild(wallNote);
+        }
       }
       document.getElementById("modelSection").hidden = false;
     });
