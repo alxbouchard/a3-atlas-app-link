@@ -642,7 +642,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T19:45Z";
+  var ATLAS_BUILD = "2026-08-04T20:10Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2377,36 +2377,42 @@
                ["agx","AgX"],["commerce","Commerce"]] }
   ];
   // La moitié de ce qu'on prend pour « l'éclairage » vient des MATÉRIAUX :
-  // à rugosité 0,82 un mur est mat comme du plâtre, à 0,30 il devient satiné
-  // et accroche la lumière. Ces trois-là se règlent depuis le navigateur, sur
-  // le modèle chargé — ils ne passent par aucun attribut.
-  var MAT_TUNING = { wallLight: 0.93, wallRough: 0.82, floorRough: 0.55, on: false };
+  // à rugosité 0,82 un mur est mat comme du plâtre, à 0,10 il devient satiné
+  // et accroche la lumière. Valeurs retenues par Alex au banc d'essai
+  // (2026-08-04), avec exposition 0,5 et ambiance « legacy ».
+  var MAT_TUNING = { wallLight: 0.60, wallRough: 0.10, floorRough: 1.00 };
   var MAT_SLIDERS = [
-    { key:"wallLight",  label:"Murs — clarté",    min:0.6, max:1,   step:0.01 },
-    { key:"wallRough",  label:"Murs — rugosité",  min:0.1, max:1,   step:0.02 },
+    { key:"wallLight",  label:"Murs — clarté",    min:0.3, max:1,   step:0.01 },
+    { key:"wallRough",  label:"Murs — rugosité",  min:0.05, max:1,  step:0.01 },
     { key:"floorRough", label:"Sol — rugosité",   min:0.1, max:1,   step:0.02 }
   ];
-  /// Repeint les murs et le sol avec les valeurs du banc. On reconnaît un mur
-  /// à sa teinte quasi neutre et claire, le sol à sa dominante chaude — le
-  /// modèle n'a pas de textures, seulement des couleurs à plat (203 matériaux
-  /// vérifiés), donc la teinte suffit à les distinguer.
-  function applyMaterialTuning(mv){
-    if (!MAT_TUNING.on) return;
-    try {
-      var mats = (mv.model && mv.model.materials) ? mv.model.materials : [];
-      for (var i = 0; i < mats.length; i++){
-        var pbr = mats[i].pbrMetallicRoughness;
-        var c = pbr.baseColorFactor || [0,0,0,1];
-        var warm = c[0] - c[2];                    // rouge moins bleu
-        if (warm > 0.12 && c[0] > 0.4){            // bois / sol
-          pbr.setRoughnessFactor(MAT_TUNING.floorRough);
-        } else if (warm < 0.05 && c[0] > 0.75){    // peinture claire / murs
-          var v = MAT_TUNING.wallLight;
-          pbr.setBaseColorFactor([v, v, v, 1]);
-          pbr.setRoughnessFactor(MAT_TUNING.wallRough);
-        }
-      }
-    } catch (e) { /* viewer plus ancien : on laisse les matériaux tranquilles */ }
+
+  /// À QUOI sert chaque matériau — décidé UNE FOIS, sur les valeurs d'origine.
+  ///
+  /// C'est le point délicat : dès qu'on repeint un mur, la teinte qui
+  /// permettait de le reconnaître a disparu. Un second passage le prendrait
+  /// pour autre chose et le repeindrait encore — le gardien repasse toutes les
+  /// 400 ms, les murs clignoteraient. On mémorise donc le rôle au premier
+  /// passage, et on ne le recalcule qu'au changement de modèle (autre étage).
+  ///
+  /// Le modèle n'a aucune texture — 203 matériaux en couleurs à plat — donc la
+  /// teinte et la rugosité d'origine suffisent à distinguer les trois familles.
+  function materialRoles(mv){
+    var src = mv.getAttribute("src") || "";
+    if (mv.__roles && mv.__rolesFor === src) return mv.__roles;
+    var mats = (mv.model && mv.model.materials) ? mv.model.materials : [];
+    if (!mats.length) return null;
+    var roles = [];
+    for (var i = 0; i < mats.length; i++){
+      var pbr = mats[i].pbrMetallicRoughness;
+      var c = pbr.baseColorFactor || [0, 0, 0, 1];
+      var warm = c[0] - c[2];                       // rouge moins bleu
+      roles.push(pbr.roughnessFactor < 0.5 ? "shiny"
+               : (warm > 0.12 && c[0] > 0.4) ? "floor"
+               : (warm < 0.05 && c[0] > 0.75) ? "wall" : "other");
+    }
+    mv.__roles = roles; mv.__rolesFor = src;
+    return roles;
   }
 
   function lightingLab(mv){
@@ -2425,11 +2431,9 @@
         var v = mv.getAttribute(c.attr);
         parts.push(c.attr + '="' + (v === null ? "" : v) + '"');
       });
-      if (MAT_TUNING.on){
-        MAT_SLIDERS.forEach(function(c){
-          parts.push(c.key + "=" + MAT_TUNING[c.key].toFixed(2));
-        });
-      }
+      MAT_SLIDERS.forEach(function(c){
+        parts.push(c.key + "=" + MAT_TUNING[c.key].toFixed(2));
+      });
       out.textContent = parts.join("  ");
     }
 
@@ -2465,9 +2469,8 @@
       range.step = c.step; range.value = MAT_TUNING[c.key];
       range.addEventListener("input", function(){
         MAT_TUNING[c.key] = parseFloat(range.value);
-        MAT_TUNING.on = true;                      // dès le premier geste
         val.textContent = MAT_TUNING[c.key].toFixed(2);
-        applyMaterialTuning(mv);
+        styleModelMaterials(mv);
         refresh();
       });
       lab.appendChild(lab2); lab.appendChild(range);
@@ -2580,30 +2583,38 @@
   // Returns how many materials it actually touched — 0 means the model is
   // not ready (or was already styled), which is what drives the keeper.
   function styleModelMaterials(mv){
-    var touched = 0;
+    var src = mv.getAttribute("src") || "";
+    var fresh = !(mv.__roles && mv.__rolesFor === src);
+    var roles = materialRoles(mv);
+    if (!roles) return 0;
     try {
-      var mats = (mv.model && mv.model.materials) ? mv.model.materials : [];
-      for (var i = 0; i < mats.length; i++){
+      var mats = mv.model.materials;
+      for (var i = 0; i < roles.length; i++){
         var pbr = mats[i].pbrMetallicRoughness;
-        if (pbr.roughnessFactor < 0.5){
+        if (roles[i] === "shiny"){
           // Un gris clair suffit à détacher les ouvertures du mur : le
           // charbon (0,20) puis le gris moyen (0,52) écrasaient encore les
           // cadres et les électroménagers (owner 2026-08-03, deux fois).
           pbr.setBaseColorFactor([0.68, 0.70, 0.74, 1]);
           pbr.setMetallicFactor(0);
           pbr.setRoughnessFactor(0.55);
-          touched++;
+        } else if (roles[i] === "wall"){
+          var v = MAT_TUNING.wallLight;
+          pbr.setBaseColorFactor([v, v, v, 1]);
+          pbr.setRoughnessFactor(MAT_TUNING.wallRough);
+        } else if (roles[i] === "floor"){
+          pbr.setRoughnessFactor(MAT_TUNING.floorRough);
         }
       }
-    } catch (e) { /* an older model-viewer: leave the materials as they are */ }
-    return touched;
+    } catch (e) { return 0; }   // an older model-viewer: leave the materials as they are
+    // « Touché » ne vaut que la PREMIÈRE fois : c'est le signal que le modèle
+    // vient d'arriver, donc qu'il faut le recadrer. Le dire à chaque passage
+    // relancerait un recadrage toutes les 400 ms.
+    return fresh ? roles.length : 0;
   }
 
   function applyModelLook(mv){
     var touched = styleModelMaterials(mv);
-    // Le banc d'essai passe APRÈS le style d'origine : sinon le gardien, qui
-    // repasse toutes les 400 ms, effacerait les réglages sous les doigts.
-    applyMaterialTuning(mv);
     var box = mv.clientWidth + "x" + mv.clientHeight;
     if (touched > 0 || mv.__fitBox !== box){
       if (fitModel(mv)) mv.__fitBox = box;
@@ -2665,7 +2676,7 @@
           mv.setAttribute("auto-rotate", "");
           mv.setAttribute("auto-rotate-delay", "1200");
           mv.setAttribute("rotation-per-second", "12deg");
-          mv.setAttribute("environment-image", "neutral");
+          mv.setAttribute("environment-image", "legacy");
           mv.setAttribute("loading", "eager");
           mv.setAttribute("reveal", "auto");
           // Owner 2026-08-03 — a floor plan in 3D reads best seen from
@@ -2676,15 +2687,15 @@
           mv.setAttribute("min-camera-orbit", "auto 5deg auto");
           mv.setAttribute("max-camera-orbit", "auto 88deg auto");
           mv.setAttribute("field-of-view", "32deg");
-          mv.setAttribute("shadow-intensity", "2.5");
-          mv.setAttribute("shadow-softness", "0.3");
+          mv.setAttribute("shadow-intensity", "1.4");
+          mv.setAttribute("shadow-softness", "0.8");
           // The warm tint of the floors comes from the LIGHT, not from the
           // materials (verified: 203 materials, no textures, flat colours)
           // — so greying the white through baseColorFactor flattened the
           // whole model and killed the wood. Lowering the exposure greys
           // the whites while keeping the warmth: 0.74 after trying 0.72
           // (too dim for the owner), 0.9 and 0.82 (« éclairage trop fort »).
-          mv.setAttribute("exposure", "0.74");
+          mv.setAttribute("exposure", "0.5");
           // A RoomPlan model gives walls, floors and furniture ONE material
           // (verified live: 203 materials, no names, two signatures) — so
           // furniture cannot be tinted apart from the walls here. What CAN
@@ -2708,7 +2719,7 @@
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
           });
-          mv.setAttribute("tone-mapping", "neutral");
+          mv.setAttribute("tone-mapping", "commerce");
           mv.setAttribute("interaction-prompt", "none");
           root.appendChild(mv);
           keepModelLook(mv);   // le gardien démarre ici, pas au `load`
