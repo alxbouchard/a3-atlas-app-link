@@ -646,7 +646,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-05T00:50Z";
+  var ATLAS_BUILD = "2026-08-05T01:15Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2282,15 +2282,32 @@
   // fiche stays light. The GLB streams from Drive via the CORS-open media
   // endpoint (referrer-restricted key). Graceful: if the viewer library can't
   // load, we fall back to a download link.
+  // L'API D'ABORD pour les modèles 3D — l'inverse des compagnons JSON.
+  //
+  // Console d'Alex, 2026-08-05 : « Access to fetch at
+  // drive.usercontent.google.com/download … has been blocked by CORS policy:
+  // No Access-Control-Allow-Origin header is present ». L'hôte de contenu ne
+  // répond PAS en CORS pour ces .glb, et `model-viewer` les charge par
+  // `fetch` : le chargement échoue systématiquement.
+  //
+  // Ça marchait quand même — par accident. Le gestionnaire d'erreur basculait
+  // sur l'API, qui elle envoie bien les en-têtes CORS. Mais son drapeau
+  // n'autorisait qu'UN seul repli pour toute la vie de la visionneuse : le
+  // premier étage le consommait, et tous les suivants restaient vides.
+  //
+  // (Mes mesures en `curl` disaient le contraire — CORS ouvert d'un côté, 403
+  // de l'autre. Les deux étaient des artefacts : `curl` ignore le CORS, et il
+  // n'envoie pas le référent qu'attend la clé. Le navigateur, lui, dit vrai.)
   function driveModelUrl(id){
-    // Sans clé d'abord, comme les compagnons JSON — un .glb pèse quelques Mo,
-    // donc l'hôte de contenu le sert directement (pas de page antivirus).
-    return driveRaw(id);
+    return DRIVE_API_KEY ? driveModelApiUrl(id) : driveRaw(id);
   }
-  function driveModelFallbackUrl(id){
+  function driveModelApiUrl(id){
     return "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(id) +
            "?alt=media" + (DRIVE_API_KEY ? ("&key=" + DRIVE_API_KEY) : "");
   }
+  // Deuxième chance : l'hôte sans clé. Sans référent autorisé (fiche ouverte
+  // hors ligne, clé absente), c'est lui qui devient le seul chemin.
+  function driveModelFallbackUrl(id){ return driveRaw(id); }
   var _mvState = 0, _mvCbs = [];   // 0 idle · 1 loading · 2 ready · 3 failed
   function loadModelViewer(cb){
     if (_mvState === 2) return cb(true);
@@ -2713,11 +2730,14 @@
           // second `load` announces it. The keeper below re-applies the look
           // and the framing for as long as the layout is still settling.
           mv.addEventListener("load", function(){ applyModelLook(mv); });   // voie rapide
+          // Une deuxième chance PAR ÉTAGE, jamais une seule pour toute la
+          // visionneuse : c'est ce compteur unique qui condamnait les étages
+          // suivants (Alex 2026-08-05).
           mv.addEventListener("error", function(){
-            if (mv.__triedApiFallback) return;
-            mv.__triedApiFallback = true;
             var current = FLOORS.list[FLOORS.current];
             var id = (current && current.model && current.model.driveId) || first.driveId;
+            if (mv.__triedFallbackFor === id) return;
+            mv.__triedFallbackFor = id;
             mv.setAttribute("src", driveModelFallbackUrl(id));
           });
           mv.addEventListener("camera-change", function(e){
@@ -2734,6 +2754,7 @@
             if (!f || !f.model || mv.__floor === i) return;
             mv.__floor = i;
             mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
+            mv.__fit = null; mv.__triedFallbackFor = null;
             mv.setAttribute("src", driveModelUrl(f.model.driveId));
             keepModelLook(mv);
           });
