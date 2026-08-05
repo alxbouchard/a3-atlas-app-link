@@ -646,7 +646,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-04T23:20Z";
+  var ATLAS_BUILD = "2026-08-05T00:20Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2713,12 +2713,28 @@
           // second `load` announces it. The keeper below re-applies the look
           // and the framing for as long as the layout is still settling.
           mv.addEventListener("load", function(){ applyModelLook(mv); });   // voie rapide
+          // UNE erreur passagère ne doit pas condamner l'étage.
+          //
+          // Mesuré le 2026-08-05 sur les deux modèles du chalet d'Alex : la
+          // voie de repli par l'API renvoie **403** (la clé est restreinte au
+          // référent, et ce chemin n'a jamais servi qu'en théorie). L'ancienne
+          // version y basculait à la première erreur, puis se verrouillait —
+          // `__triedApiFallback` n'était jamais réarmé. Résultat : le moindre
+          // hoquet pendant le chargement d'un étage laissait un cadre vide,
+          // définitivement (Alex : « le modèle 3D du 2ième ne s'affiche pas »).
+          //
+          // Or l'hôte sans clé, lui, fonctionne — vérifié sur les deux
+          // fichiers, 200 et `access-control-allow-origin: *`. On réessaie
+          // donc CE chemin-là, une fois par étage, avec un paramètre qui
+          // contourne le cache d'une réponse ratée.
           mv.addEventListener("error", function(){
-            if (mv.__triedApiFallback) return;
-            mv.__triedApiFallback = true;
             var current = FLOORS.list[FLOORS.current];
             var id = (current && current.model && current.model.driveId) || first.driveId;
-            mv.setAttribute("src", driveModelFallbackUrl(id));
+            if (mv.__retriedFor === id) return;
+            mv.__retriedFor = id;
+            setTimeout(function(){
+              mv.setAttribute("src", driveModelUrl(id) + "&retry=1");
+            }, 500);
           });
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
@@ -2734,7 +2750,7 @@
             if (!f || !f.model || mv.__floor === i) return;
             mv.__floor = i;
             mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
-            mv.__fit = null;
+            mv.__fit = null; mv.__retriedFor = null;
             // LIBÉRER LA CAMÉRA AVANT DE CHANGER DE MODÈLE.
             //
             // Les bornes de zoom sont posées en MÈTRES, calculées pour l'étage
