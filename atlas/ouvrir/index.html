@@ -646,7 +646,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-06T23:35Z";
+  var ATLAS_BUILD = "2026-08-07T00:20Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3910,7 +3910,10 @@
       vol.visible = false;
       hote.add(vol);
       CAM.scene = mv[symScene];
-      try { extraitMurs(mv, hote); } catch (e) {}
+      // Pas de `catch` muet : une exception avalée m'a caché pendant
+      // plusieurs passes que les hotspots n'étaient jamais créés.
+      try { extraitMurs(mv, hote); }
+      catch (e) { console.warn("[Atlas] mesures indisponibles", e); }
       return vol;
     } catch (e){ return null; }
   }
@@ -4024,35 +4027,63 @@
    * re-rendu au changement d'étage écrit dans `#videoWrap`, et le déplacer
    * garde ce chemin intact. */
   function accoleLaVideo(){
-    var visuel = document.querySelector(".hero-visual");
-    var wrap = document.getElementById("videoWrap");
     var section = document.getElementById("videoSection");
-    if (!visuel || !wrap || visuel.querySelector("#videoWrap")) return;
     if (!section || section.hidden) return;
-    var pills = section.querySelector(".floor-pills");
-    var duo = document.createElement("div");
-    duo.className = "hero-duo";
-    var colonne = document.createElement("div");
-    colonne.className = "hero-duo-video";
-    colonne.appendChild(wrap);
-    // Les pastilles SOUS la vidéo, pas au-dessus : au-dessus elles décalaient
-    // le panneau de 55 px et les deux ne partageaient plus leur ligne de base
-    // (mesuré). Deux panneaux désalignés se lisent comme deux médias sans
-    // rapport — exactement ce qu'on cherche à défaire.
-    if (pills) colonne.appendChild(pills);
-    visuel.parentNode.insertBefore(duo, visuel);
-    duo.appendChild(visuel);
-    duo.appendChild(colonne);
-    section.hidden = true;              // la carte d'origine n'a plus de contenu
+    // EN CSS, PAS EN DÉPLAÇANT DES NŒUDS.
+    //
+    // Deux tentatives ont échoué en remontant la vidéo par le DOM : la fiche a
+    // une passe de mise en page qui rejoue après nous et remettait le hero dans
+    // sa colonne (constaté : `heroParent` redevenait « split-left »). Une règle
+    // CSS, elle, ne se fait pas défaire.
+    //
+    // Sa grille fait déjà 910 / 402 px — exactement les proportions du
+    // prototype. Il suffit donc de remonter la vidéo en TÊTE de la colonne de
+    // droite et de lui donner la hauteur du modèle : les deux panneaux
+    // partagent alors leur ligne de base, ce qui est tout l'objet. Deux
+    // panneaux désalignés se lisent comme deux médias sans rapport.
+    var visuel = document.querySelector(".hero-visual");
+    var barre = visuel && visuel.querySelector(".hero-controls");
+    if (barre && !barre.querySelector(".atlas-unit")){
+      var bm = document.createElement("button");
+      bm.type = "button"; bm.className = "hero-btn atlas-mesures";
+      bm.textContent = (lang === "fr") ? "Mesures" : "Measurements";
+      bm.addEventListener("click", function(e){
+        e.stopPropagation();
+        MES.visibles = !MES.visibles;
+        bm.style.opacity = MES.visibles ? "1" : ".5";
+        var mvv = document.querySelector("model-viewer.model3d");
+        if (mvv) { try { dessineMesures(mvv); } catch (err) {} }
+      });
+      barre.appendChild(bm);
+      // Le réglage mètres/pieds pilote celui de TOUTE la fiche : une seule
+      // préférence, retenue d'une visite à l'autre.
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "hero-btn atlas-unit";
+      function ecrit(){ b.textContent = (UNIT.code === "si") ? t.unit_ft : t.unit_m; }
+      ecrit();
+      b.addEventListener("click", function(e){
+        e.stopPropagation();
+        setUnit(UNIT.code === "si" ? "imp" : "si");
+        ecrit();
+      });
+      UNIT.hooks.push(ecrit);
+      barre.appendChild(b);
+    }
+    var fold = section.querySelector("details.fold");
+    if (fold && !fold.open) fold.open = true;   // déplié : on ne cache pas ce qu'on aligne
+
+    if (document.getElementById("atlas-duo-css")) return;
     var css = document.createElement("style");
+    css.id = "atlas-duo-css";
     css.textContent =
-      ".hero-duo{display:grid;grid-template-columns:1fr minmax(280px,360px);" +
-      "gap:16px;align-items:stretch}" +
-      ".hero-duo > .hero-visual{margin:0}" +
-      ".hero-duo-video{display:flex;flex-direction:column;gap:8px;min-width:0}" +
-      ".hero-duo-video #videoWrap{flex:1;display:flex;align-items:center;justify-content:center}" +
-      ".hero-duo-video video{max-height:100%;width:auto}" +
-      "@media (max-width:860px){.hero-duo{grid-template-columns:1fr}}";
+      ".split-right{display:flex;flex-direction:column}" +
+      "#videoSection{order:-1}" +          /* en tête, sans toucher au DOM */
+      "#videoSection .fold-body{padding-top:0}" +
+      "#videoSection #videoWrap{display:flex;align-items:center;justify-content:center;" +
+      "min-height:min(62vh,440px)}" +
+      "#videoSection #videoWrap video{max-height:min(62vh,440px);width:auto;max-width:100%}" +
+      "@media (max-width:860px){#videoSection #videoWrap{min-height:0}" +
+      "#videoSection #videoWrap video{max-height:none;width:100%}}";
     document.head.appendChild(css);
   }
 
@@ -4173,7 +4204,8 @@
     segmente(tri);
     oriente();
     posePoints(mv);
-    placeCotes(mv);
+    setTimeout(function(){ try { placeCotes(mv); } catch (e) {} }, 0);
+    setTimeout(function(){ try { placeCotes(mv); } catch (e) {} }, 600);
   }
 
   function morpho(src, W, H, r, mode){
@@ -4459,7 +4491,7 @@
     var pret = document.querySelector("model-viewer.model3d")
             && document.querySelector("#videoWrap video");
     if (pret){ accoleLaVideo(); if (!CAM.piste) majCamera(); }
-    if (CAM.frustum) return;
+    if (CAM.frustum && MES.emprise) return;
     setTimeout(function(){ amorce(essais - 1); }, 600);
   })(20);
   // Un seul réglage d'unité pour toute la fiche : les cotes suivent celui qui
