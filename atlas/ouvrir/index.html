@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T22:28Z";
+  var ATLAS_BUILD = "2026-08-07T22:53Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2611,6 +2611,55 @@
     }
   }
 
+  /** À quelle distance l'emprise TOURNÉE remplit-elle le panneau ?
+   *
+   * La distance valait `fit.radius × 1,2` — un cadrage qui contient la
+   * DIAGONALE de l'emprise, donc le pire cas, celui où le bâtiment est de
+   * biais à 45°. On le payait en permanence : mesuré sur téléphone, le plan
+   * n'occupait que 61 % de la largeur et 52 % de la hauteur, presque la
+   * moitié du panneau vide (owner 2026-08-07).
+   *
+   * Ici on calcule ce qu'il faut pour l'orientation COURANTE. Un rectangle
+   * L × P vu sous un angle φ occupe `L·|cos φ| + P·|sin φ|` en largeur et
+   * `L·|sin φ| + P·|cos φ|` en profondeur ; à 0° cela vaut L × P, à 45° la
+   * diagonale. Le plan grandit donc quand il s'aligne et ne dépasse jamais —
+   * au pire il revient à ce qu'il était.
+   *
+   * La distance est recalculée à chaque consigne, soit huit fois par seconde,
+   * et la rotation étant lente cela se lit comme un zoom très doux.
+   */
+  function distanceVueDeDessus(mv, fit, cap){
+    // LES DIMENSIONS DU MODÈLE, PAS CELLES DES MURS.
+    //
+    // J'ai d'abord cadré sur l'emprise des murs (7,52 × 8,26). Le bâtiment
+    // déborde de son rectangle de murs — balcons, débords de toit — et il
+    // sortait du cadre à certaines orientations. `getDimensions()` donne la
+    // boîte du modèle entier, 8,30 × 8,95 ici, dans les mêmes unités que
+    // l'orbite : c'est elle qu'il faut faire tenir.
+    var recours = fit.radius * MODEL_TOP_RADIUS;
+    var dim = null;
+    try { dim = mv.getDimensions && mv.getDimensions(); } catch (err) {}
+    if (!dim || !(dim.x > 0) || !(dim.z > 0)) return recours;
+    var r = mv.getBoundingClientRect();
+    if (!(r.width > 0) || !(r.height > 0)) return recours;
+    var fov = parseFloat(mv.getAttribute("field-of-view")) || 32;
+    var demi = Math.tan(fov * Math.PI / 360);        // tangente du DEMI-champ
+    if (!(demi > 0)) return recours;
+    // Les axes du modèle et ceux de la scène coïncident : l'azimut de
+    // l'orbite suffit, sans correction d'orientation.
+    var phi = ((cap == null ? fit.theta : cap) * Math.PI) / 180;
+    var c = Math.abs(Math.cos(phi)), si = Math.abs(Math.sin(phi));
+    var larg = dim.x * c + dim.z * si;
+    var prof = dim.x * si + dim.z * c;
+    // La vue n'est pas tout à fait à l'aplomb : les 6° d'inclinaison
+    // rabattent un peu de la HAUTEUR du bâtiment sur l'écran.
+    prof += (dim.y || 0) * Math.sin((MODEL_TOP_PHI * Math.PI) / 180);
+    var REMPLISSAGE = 0.88;                          // une marge, pas un bord
+    var d = Math.max(prof / (2 * REMPLISSAGE * demi),
+                     larg / (2 * REMPLISSAGE * demi * (r.width / r.height)));
+    return (isFinite(d) && d > 0) ? d : recours;
+  }
+
   function makeViewButtons(mv){
     var row = document.createElement("div");
     row.className = "view-btns";
@@ -2708,7 +2757,7 @@
     // supplément de distance que j'avais ajouté pour rattraper une personne
     // dans un coin devient inutile.
     add(t.view_top, MODEL_TOP_PHI, MODEL_TOP_RADIUS, function(fit){
-      return fit.radius * MODEL_TOP_RADIUS;
+      return distanceVueDeDessus(mv, fit, azimutDuRegard());
     }, "dessus", function(fit){ return fit.centreBrut; });
 
     // LA VUE SUBJECTIVE A ÉTÉ RETIRÉE (2026-08-07).
@@ -4922,7 +4971,7 @@
     if (maintenant - (D.dernier || 0) < 120) return;  // ~8 consignes par seconde
     D.dernier = maintenant;
     var phi = suit ? D.phi : MODEL_TOP_PHI;
-    var dist = suit ? D.distance : fit.radius * MODEL_TOP_RADIUS;
+    var dist = suit ? D.distance : distanceVueDeDessus(mv, fit, D.cap);
     mv.setAttribute("camera-target", D.cible[0].toFixed(3) + "m " +
                     D.cible[1].toFixed(3) + "m " + D.cible[2].toFixed(3) + "m");
     mv.setAttribute("camera-orbit", D.cap.toFixed(1) + "deg " +
