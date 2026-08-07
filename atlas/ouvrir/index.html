@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T23:09Z";
+  var ATLAS_BUILD = "2026-08-07T23:18Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2809,6 +2809,9 @@
       if (ronde.minuteur || !ronde.actif) return;
       ronde.minuteur = setInterval(function(){
         if (!ronde.actif || document.hidden) return;
+        // Endormie, la fiche ne change pas de vue toute seule : ce serait
+        // rallumer le rendu que la boucle vient d'éteindre.
+        if (!HEROS_VISIBLE || auRepos()) return;
         // On ne bouge pas pendant la lecture : le visiteur regarde la vidéo,
         // pas le modèle, et une caméra qui dérive sous ses yeux le gêne.
         var vid = document.querySelector("#videoWrap video");
@@ -5796,6 +5799,40 @@
    * réapparaisse : il ne doit jamais se montrer figé.
    */
   var HEROS_VISIBLE = true;
+
+  /** LA FICHE S'ENDORT QUAND PLUS PERSONNE NE S'EN OCCUPE.
+   *
+   * La rotation lente à l'ouverture est là pour dire « c'est vivant, ça se
+   * manipule ». Passé une trentaine de secondes sans un geste, elle ne dit
+   * plus rien à personne — elle fait juste tourner le processeur graphique
+   * d'un téléphone (owner 2026-08-07).
+   *
+   * Une lecture en cours n'est JAMAIS un repos : le survol accompagne la
+   * visite, et l'interrompre au milieu serait un défaut, pas une économie.
+   *
+   * Revenir sur le modèle après l'avoir quitté compte comme un geste : on
+   * regarde de nouveau, donc la fiche se réveille pour une nouvelle période.
+   */
+  var REPOS_APRES = 30000;
+  function marqueUnGeste(){ CAM.dernierGeste = performance.now(); }
+  function auRepos(){
+    var v = document.querySelector("#videoWrap video");
+    if (v && !v.paused && !v.ended) return false;
+    return (performance.now() - (CAM.dernierGeste || 0)) > REPOS_APRES;
+  }
+  function reveille(){
+    var dormait = auRepos();
+    marqueUnGeste();
+    if (dormait) demarreBoucle();
+  }
+  (function ecouteLesGestes(){
+    marqueUnGeste();
+    ["pointerdown", "keydown", "wheel"].forEach(function(nom){
+      document.addEventListener(nom, reveille, { passive: true, capture: true });
+    });
+    // Une lecture qui démarre réveille aussi : c'est elle qui pilote le survol.
+    document.addEventListener("play", reveille, true);
+  })();
   function surveilleLeHeros(){
     var vis = document.querySelector(".hero-visual");
     if (!vis || vis.__atlasVu || typeof IntersectionObserver !== "function") return;
@@ -5803,7 +5840,7 @@
     new IntersectionObserver(function(entrees){
       var avant = HEROS_VISIBLE;
       HEROS_VISIBLE = entrees.some(function(e){ return e.isIntersecting; });
-      if (HEROS_VISIBLE && !avant) demarreBoucle();
+      if (HEROS_VISIBLE && !avant) reveille();
     }, { rootMargin: "200px" }).observe(vis);
   }
 
@@ -5812,7 +5849,7 @@
     (function tourne(){
       // On CESSE de se replanifier plutôt que de tourner à vide : une image
       // sautée coûte quand même son réveil de processeur.
-      if (!HEROS_VISIBLE){ CAM.boucle = 0; return; }
+      if (!HEROS_VISIBLE || auRepos()){ CAM.boucle = 0; return; }
       CAM.boucle = requestAnimationFrame(tourne);
       if (document.hidden) return;
       var mv = document.querySelector("model-viewer.model3d");
