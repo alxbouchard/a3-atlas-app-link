@@ -71,6 +71,58 @@
     font-weight:800; letter-spacing:.28em; text-transform:uppercase; padding:22px 4px 14px}
   .brand .logo{width:34px; height:34px; border-radius:9px; display:block;
     box-shadow:0 8px 24px rgba(7,27,40,.28)}
+  /* UN SEUL sélecteur d'étage, en tête, à droite du logo.
+     Il en existait TROIS — carte 3D, plans, carte vidéo — tous branchés sur
+     `setFloor` et synchronisés par le même crochet : une seule décision
+     affichée trois fois, à trois hauteurs. Chacun avait sa bonne raison
+     locale ; ensemble ils faisaient du bruit (owner 2026-08-07).
+     L'étage gouverne le modèle, la vidéo ET les plans : il n'appartient à
+     aucun des trois. La bande à droite du logo était vide sur toute la
+     largeur — c'est sa place.
+     COLLÉE en haut : sans ça, « toujours disponible » est faux dès qu'on
+     défile, et sur téléphone on perd l'étage avant d'atteindre la vidéo. */
+  /* Trois colonnes, pas une file : `1fr auto 1fr` centre les pastilles sur la
+     PAGE, pas entre leurs voisines. Avec `space-between` elles auraient dérivé
+     selon la longueur du nom de la propriété — or l'étage est le choix central
+     de la fiche, et un contrôle central se met au centre (owner 2026-08-07). */
+  /* TRANSLUCIDE ET FLOUTÉE, comme toute surface de la fiche.
+     Je l'avais posée en `var(--bg)` opaque : un aplat plat par-dessus le
+     dégradé du fond, et les cartes disparaissaient franchement dessous en
+     défilant. `--card` + flou est le matériau du reste de la page. */
+  .entete{display:grid; grid-template-columns:1fr auto 1fr; align-items:center;
+    gap:12px; position:sticky; top:0; z-index:20; background:var(--card);
+    -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px);
+    border-bottom:1px solid var(--line)}
+  .entete .brand{padding-top:14px; padding-bottom:12px; min-width:0}
+  .entete .floor-pills{margin:0; justify-self:center; flex-wrap:nowrap}
+  .entete .share-top{justify-self:end; margin:0}
+  /* Le nom prend la place qu'il reste et se coupe plutôt que de pousser les
+     pastilles hors du centre. */
+  /* L'étage de la vidéo : une précision sur le titre, pas un second titre. */
+  .etage-du-media{color:var(--muted); font-weight:500; font-size:13px}
+  /* La description de la propriété, sous son nom. */
+  .hero #subtitle{margin:6px 0 0; color:var(--muted); font-size:15px}
+  /* Le bouton d'échange, posé sur le coin de la vignette active. */
+  /* À 45°, les flèches suivent la diagonale qui relie le grand cadre à la
+     vignette de son coin : le symbole dit alors le mouvement réel, pas un
+     échange abstrait de gauche à droite (owner 2026-08-07). */
+  .atlas-bascule-fleches{display:block; transform:rotate(45deg); line-height:1}
+  .atlas-bascule{position:absolute; z-index:9; display:none; width:34px; height:34px;
+    align-items:center; justify-content:center; border:0; border-radius:50%;
+    background:rgba(7,27,40,.55); color:#fff; cursor:pointer;
+    font:700 15px -apple-system,BlinkMacSystemFont,sans-serif;
+    box-shadow:0 2px 8px rgba(0,0,0,.45); -webkit-backdrop-filter:blur(6px);
+    backdrop-filter:blur(6px)}
+  .entete .nom-propriete{font-family:var(--serif); font-size:17px; font-weight:500;
+    letter-spacing:0; text-transform:none; color:var(--ink); overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap}
+  /* « Partager » n'a plus besoin de son mot : l'icône est universelle et le
+     libellé reste pour les lecteurs d'écran et l'infobulle. */
+  .entete .share-top span{position:absolute; width:1px; height:1px; overflow:hidden;
+    clip:rect(0 0 0 0); white-space:nowrap}
+  .entete .share-top{padding:9px 11px; gap:0}
+  .hero-visual .floor-pills, #plansSection .floor-pills,
+  #videoSection .floor-pills{display:none !important}
   .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
     box-shadow:var(--shadow); padding:22px; margin-bottom:16px; backdrop-filter:blur(14px)}
   h1{font-family:var(--serif); font-weight:500; font-size:30px; line-height:1.14;
@@ -357,7 +409,12 @@
     padding:7px 15px; font:inherit; font-size:13.5px; font-weight:700; cursor:pointer}
   .share-top:hover{border-color:var(--accent); color:var(--accent)}
   .share-top svg{width:16px; height:16px}
-  .lb-share{left:auto; right:70px}
+  /* DEUX CLASSES, POUR NE PLUS DÉPENDRE DE L'ORDRE.
+     `.lb-share{left:auto}` était écrit AVANT `.lb-tool{left:14px}` : à
+     spécificité égale c'est le dernier qui l'emporte, donc le bouton
+     « Partager » recevait `left` ET `right`, s'étirait sur toute la largeur et
+     se superposait à « Télécharger » (owner 2026-08-07). */
+  .lb-tool.lb-share{left:auto; right:70px}
   .lb-share svg{width:18px; height:18px}
   .share-card{width:min(420px,100%); background:var(--card); border:1px solid var(--line);
     border-radius:20px; padding:18px; box-shadow:var(--shadow)}
@@ -400,6 +457,31 @@
   .hero-visual .hero-controls{position:absolute; left:12px; right:12px; bottom:12px; z-index:2;
     display:flex; flex-wrap:wrap; gap:8px; justify-content:space-between; align-items:flex-end}
   .hero-visual .floor-pills, .hero-visual .view-btns{position:static; margin:0}
+  /* LES DEUX VUES : UN SEUL OBJET, COUPÉ EN DEUX.
+     Six pilules identiques ne disaient pas lesquelles s'excluent. Un segment
+     le dit par sa forme : une moitié allumée, donc une seule à la fois. */
+  .hero-visual .view-btns{background:var(--card); border:1px solid var(--line);
+    border-radius:999px; padding:3px; gap:0; box-shadow:0 1px 3px rgba(0,0,0,.18)}
+  .hero-visual .view-btns .view-btn{background:transparent; border-color:transparent;
+    box-shadow:none}
+  .hero-visual .view-btns .view-btn:hover{border-color:transparent; color:var(--ink)}
+  /* Le réglage fin de l'arrêt sur image se replie : 160 px pour un curseur
+     que le visiteur n'a pas à toucher, la règle automatique étant le défaut. */
+  /* DEUX GROUPES, PAS QUATRE OBJETS ÉPARPILLÉS.
+     `space-between` répartissait les quatre sur toute la largeur : on lisait
+     quatre contrôles sans rapport. Réunis, la gauche dit d'où on regarde et
+     la droite ce qui est dessiné par-dessus. */
+  .hero-controls .atlas-outils{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+  .atlas-arret{position:relative; display:inline-flex; align-items:center; gap:0}
+  /* Le bouton et son chevron forment UN objet : bords intérieurs plats et
+     pas de double filet, sinon on lit deux contrôles au lieu d'un et de son
+     réglage. */
+  .atlas-arret .atlas-arret-btn{border-top-right-radius:0; border-bottom-right-radius:0;
+    border-right:none; padding-right:12px}
+  .atlas-arret .atlas-reglage{border-top-left-radius:0; border-bottom-left-radius:0;
+    padding-left:8px; padding-right:11px; font-size:10px}
+  .atlas-arret .atlas-opacite{position:absolute; right:0; bottom:calc(100% + 8px);
+    z-index:5}
   /* Sur le modèle, le fond de puce ne suffit plus à détacher le bouton. */
   .hero-visual .view-btn{background:var(--card); box-shadow:0 1px 3px rgba(0,0,0,.18)}
   .floor-pill{border:1px solid var(--line); background:var(--card); color:inherit;
@@ -646,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T00:20Z";
+  var ATLAS_BUILD = "2026-08-07T22:19Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -994,26 +1076,56 @@
   }
   setPrivacyNote(null);
 
+  /** Le sous-titre décrit LA PROPRIÉTÉ, pas l'étage affiché ni le fichier.
+   *
+   * Il disait « 0ᵉ étage · 2 espaces » : un indice de tableau montré tel quel
+   * — toute la fiche appelle ça « Rc », et personne ne dit « zéroième étage »
+   * — suivi d'un compte que la tuile d'en dessous répétait sous un autre mot
+   * (owner 2026-08-07).
+   *
+   * Le nombre d'étages n'est connu qu'une fois les médias arrivés : la
+   * fonction est donc rejouée par `applyLayout`, et se tait dès que le
+   * contexte enrichi a écrit sa propre version, plus riche que la mienne.
+   */
+  function ecritLeSousTitre(){
+    var el = document.getElementById("subtitle");
+    if (!el || el.dataset.enrichi === "1") return;
+    var bouts = [];
+    if (rooms !== null)
+      bouts.push(rooms + " " + (lang === "fr" ? (rooms > 1 ? "pièces" : "pièce")
+                                              : (rooms > 1 ? "rooms" : "room")));
+    var n = (typeof FLOORS !== "undefined" && FLOORS.list) ? FLOORS.list.length : 0;
+    if (n > 1)
+      bouts.push(n + " " + (lang === "fr" ? "étages" : "floors"));
+    var txt = bouts.join(" · ");
+    if (el.textContent !== txt) el.textContent = txt;
+  }
+
   // ---- BASELINE render (synchronous, never broken) ----
   document.getElementById("fiche").hidden = false;
   document.getElementById("title").textContent = label;
 
-  var subParts = [];
-  var fl = floorLabel(floor); if (fl) subParts.push(fl);
-  if (rooms !== null) subParts.push(rooms + " " + (lang==="fr"?(rooms>1?"espaces":"espace"):(rooms>1?"spaces":"space")));
-  document.getElementById("subtitle").textContent = subParts.join(" · ");
+  ecritLeSousTitre();
 
   var badge = document.getElementById("lidarBadge");
   if (lidar === "1"){ badge.innerHTML = '<span class="badge ok">🛰️ '+esc(t.lidar_ok)+'</span>'; }
   else if (lidar === "0"){ badge.innerHTML = '<span class="badge warn">⚠️ '+esc(t.lidar_demo)+'</span>'; }
 
   (function renderBaselineStats(){
+    // ON N'AFFICHE QUE CE QUI N'EST DIT NULLE PART AILLEURS.
+    //
+    // La carte était faite de doublons : le nombre de pièces répétait le
+    // sous-titre juste au-dessus, les photos répétaient le badge de leur
+    // section, et le poids répétait le bouton de téléchargement, au mégaoctet
+    // près (owner 2026-08-07). Répéter un chiffre ne le rend pas plus vrai ;
+    // ça occupe la place de ce qui manque — la superficie, que ce partage ne
+    // transporte pas.
+    //
+    // Portes et fenêtres restent : elles ne figurent nulle part ailleurs, et
+    // elles décrivent la propriété, pas le fichier.
     var stats = [];
-    if (rooms !== null)   stats.push({n:rooms, l:t.rooms});
     if (doors !== null)   stats.push({n:doors, l:t.doors});
     if (windows !== null) stats.push({n:windows, l:t.windows});
-    if (photos !== null)  stats.push({n:photos, l:t.photos});
-    var sz = fmtSize(q.get("s")); if (sz) stats.push({n:sz, l:t.size});
     document.getElementById("stats").innerHTML = stats.map(function(s){
       return '<div class="stat"><div class="n">'+esc(String(s.n))+'</div><div class="l">'+esc(s.l)+'</div></div>';
     }).join("");
@@ -1575,7 +1687,9 @@
     var sub = [];
     var fsum = spacesFloorSummary(spaces); if (fsum) sub.push(fsum);
     sub.push(spaces.length + " " + (lang==="fr"?(spaces.length>1?"espaces":"espace"):(spaces.length>1?"spaces":"space")));
-    document.getElementById("subtitle").textContent = sub.join(" · ");
+    var elSub = document.getElementById("subtitle");
+    elSub.dataset.enrichi = "1";   // la version enrichie l'emporte, et le reste
+    elSub.textContent = sub.join(" · ");
 
     var gEl = document.getElementById("generated");
     var gd = fmtDate(doc.capturedAt);
@@ -2356,26 +2470,322 @@
   /// Les vues prêtes. Elles s'appuient sur le cadrage mémorisé par `fitModel` :
   /// pas de valeur absolue, donc elles marchent quelle que soit la taille du
   /// modèle et quel que soit l'étage affiché.
+  /** Le modèle cesse de tourner sur lui-même.
+   *
+   * Il ne s'arrêtait qu'au démarrage de la vidéo. Un visiteur qui demande un
+   * cadrage sans jamais lancer la lecture voyait donc sa vue dériver de 12°
+   * par seconde aussitôt après le clic — et c'est ce qui a faussé toutes mes
+   * mesures d'alignement : je posais un azimut, puis je le mesurais une fois
+   * qu'il s'en était éloigné (propriétaire, 2026-08-06 : « ton modèle tourne
+   * tout seul »). Demander un cadrage, c'est prendre la main. */
+  /** Une transition, pas un saut.
+   *
+   * model-viewer glisse vers chaque consigne, et la durée de ce glissement se
+   * règle. Elle est courte par défaut, et je la remets à cette valeur dès que
+   * le visiteur prend la souris — pour que son geste soit au doigt et à l'œil.
+   * Mais un CLIC sur une vue n'est pas un geste continu : c'est une demande de
+   * cadrage, et elle mérite d'y aller en douceur. On allonge donc la constante
+   * le temps du déplacement, puis on la rend (propriétaire, 2026-08-07). */
+  function transitionDouce(mv){
+    try { mv.setAttribute("interpolation-decay", "700"); } catch (e) {}
+    clearTimeout(CAM.tempoTransition);
+    CAM.tempoTransition = setTimeout(function(){
+      try {
+        if (CAM.drone && CAM.drone.actif) mv.setAttribute("interpolation-decay", "450");
+        else mv.removeAttribute("interpolation-decay");
+      } catch (e) {}
+    }, 1300);
+  }
+
+  function arreteLaRotation(mv){
+    try { mv.autoRotate = false; } catch (e) {}
+    try { mv.removeAttribute("auto-rotate"); } catch (e) {}
+    // ET ON REMET LE LACET À ZÉRO.
+    //
+    // Arrêter la rotation ne défait pas l'angle déjà parcouru : la scène reste
+    // tournée de ce qu'elle a tourné. Or les poses sont dans le repère du
+    // MODÈLE et `camera-orbit` s'exprime dans celui de la scène — l'écart
+    // valait 26° au moment où je l'ai mesuré, et il continuait de courir.
+    //
+    // J'ai d'abord essayé de le compenser en l'ajoutant à l'azimut. Mauvaise
+    // idée : ce n'est pas une constante, c'est un angle qui bouge, et la
+    // compensation donnait 3°, 20°, 43° puis 100° d'erreur selon l'instant.
+    // Le remettre à zéro fait coïncider les deux repères, et il n'y a plus
+    // rien à corriger.
+    try { mv.resetTurntableRotation(0); } catch (e) {}
+  }
+
+  /** La vignette prend LA FORME DE LA VIDÉO, pour qu'on la voie en entier.
+   *
+   * Le cadre était presque carré et l'image recadrée : une vidéo filmée en
+   * portrait y perdait le haut et le bas. Plutôt que d'ajouter des bandes
+   * vides, on donne au cadre le rapport de l'image — elle tient alors en
+   * entier ET remplit son cadre.
+   *
+   * La hauteur mène : c'est elle qui est bornée par le plan (34 %, 190 px au
+   * plus). La largeur suit, donc une vidéo en portrait donne une vignette
+   * étroite au lieu d'une vignette haute qui mangerait le plan.
+   *
+   * On compare au style EN LIGNE, pas à un drapeau : la bascule vidéo/plan
+   * remet `style.cssText` à vide, et un drapeau nous ferait croire que le
+   * travail est déjà fait.
+   */
+  function ajusteLaVignette(){
+    var sec = document.getElementById("videoSection");
+    if (!sec) return;
+    var v = sec.querySelector("video");
+    var r = (v && v.videoWidth && v.videoHeight)
+          ? (v.videoWidth / v.videoHeight).toFixed(4) : null;
+    // Le rapport de l'image sert aux DEUX états : la vignette le prend pour
+    // forme, et le panneau en grand aussi. Même raison dans les deux cas —
+    // que l'image remplisse son cadre au lieu de flotter entre deux vides.
+    var re = document.documentElement;
+    if (r && re.style.getPropertyValue("--rapport-video") !== r)
+      re.style.setProperty("--rapport-video", r);
+    // Le triangle ne doit paraître QUE sur pause : posé sur une image qui
+    // bouge, il masque la vidéo et annonce une action déjà faite.
+    if (v){
+      var joue = !v.paused && !v.ended;
+      if (sec.classList.contains("atlas-joue") !== joue)
+        sec.classList.toggle("atlas-joue", joue);
+    }
+    var vignette = sec.classList.contains("atlas-vignette");
+    var grande = MINI.matches && !vignette;
+    if (document.body.classList.contains("atlas-video-grande") !== grande)
+      document.body.classList.toggle("atlas-video-grande", grande);
+    if (!vignette){
+      if (sec.style.aspectRatio){ sec.style.aspectRatio = ""; sec.style.width = ""; }
+      return;
+    }
+    if (!r || sec.style.aspectRatio === r) return;
+    sec.style.aspectRatio = r;
+    sec.style.width = "auto";     // la hauteur mène, la largeur en découle
+  }
+
+  /** Pose le bouton d'échange sur le coin de la vignette ACTIVE.
+   *
+   * Un seul bouton pour les deux états : c'est toujours « amène l'autre au
+   * premier plan ». Il se déplace au lieu de se dédoubler, donc il n'y a
+   * jamais deux cibles qui veulent dire la même chose.
+   */
+  function poseLeBoutonDechange(){
+    var vis = document.querySelector(".hero-visual");
+    if (!vis) return;
+    var b = vis.querySelector(".atlas-bascule");
+    if (!b){
+      b = document.createElement("button");
+      b.type = "button"; b.className = "atlas-bascule";
+      // Le glyphe dans un élément à lui : c'est LUI qui tourne, pas le
+      // bouton. Le disque est symétrique, donc le faire tourner ne se verrait
+      // pas — mais son ombre portée, si.
+      var fleches = document.createElement("span");
+      fleches.className = "atlas-bascule-fleches";
+      fleches.textContent = "\u21C4";
+      b.appendChild(fleches);
+      b.setAttribute("aria-label", (lang === "fr") ? "Échanger le plan et la vidéo"
+                                                   : "Swap plan and video");
+      b.addEventListener("click", function(e){
+        e.preventDefault(); e.stopPropagation();
+        echangeMinicarte();
+      });
+      vis.appendChild(b);
+    }
+    if (!MINI.matches) return;
+    var vg = document.querySelector("#videoSection.atlas-vignette")
+          || document.querySelector("model-viewer.atlas-vignette");
+    if (!vg) return;
+    var hr = vis.getBoundingClientRect(), vr = vg.getBoundingClientRect();
+    var haut = Math.round(vr.top - hr.top + 4) + "px";
+    var droite = Math.round(hr.right - vr.right + 4) + "px";
+    if (b.style.top !== haut) b.style.top = haut;
+    if (b.style.right !== droite) b.style.right = droite;
+  }
+
+  /** Allume la moitié du segment qui correspond au mode en cours. */
+  function synchroniseLeSegment(){
+    var seg = document.querySelector(".hero-visual .view-btns");
+    if (!seg) return;
+    for (var i = 0; i < seg.children.length; i++){
+      var b = seg.children[i];
+      b.classList.toggle("on", !!CAM.mode && b.dataset.mode === CAM.mode);
+    }
+  }
+
   function makeViewButtons(mv){
     var row = document.createElement("div");
     row.className = "view-btns";
-    function add(label, phi, factor){
+    /** UNE SEULE CAMÉRA, À TROIS DISTANCES.
+     *
+     * Les trois vues partagent l'axe du regard et la personne comme cible ;
+     * seules la distance et l'inclinaison changent. On est dedans, puis on
+     * décolle par-dessus l'épaule, puis on monte à la verticale — et la
+     * direction ne bouge jamais, donc on ne perd pas le nord. C'est ce qui
+     * permet de comprendre un espace (propriétaire, 2026-08-07).
+     *
+     * Avant, « d'ensemble » et « de dessus » visaient le CENTRE DU BÂTIMENT :
+     * bien orientées, mais ce n'était pas la même caméra reculée, c'en était
+     * une autre. Reculer ne voulait rien dire.
+     *
+     * Sans pose — pas de piste caméra, ou une fiche sans vidéo — on retombe
+     * sur le cadrage d'origine : une fiche sans visite garde ses vues.
+     */
+    function add(label, phi, factor, distance, mode, cibleFixe){
       var b = document.createElement("button");
       b.type = "button"; b.className = "view-btn"; b.textContent = label;
+      b.dataset.mode = mode || "";
       b.addEventListener("click", function(){
         var fit = mv && mv.__fit;
         if (!fit) return;
-        // Le visiteur reprend la main : on ne veut pas qu'un recadrage
-        // automatique lui reprenne la vue qu'il vient de demander.
         mv.__userMoved = true;
-        mv.setAttribute("camera-orbit", fit.theta.toFixed(1) + "deg " +
-                        phi + "deg " + (fit.radius * factor).toFixed(2) + "m");
+        if (CAM.ronde && !CAM.ronde.interne) CAM.ronde.arrete();
+        // CHOISIR UNE VUE, C'EST DEMANDER SON COMPORTEMENT.
+        //
+        // Le clic fixait le mode sans rallumer l'animation : après un
+        // glissement à la souris, « Vue d'ensemble » donnait un cadrage figé
+        // au lieu du survol qu'il annonce (propriétaire, 2026-08-07). La règle
+        // devient : la souris arrête, la lecture ET les boutons de vue
+        // relancent.
+        //
+        // Avant `transitionDouce`, qui décide de la constante à rétablir selon
+        // que l'animation tourne ou non.
+        CAM.drone.actif = true;
+        arreteLaRotation(mv);
+        transitionDouce(mv);
+        // On rétablit toujours les bornes : la vue subjective les a peut-être
+        // relâchées, et un visiteur coincé dans une orbite qu'il ne peut plus
+        // quitter serait pire que le défaut qu'on corrige.
+        if (fit.bornes){
+          mv.setAttribute("min-camera-orbit", fit.bornes.min);
+          mv.setAttribute("max-camera-orbit", fit.bornes.max);
+        }
+        CAM.mode = mode || null;
+        synchroniseLeSegment();
+        var az = azimutDuRegard(), p2 = positionDuRegard();
+        // Certaines vues ne suivent personne : elles recentrent le modèle.
+        if (cibleFixe){
+          var cf = cibleFixe(fit);
+          if (cf){
+            mv.setAttribute("camera-target",
+                            cf[0].toFixed(3) + "m " + cf[1].toFixed(3) + "m " +
+                            cf[2].toFixed(3) + "m");
+            mv.setAttribute("camera-orbit",
+                            ((az === null) ? fit.theta : az).toFixed(1) + "deg " +
+                            phi + "deg " +
+                            (distance ? distance(fit) : fit.radius * factor).toFixed(2) + "m");
+            return;
+          }
+        }
+        if (az === null || !p2){
+          if (fit.cible) mv.setAttribute("camera-target", fit.cible);
+          mv.setAttribute("camera-orbit", fit.theta.toFixed(1) + "deg " +
+                          phi + "deg " + (fit.radius * factor).toFixed(2) + "m");
+          return;
+        }
+        mv.setAttribute("camera-target",
+                        p2[0].toFixed(3) + "m " + p2[1].toFixed(3) + "m " + p2[2].toFixed(3) + "m");
+        var d2 = distance ? distance(fit) : fit.radius * factor;
+        mv.setAttribute("camera-orbit", az.toFixed(1) + "deg " +
+                        phi + "deg " + d2.toFixed(2) + "m");
       });
       row.appendChild(b);
       return b;
     }
-    add(t.view_overview, MODEL_PHI, 1);
-    add(t.view_top, MODEL_TOP_PHI, MODEL_TOP_RADIUS);
+    // En biais, par-dessus l'épaule. On ne descend pas sous la borne de zoom
+    // que la fiche s'impose : elle est calculée sur la taille du modèle.
+    // En biais, mais RECULÉ : à 5,8 m on était collé au sujet et on ne voyait
+    // plus la pièce autour (propriétaire, 2026-08-07).
+    add(t.view_overview, 60, 1, function(fit){
+      return Math.max(fit.radius * 0.5, 6);
+    }, "ensemble");
+    // À la verticale, mais assez HAUT pour voir l'étage entier : c'est la
+    // seule vue qui montre encore le logement en entier, et une distance
+    // suffit à la garder.
+    // À la verticale, sur le CENTRE DU BÂTIMENT — pas sur la personne.
+    //
+    // Cette vue-là ne suit pas, elle s'oriente : elle montre le plan entier et
+    // tourne doucement dans la direction du regard (propriétaire, 2026-08-07).
+    // Centrée sur le bâtiment, le plan reste cadré quoi qu'il arrive, et le
+    // supplément de distance que j'avais ajouté pour rattraper une personne
+    // dans un coin devient inutile.
+    add(t.view_top, MODEL_TOP_PHI, MODEL_TOP_RADIUS, function(fit){
+      return fit.radius * MODEL_TOP_RADIUS;
+    }, "dessus", function(fit){ return fit.centreBrut; });
+
+    // LA VUE SUBJECTIVE A ÉTÉ RETIRÉE (2026-08-07).
+    //
+    // Elle plaçait la caméra exactement à l'objectif. Ce n'était pas une vue
+    // de visite : c'était un INSTRUMENT. Depuis le point de prise de vue, une
+    // image plate coïncide avec la géométrie quelle que soit la profondeur du
+    // plan — donc elle prouvait, d'un coup d'œil, que la piste, le recentrage
+    // et l'ouverture étaient justes. Mesuré alors : 0,05° d'écart d'axe et
+    // 1 mm de position.
+    //
+    // Mais un visiteur y perd le plan, c'est-à-dire ce qu'il est venu voir, et
+    // elle imposait une exception « sauf en vue subjective » à peu près
+    // partout. Si un doute revient sur l'alignement, elle se réécrit en une
+    // trentaine de lignes : viser un point 1 m devant la pose, se tenir à 1 m,
+    // et relâcher `min/max-camera-orbit` le temps du séjour.
+
+    // ── LE VA-ET-VIENT LENT ───────────────────────────────────────────────
+    //
+    // À la place du tourne-disque, la fiche passe doucement d'une vue à
+    // l'autre — comme si quelqu'un cliquait sur les boutons à intervalle
+    // régulier. model-viewer interpole les changements d'orbite, donc le
+    // mouvement se fait tout seul, en transition. Une rotation qui tourne pour
+    // tourner ne dit rien ; un aller-retour entre l'ensemble et le plan montre
+    // deux choses, et le visiteur comprend qu'elles sont liées.
+    //
+    // Il s'arrête DÉFINITIVEMENT à la première intervention : celui qui prend
+    // la main la garde. Une caméra qui reprend le contrôle après coup est
+    // insupportable, et c'est le défaut classique de ce genre d'automatisme.
+    // model-viewer glisse vers chaque consigne d'orbite au lieu d'y sauter, et
+    // la durée de ce glissement se règle. Par défaut elle est courte (50 ms),
+    // ce qui rend le suivi nerveux ; allongée, chaque consigne est absorbée en
+    // douceur — c'est le levier le plus efficace, avant même l'amortissement
+    // que je calcule moi-même.
+    try { mv.setAttribute("interpolation-decay", "450"); } catch (e) {}
+    var ronde = { minuteur: 0, index: 0, actif: true, interne: false };
+    // ARRÊTER LA RONDE N'ARRÊTE PAS L'ANIMATION.
+    //
+    // Les deux sont indépendantes, et les confondre était une erreur :
+    // choisir « Vue d'ensemble », c'est demander le drone, pas le congédier.
+    // Un clic sur une vue arrête donc l'alternance automatique et fixe le
+    // mode ; seul un glissement à la main — le visiteur qui cadre lui-même —
+    // arrête le mouvement.
+    ronde.arrete = function(){
+      ronde.actif = false;
+      if (ronde.minuteur) { clearInterval(ronde.minuteur); ronde.minuteur = 0; }
+    };
+    ronde.demarre = function(vues){
+      if (ronde.minuteur || !ronde.actif) return;
+      ronde.minuteur = setInterval(function(){
+        if (!ronde.actif || document.hidden) return;
+        // On ne bouge pas pendant la lecture : le visiteur regarde la vidéo,
+        // pas le modèle, et une caméra qui dérive sous ses yeux le gêne.
+        var vid = document.querySelector("#videoWrap video");
+        if (vid && !vid.paused) return;
+        ronde.interne = true;
+        try { vues[ronde.index % vues.length].click(); } catch (e) {}
+        ronde.interne = false;
+        ronde.index++;
+      }, 11000);
+    };
+    mv.addEventListener("camera-change", function(e){
+      if (e && e.detail && e.detail.source === "user-interaction"){
+        ronde.arrete();
+        CAM.drone.actif = false;        // il cadre lui-même : on ne bouge plus
+        // ET ON REND LA MAIN, AU SENS PROPRE.
+        //
+        // L'amortissement de 450 ms sert au survol automatique. Laissé en
+        // place, il s'applique aussi à la souris : le modèle traîne derrière
+        // le geste, et le visiteur a l'impression de piloter dans du sirop
+        // (propriétaire, 2026-08-07). Dès qu'il touche, on revient au réglage
+        // par défaut — ce qu'il fait à la main doit être exactement ce qu'il
+        // voit.
+        try { mv.removeAttribute("interpolation-decay"); } catch (e2) {}
+      }
+    });
+    CAM.ronde = ronde;
     return row;
   }
 
@@ -2595,7 +3005,19 @@
                       thetaDeg.toFixed(1) + "deg " + MODEL_PHI + "deg " + R.toFixed(2) + "m");
       // Mémorisé pour les vues prêtes : sans ça, « Vue d'ensemble » ne saurait
       // pas où revenir une fois que le visiteur a tourné le modèle.
-      mv.__fit = { theta: thetaDeg, radius: R };
+      mv.__fit = { theta: thetaDeg, radius: R,
+                   // Le centre BRUT de la boîte englobante, sans le décalage
+                   // de cadrage. Celui-ci est calculé pour une vue oblique à
+                   // 42° ; vu de la verticale il pousse le plan hors du cadre.
+                   centreBrut: [c.x, c.y, c.z],
+                   centre: [c.x + ox*r[0] + oy*u[0],
+                            c.y + ox*r[1] + oy*u[1],
+                            c.z + ox*r[2] + oy*u[2]],
+                   bornes: { min: "auto 5deg " + (R * MODEL_ZOOM_IN).toFixed(2) + "m",
+                             max: "auto 88deg " + (R * MODEL_ZOOM_OUT).toFixed(2) + "m" },
+                   cible: (c.x + ox*r[0] + oy*u[0]).toFixed(3) + "m " +
+                          (c.y + ox*r[1] + oy*u[1]).toFixed(3) + "m " +
+                          (c.z + ox*r[2] + oy*u[2]).toFixed(3) + "m" };
       return true;
     } catch (e) { return false; }   // an older model-viewer: leave its framing alone
   }
@@ -2899,7 +3321,16 @@
   // ===================================================================
   var LAYOUT_ORDER = ["plansSection", "gallerySection", "baSection", "videoSection",
                       "plateSection", "equipSection", "surfacesSection", "spacesSection",
-                      "areaSection", "dataSemSection", "limitsSection", "historySection"];
+                      "areaSection", "historySection", "dataSemSection", "limitsSection"];
+  /** Sections qui existent SANS figurer dans la barre de pastilles.
+   *
+   * Le mode d'emploi et les mises en garde doivent rester lisibles — c'est
+   * ce qui empêche la fiche de faire passer une mesure indicative pour un
+   * relevé certifié. Mais ce ne sont pas des destinations : personne n'ouvre
+   * une fiche pour aller les lire, et en pastille ils occupaient deux places
+   * sur cinq au-dessus du contenu réel (owner 2026-08-07). Ils vivent en bas
+   * de page, à leur rang. */
+  var SANS_PASTILLE = ["dataSemSection", "limitsSection"];
   // Sections that stay OPEN: the ones the owner wants seen immediately.
   var LAYOUT_OPEN = { plansSection: true };
   var _layoutDone = false;
@@ -2919,6 +3350,26 @@
 
   // Wrap a section's content in a native <details>: keyboard and screen
   // readers for free, no JS state to get wrong.
+  /** L'étiquette d'étage de la vidéo, accolée au titre de sa carte.
+   *
+   * Le titre n'est plus un `h2` une fois la carte repliable : `fold` le
+   * transforme en `summary`. On repose donc l'étiquette à chaque passe de
+   * mise en page, sinon elle disparaît au moment du pliage.
+   */
+  var ETIQUETTE_VIDEO = "";
+  function poseLetageSurLeTitre(){
+    var som = document.querySelector("#videoSection summary");
+    if (!som) return;
+    var sp = som.querySelector(".etage-du-media");
+    if (!ETIQUETTE_VIDEO){ if (sp) sp.remove(); return; }
+    if (!sp){
+      sp = document.createElement("span");
+      sp.className = "etage-du-media";
+      som.insertBefore(sp, som.children[1] || null);
+    }
+    if (sp.textContent !== ETIQUETTE_VIDEO) sp.textContent = ETIQUETTE_VIDEO;
+  }
+
   function fold(section){
     if (!section || section.dataset.folded === "1") return;
     var h2 = section.querySelector("h2");
@@ -2991,6 +3442,15 @@
     h1.className = "hero-title";
     h1.textContent = (document.getElementById("title") || {}).textContent || "";
     hero.appendChild(h1);
+    // LA LIGNE DE DESCRIPTION SUIT SON TITRE.
+    //
+    // Vidée de ses tuiles, la carte d'en-tête n'était plus qu'un cadre autour
+    // d'une seule ligne grise — un objet qui n'existe plus que pour
+    // lui-même. « 2 pièces · 2 étages » qualifie le nom de la propriété :
+    // sa place est sous ce nom. On DÉPLACE l'élément au lieu de le copier,
+    // sinon deux exemplaires divergent dès la première mise à jour.
+    var sousTitre = document.getElementById("subtitle");
+    if (sousTitre) hero.appendChild(sousTitre);
     var rule = document.createElement("div");
     rule.className = "hero-rule";
     hero.appendChild(rule);
@@ -3001,8 +3461,33 @@
     hero.appendChild(figs);
     updateHeroFigures();
     main.insertBefore(hero, first);
-    // The original header card keeps the subtitle, badges and stats.
     first.querySelector("#title") && (first.querySelector("#title").hidden = true);
+  }
+
+  /** Fait disparaître la carte d'en-tête quand il ne lui reste rien.
+   *
+   * Elle tenait le titre, le sous-titre, les badges et les tuiles. Le titre
+   * est monté dans le héros, le sous-titre l'a suivi, et les tuiles ne
+   * survivent que si elles disent quelque chose d'unique. Sur un partage sans
+   * badge LiDAR ni comptes de portes, il ne reste qu'un cadre vide — qu'on ne
+   * montre pas.
+   */
+  function masqueLEnteteVide(){
+    // ON PART DE L'ÉLÉMENT, PAS DE SA POSITION.
+    //
+    // Je cherchais « la première carte de la fiche ». Après la mise en page,
+    // la première carte est celle du modèle : la fonction sortait aussitôt et
+    // ne masquait jamais rien (mesuré le 2026-08-07). Une position n'est pas
+    // une identité.
+    var st = document.getElementById("stats");
+    var carte = st && st.closest("section.card");
+    if (!carte) return;
+    var reste = ["#lidarBadge", "#generated", "#stats", "#fallbackNote"].some(function(sel){
+      var e = carte.querySelector(sel);
+      return e && !e.hidden && (e.children.length > 0 || (e.textContent || "").trim());
+    });
+    var vide = !reste;
+    if (carte.hidden !== vide) carte.hidden = vide;
   }
 
   // The 3D model is the hero when there is one; otherwise the exterior
@@ -3054,6 +3539,16 @@
     visual.hidden = false; visual.dataset.filled = "photo";
   }
 
+  /** La carte vidéo a-t-elle été remontée à côté du modèle ? */
+  function laVideoEstEnHaut(){
+    var sec = document.getElementById("videoSection");
+    if (!sec) return false;
+    if (sec.closest(".hero-visual")) return true;          // téléphone : dans le héros
+    var par = sec.parentElement;
+    return !!(par && par.classList.contains("split-right")
+              && par.firstElementChild === sec);           // grand écran : en tête de colonne
+  }
+
   function buildChips(){
     var hero = document.querySelector(".hero");
     if (!hero) return;
@@ -3065,6 +3560,16 @@
       bar.className = "navchips";
     }
     LAYOUT_ORDER.forEach(function(id){
+      if (SANS_PASTILLE.indexOf(id) >= 0) return;
+      // La vidéo N'A PAS de pastille quand elle est déjà en haut.
+      //
+      // Elle est présentée avec le modèle dès l'ouverture — en tête de la
+      // colonne de droite sur grand écran, dans le héros sur téléphone. Une
+      // pastille qui fait défiler vers ce qu'on regarde déjà est du bruit
+      // (owner 2026-08-07). Mais une fiche SANS modèle 3D laisse la vidéo
+      // dans le flux, plus bas : là, la pastille sert. D'où le test sur sa
+      // place réelle plutôt qu'une exclusion sèche.
+      if (id === "videoSection" && laVideoEstEnHaut()) return;
       var sec = document.getElementById(id);
       if (!sec || sec.hidden) return;
       var own = sec.querySelector(":scope > details.fold > summary > span");
@@ -3122,8 +3627,14 @@
     var nodes = [document.querySelector(".hero"),
                  document.getElementById("plansSection"),
                  chrome.summary];
+    // EN MINICARTE, la carte vidéo n'appartient plus à la colonne : elle est
+    // posée dans un coin du plan. La passe de mise en page la ramènerait à sa
+    // place à la première occasion — on la retire donc de la liste tant
+    // qu'elle est vignette.
+    var enVignette = document.body.classList.contains("atlas-minicarte");
     LAYOUT_ORDER.forEach(function(id){
       if (id === "plansSection") return;
+      if (enVignette && id === "videoSection") return;
       nodes.push(document.getElementById(id));
     });
     nodes.push(chrome.actions);   // downloads & JSON contexts: at the bottom
@@ -3145,13 +3656,74 @@
     if (wide) { applySplit(); }
     else {
       dismantleSplit();
-      orderedNodes().forEach(function(node){ main.appendChild(node); });
+      // Même règle qu'en colonne : ne rien déplacer de ce qui est déjà rangé,
+      // sinon chaque passe de rattrapage relance la visionneuse 3D.
+      rangeDans(main, orderedNodes());
     }
 
+    posePastillesEnTete();
+    poseLetageSurLeTitre();
+    ecritLeSousTitre();
+    masqueLEnteteVide();
     fillHeroVisual();
     teaseHistory();
     refreshCounts();
     buildChips();
+  }
+
+  /** Sort le sélecteur d'étage des cartes et le pose en tête de page.
+   *
+   * Appelée depuis `applyLayout`, donc rejouée à 0, 600, 1500, 3000, 6000 et
+   * 10000 ms : à la première passe les étages ne sont pas encore connus et
+   * `makeFloorPills` répond `null`. Les passes suivantes rattrapent — c'est
+   * voulu, pas une redondance.
+   */
+  function posePastillesEnTete(){
+    var marque = document.querySelector(".wrap > .brand");
+    if (!marque) return;
+    var tete = document.querySelector(".entete");
+    if (!tete){
+      tete = document.createElement("div");
+      tete.className = "entete";
+      marque.parentElement.insertBefore(tete, marque);
+      tete.appendChild(marque);
+    }
+    // Le nom de la propriété REMPLACE le mot-symbole : le logo dit déjà de
+    // quelle app il s'agit, et la phrase d'accroche le répète en toutes
+    // lettres. Ce qu'on cherche en haut d'une fiche, c'est de quelle
+    // propriété on parle.
+    var mot = marque.querySelector('[data-i18n="brand"]');
+    if (mot) mot.hidden = true;
+    var nom = marque.querySelector(".nom-propriete");
+    if (!nom){
+      nom = document.createElement("span");
+      nom.className = "nom-propriete";
+      marque.appendChild(nom);
+    }
+    var titre = document.getElementById("title");
+    var vrai = (titre && titre.textContent || "").trim();
+    if (vrai && vrai !== "\u2014" && nom.textContent !== vrai) nom.textContent = vrai;
+
+    // « Partager » monte dans la barre, réduit à son icône.
+    var part = document.getElementById("shareTop");
+    if (part && part.parentElement !== tete){
+      part.title = t.share_h;
+      part.setAttribute("aria-label", t.share_h);
+      tete.appendChild(part);
+    }
+
+    // La phrase d'accroche descend en pied de page : c'est un message
+    // d'acquisition, il se lit APRÈS le contenu, pas avant.
+    var pied = document.querySelector(".wrap > .topfoot");
+    var enveloppe = document.querySelector("main#fiche");
+    if (pied && enveloppe && pied.compareDocumentPosition(enveloppe)
+        & Node.DOCUMENT_POSITION_FOLLOWING){
+      enveloppe.parentElement.appendChild(pied);
+    }
+
+    if (tete.querySelector(".floor-pills")) return;
+    var p = makeFloorPills();   // `null` s'il n'y a qu'un étage : rien à choisir
+    if (p) tete.insertBefore(p, part || null);
   }
 
   function dismantleSplit(){
@@ -3180,11 +3752,37 @@
     var left = split.querySelector(".split-left");
     var right = split.querySelector(".split-right");
     var plans = document.getElementById("plansSection");
-    [hero, plans].forEach(function(n){ if (n) left.appendChild(n); });
-    orderedNodes().forEach(function(n){
-      if (n === hero || n === plans) return;
-      right.appendChild(n);
-    });
+    rangeDans(left, [hero, plans].filter(Boolean));
+    rangeDans(right, orderedNodes().filter(function(n){
+      return n !== hero && n !== plans;
+    }));
+  }
+
+  /** Ranger SANS déplacer ce qui est déjà à sa place.
+   *
+   * `appendChild` sur un nœud déjà enfant le RETIRE puis le réinsère : c'est
+   * une opération, pas un constat. Le `model-viewer` reçoit alors un
+   * `disconnectedCallback`, reconstruit son contexte WebGL et remet sa caméra
+   * à zéro, et le lecteur vidéo repart. Or cette fonction repasse à 600, 1500,
+   * 3000, 6000 et 10000 ms pour rattraper les rendus tardifs — d'où un modèle
+   * et une vidéo qui « se rafraîchissent toutes les trois secondes »
+   * (propriétaire, 2026-08-06).
+   *
+   * Les passes de rattrapage étaient déjà censées être sans effet quand tout
+   * est en place ; elles ne l'étaient pas. Elles le sont maintenant. */
+  function rangeDans(parent, noeuds){
+    // On vérifie l'état RÉEL — même parent, contigus, dans cet ordre, et en
+    // dernier — plutôt que de comparer des indices : le conteneur peut porter
+    // d'autres enfants devant, et une comparaison depuis zéro échouerait à
+    // chaque passe, donc réinsérerait tout à chaque passe.
+    var ref = null, dejaBon = true;
+    for (var i = noeuds.length - 1; i >= 0; i--){
+      if (noeuds[i].parentElement !== parent
+       || noeuds[i].nextElementSibling !== ref){ dejaBon = false; break; }
+      ref = noeuds[i];
+    }
+    if (dejaBon) return;
+    for (var j = 0; j < noeuds.length; j++) parent.appendChild(noeuds[j]);
   }
 
   window.__atlasLayout = applyLayout;
@@ -3481,10 +4079,13 @@
     var label = (video.label != null) ? String(video.label).trim() : "";
 
     function addLabel(){
-      if (!label) return;
-      var cap = document.createElement("div");
-      cap.className = "media-cap"; cap.style.marginTop = "8px"; cap.textContent = label;
-      wrap.appendChild(cap);
+      // L'ÉTAGE SE LIT À CÔTÉ DU TITRE, PAS SOUS LES VITESSES DE LECTURE.
+      //
+      // Posé en fin de carte, « Rc » flottait sous « 1× 1,5× 2× » sans rien
+      // qualifier : on ne pouvait pas deviner qu'il parlait de la vidéo
+      // au-dessus (owner 2026-08-07). Contre le titre, il le complète.
+      ETIQUETTE_VIDEO = label;
+      poseLetageSurLeTitre();
     }
     // La FORME de la vidéo, connue sans la télécharger : la vignette Drive
     // a les proportions du fichier (vérifié : 640×853 sur une vidéo de scan)
@@ -3843,7 +4444,17 @@
   // pas (mesuré sur le banc : -2,85 1,83 -6,24, la translation d'aucun des deux
   // modèles). Une boucle qui survit à ce qu'elle observe doit tout relire.
   var CAM = { piste: null, offset: null, video: null, frustum: null, scene: null,
-              boucle: 0, dernierT: -1 };
+              boucle: 0, dernierT: -1,
+              // Initialisé EXPLICITEMENT : laissé à `undefined`, `!undefined`
+              // vaut `true`, donc le premier clic allumait ce qui l'était
+              // déjà et paraissait sans effet (mesuré le 2026-08-06).
+              arretVisible: true, pose: null,
+              // Le drone : cible et cap LISSÉS, hauteur et distance figées.
+              // Le PLAN par défaut : c'est la vue qui montre le logement en
+              // entier, et une fiche s'ouvre sur ce qu'on est venu voir.
+              mode: "dessus",
+              drone: { actif: false, cible: null, cap: 0, phi: 58,
+                       distance: 9, dernier: 0, mode: null } };
 
   /** La trace publiée par l'app (`a3.camera-track.v1`), 80 Ko environ. */
   function chargeTrace(video){
@@ -3882,40 +4493,122 @@
       if (!hote) return null;
       var Mesh = ech.constructor, Geo = ech.geometry.constructor;
       var Attr = ech.geometry.attributes.position.constructor;
-      var mat0 = Array.isArray(ech.material) ? ech.material[0] : ech.material;
-      var Mat = mat0.constructor;
-      // L'ouverture arrive DÉJÀ dans le repère de l'image : l'app a fait la
-      // conversion depuis le capteur (paysage) une fois pour toutes. La
-      // reprendre ici dessinerait un volume couché sur une visite debout.
+      // Le matériau se prend sur un maillage qui SAIT émettre.
+      //
+      // Prendre le premier venu suffisait tant que c'en était un standard ;
+      // sur le modèle du rez-de-chaussée c'est un `MeshBasicMaterial`, sans
+      // `emissive` ni `roughness`. Three ignorait alors la moitié des
+      // réglages en le disant en console, et le volume perdait sa lueur.
+      var mat0 = null;
+      mv[symScene].traverse(function(o){
+        if (!o.isMesh || !o.material) return;
+        var m = Array.isArray(o.material) ? o.material[0] : o.material;
+        if (!m) return;
+        if (!mat0) mat0 = m;
+        if (mat0 && !("emissive" in mat0) && ("emissive" in m)) mat0 = m;
+      });
+      if (!mat0) return null;
+      var Mat = mat0.constructor, emet = ("emissive" in mat0);
+      // LES DEUX REPÈRES NE SONT PAS LE MÊME, et c'est tout le piège.
+      //
+      // Le fichier nomme ses ouvertures d'après l'IMAGE : « large » = côté
+      // court de l'image (56,7°), « haute » = côté long (71,4°) — la visite
+      // est filmée téléphone debout. Mais ce volume-ci est bâti dans le repère
+      // de la CAMÉRA ARKit, dont l'axe X suit le côté LONG du capteur, quelle
+      // que soit la façon dont on tient l'appareil. C'est donc l'ouverture
+      // haute qui va sur X et la large sur Y ; la rotation du téléphone est
+      // déjà portée par le quaternion, qui remet le tout debout dans le monde.
+      //
+      // Posé à l'envers, le cône partait couché — « le cône est bizarre »
+      // (propriétaire, 2026-08-06).
       var L = 1.35;
-      var w = L * Math.tan((track.fovWideDeg || 57) * Math.PI / 360);
-      var h = L * Math.tan((track.fovTallDeg || 71) * Math.PI / 360);
-      var c = [[-w,h,-L],[w,h,-L],[w,-h,-L],[-w,-h,-L]], parois = [];
+      var w = L * Math.tan((track.fovTallDeg || 71) * Math.PI / 360);
+      var h = L * Math.tan((track.fovWideDeg || 57) * Math.PI / 360);
+      // Le cadre est retenu : c'est lui qui sert aussi à poser la vidéo dans
+      // le plan de base du cône.
+      CAM.cadre = { w:w, h:h, L:L };
+      var c = [[-w,h,-L],[w,h,-L],[w,-h,-L],[-w,-h,-L]];
+      // UN FAISCEAU QUI S'ÉTEINT, PAS UN SOLIDE.
+      //
+      // Le volume portait aussi son quadrilatère de base, deux fois plus
+      // opaque que les parois — c'était la pièce la plus visible, et elle se
+      // lisait comme une plaque orange posée en travers du plan
+      // (propriétaire, 2026-08-07). Un champ de vision n'a pas de fond : il
+      // s'efface.
+      //
+      // On ne garde donc que les quatre parois, et on leur donne une
+      // transparence par SOMMET : opaques à l'objectif, nulles au bout. Le
+      // faisceau se dissout au lieu de s'arrêter net, et les arêtes franches
+      // qui le faisaient ressembler à un éclat de verre disparaissent avec.
+      var parois = [], teintes = [];
       for (var k = 0; k < 4; k++){
         parois = parois.concat([0,0,0], c[k], c[(k+1)%4]);
+        teintes = teintes.concat([1,1,1,1], [1,1,1,0], [1,1,1,0]);
       }
-      var plan = [].concat(c[0],c[1],c[2],c[0],c[2],c[3]);
-      function piece(v, op){
+      function piece(v, couleurs, op){
         var g = new Geo();
         g.setAttribute("position", new Attr(new Float32Array(v), 3));
+        if (couleurs) g.setAttribute("color", new Attr(new Float32Array(couleurs), 4));
         g.computeVertexNormals();
-        var m = new Mat({ color:0xe8703a, emissive:0xe8703a, emissiveIntensity:1.4,
-                          transparent:true, opacity:op, depthWrite:false, side:2,
-                          roughness:1, metalness:0 });
+        var reglages = { color:0xe8703a, transparent:true, opacity:op,
+                         depthWrite:false, side:2 };
+        if (couleurs) reglages.vertexColors = true;
+        // On ne passe QUE ce que ce matériau-là comprend : Three avertit pour
+        // chaque propriété inconnue, et un avertissement par image noie la
+        // console où je cherche les vrais défauts.
+        if (emet){ reglages.emissive = 0xe8703a; reglages.emissiveIntensity = 1.4; }
+        if ("roughness" in mat0){ reglages.roughness = 1; reglages.metalness = 0; }
+        var m = new Mat(reglages);
         var mesh = new Mesh(g, m); mesh.renderOrder = 999; return mesh;
       }
       var vol = new (hote.constructor)();
-      vol.add(piece(parois, 0.18));
-      vol.add(piece(plan, 0.42));
+      vol.add(piece(parois, teintes, 0.55));
       vol.visible = false;
       hote.add(vol);
       CAM.scene = mv[symScene];
-      // Pas de `catch` muet : une exception avalée m'a caché pendant
-      // plusieurs passes que les hotspots n'étaient jamais créés.
-      try { extraitMurs(mv, hote); }
-      catch (e) { console.warn("[Atlas] mesures indisponibles", e); }
+      // Les mesures ne sont plus armées ici : elles viennent du MODÈLE, pas de
+      // la piste caméra. Les brancher sur la piste les rendait otages d'un
+      // fichier qui peut manquer — et le 2026-08-06, Drive répondant 403, la
+      // fiche perdait ses cotes ET son volume d'un coup, sans dire pourquoi.
       return vol;
     } catch (e){ return null; }
+  }
+
+  /** Tourner un vecteur par un quaternion — sans passer par Three, dont on
+   *  n'a pas les classes sous la main ici. */
+  function tourne(q, v){
+    var x=q[0], y=q[1], z=q[2], w=q[3];
+    var ix =  w*v[0] + y*v[2] - z*v[1],
+        iy =  w*v[1] + z*v[0] - x*v[2],
+        iz =  w*v[2] + x*v[1] - y*v[0],
+        iw = -x*v[0] - y*v[1] - z*v[2];
+    return [ix*w + iw*-x + iy*-z - iz*-y,
+            iy*w + iw*-y + iz*-x - ix*-z,
+            iz*w + iw*-z + ix*-y - iy*-x];
+  }
+
+  /** L'homographie du carré unité vers un quadrilatère (Heckbert).
+   *
+   * C'est la SEULE transformation qui envoie un rectangle sur un quadrilatère
+   * quelconque en gardant les droites droites — donc la seule qui fasse tenir
+   * une image plate dans un cadre vu en perspective. Une transformation affine
+   * n'y suffit pas : elle garde les côtés parallèles, et le plan de base d'un
+   * cône vu de biais n'en a aucun. */
+  function homographie(p){
+    var x0=p[0][0], y0=p[0][1], x1=p[1][0], y1=p[1][1],
+        x2=p[2][0], y2=p[2][1], x3=p[3][0], y3=p[3][1];
+    var dx1=x1-x2, dx2=x3-x2, dx3=x0-x1+x2-x3;
+    var dy1=y1-y2, dy2=y3-y2, dy3=y0-y1+y2-y3;
+    var g, h;
+    var det = dx1*dy2 - dx2*dy1;
+    if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9){ g = 0; h = 0; }
+    else {
+      if (Math.abs(det) < 1e-9) return null;   // quadrilatère dégénéré
+      g = (dx3*dy2 - dx2*dy3) / det;
+      h = (dx1*dy3 - dx3*dy1) / det;
+    }
+    return { a:x1-x0+g*x1, b:x3-x0+h*x3, c:x0,
+             d:y1-y0+g*y1, e:y3-y0+h*y3, f:y0, g:g, h:h };
   }
 
   /** La direction du regard, projetée au sol : -Z de la caméra tourné par le
@@ -3940,10 +4633,37 @@
     var i = Math.max(1, lo);
     var u = Math.min(1, Math.max(0, (temps - T[i-1]) / Math.max(1e-6, T[i] - T[i-1])));
     var a = track.p[i-1], b = track.p[i];
+    // FIABLE, ou DEVINÉE.
+    //
+    // La piste est relevée à 5 Hz, mais elle peut avoir des trous : mesuré sur
+    // ce partage, un seul, de 8,81 s au rez-de-chaussée — 2,9 % de la visite.
+    // Interpoler linéairement à travers neuf secondes ne donne pas une pose
+    // approximative, ça donne une pose INVENTÉE, et la fiche l'afficherait
+    // avec le même aplomb que les autres. Le propriétaire l'a repérée à l'œil
+    // du premier coup (2026-08-07, à 3:41).
+    var ecart = T[i] - T[i-1];
     return {
+      fiable: ecart <= 0.5,
       // La TRANSLATION de recentrage vient du manifeste : le modèle publié est
       // recentré sur son propre plan, et sans elle les poses tombent à 2,5 m à
       // côté du bâtiment (mesuré le 2026-08-06).
+      //
+      // LA HAUTEUR RESTE UNE QUESTION OUVERTE (2026-08-07).
+      //
+      // Mesuré proprement, cône exclu des bornes : avec ce décalage le
+      // téléphone se retrouve à 2,12 m au-dessus du plancher — sur LES DEUX
+      // étages, au centimètre. Sans lui, 0,77 m et 0,66 m. Une visite se filme
+      // vers 1,4 m ; aucune des deux valeurs n'y est.
+      //
+      // La constance des 2,12 m dit qu'il existe bien une relation, décalée
+      // d'environ 70 cm — pas que le décalage soit à jeter. J'ai essayé de
+      // retirer l'axe vertical : mes bornes de plancher incluaient alors le
+      // cône, qui venait de descendre, et je me suis mesuré moi-même. On garde
+      // donc le comportement d'origine, qui est au moins cohérent entre étages.
+      //
+      // La réponse appartient à l'app : qu'elle publie le NIVEAU DU PLANCHER
+      // avec le modèle. La fiche cesserait de déduire une hauteur d'un chiffre
+      // qui ne la porte pas.
       p: [a[0]+(b[0]-a[0])*u + offset[0],
           a[1]+(b[1]-a[1])*u + offset[1],
           a[2]+(b[2]-a[2])*u + offset[2]],
@@ -3957,44 +4677,1147 @@
     var video = document.querySelector("#videoWrap video");
     var f = FLOORS.list[FLOORS.current];
     var offset = f && f.model && f.model.recenterOffset;
-    if (!mv || !video || !CAM.piste || !offset || offset.length !== 3){
-      if (CAM.frustum) CAM.frustum.visible = false;
+    if (mv && video && CAM.piste && offset && offset.length === 3){
+      if (!CAM.frustum) CAM.frustum = construitVolume(mv, CAM.piste);
+      if (CAM.frustum){
+        CAM.offset = offset; CAM.video = video; CAM.dernierT = -1;
+        // Le modèle cesse de s'exhiber dès qu'il a quelque chose à montrer.
+        video.addEventListener("play", function(){
+          try { mv.autoRotate = false; } catch (e) {}
+          // ET LE SURVOL REPREND.
+          //
+          // Prendre la souris l'arrête — c'est juste, le visiteur cadre
+          // lui-même. Mais l'arrêter POUR TOUJOURS ne l'est pas : relancer la
+          // lecture, c'est demander à être emmené (propriétaire, 2026-08-07).
+          //
+          CAM.drone.actif = true;
+          try { mv.setAttribute("interpolation-decay", "450"); } catch (e) {}
+        });
+        // On révèle le GROUPE. Révéler le curseur ici le rouvrait à chaque
+        // passe de boucle, donc le chevron n'aurait jamais pu le refermer.
+        var ba2 = document.querySelector(".atlas-arret");
+        if (ba2) ba2.style.display = "";
+
+      }
+    } else if (CAM.frustum){
+      CAM.frustum.visible = false;
+    }
+    demarreBoucle();
+  }
+
+  // ── LA VIDÉO POSÉE DANS LE CÔNE ───────────────────────────────────────────
+  // Route B : on garde le lecteur natif et on le DÉFORME sur le quadrilatère
+  // du plan de base, projeté à l'écran. Aucune dépendance serveur, aucune
+  // texture — mais la vidéo passe devant les murs, faute de profondeur.
+  // (Route A, un plan texturé dans la scène, donne l'occlusion gratuitement ;
+  //  elle exige que la vidéo soit servie avec les en-têtes CORS.)
+
+  /** Les deux signes qui mettent l'image à l'endroit.
+   *
+   * Le VERTICAL est mesuré : la gravité dit que le haut de l'image est l'axe
+   * −X de la caméra (composante verticale 0,916 contre 0,034 pour Y).
+   *
+   * L'HORIZONTAL, lui, se déduit — il ne se devine pas. Une image n'est pas en
+   * miroir, donc sa droite est imposée par les deux autres axes :
+   *
+   *     droite = avant × haut = (0,0,−1) × (−1,0,0) = (0,+1,0) = +Y
+   *
+   * J'ai d'abord posé −Y, ce qui donnait une image à l'envers. J'ai « corrigé »
+   * d'un demi-tour, en inversant les DEUX signes : le haut est devenu juste, et
+   * l'horizontale est restée fausse — donc une image à l'endroit mais inversée
+   * gauche-droite (propriétaire, 2026-08-06). Un seul signe était à changer, et
+   * le produit vectoriel le disait. */
+  var SENS_V = -1, SENS_H = -1;
+
+  function boiteProjection(){
+    var vis = document.querySelector(".hero-visual");
+    if (!vis) return null;
+    var hote = document.getElementById("atlas-projection");
+    if (hote) return hote;
+    hote = document.createElement("div");
+    hote.id = "atlas-projection";
+    hote.style.cssText = "position:absolute;left:0;top:0;width:0;height:0;" +
+      "pointer-events:none;z-index:3;opacity:0;transition:opacity .25s";
+    vis.appendChild(hote);
+    return hote;
+  }
+
+  /** Pose la vidéo sur le plan de base du cône, pour la pose `s`. */
+  /** L'azimut depuis lequel on regarde DANS LE MÊME SENS que la caméra.
+   *
+   * On se place à l'opposé de la direction du regard : la visionneuse regarde
+   * de sa position vers le centre, donc pour voir comme le téléphone voyait,
+   * il faut être derrière lui. L'image gelée se présente alors de face au lieu
+   * d'être écrasée en losange, et le lien avec la vidéo se lit d'un coup.
+   *
+   * Rend `null` s'il n'y a rien à viser : pas de pose, ou une vidéo que
+   * personne n'a encore examinée. Pendant la LECTURE aussi — l'azimut suivrait
+   * alors les mouvements de la personne qui filme, et le bâtiment tournerait
+   * en permanence sous les yeux du visiteur. */
+  /** Où était le téléphone, dans le repère du modèle. */
+  function positionDuRegard(){
+    return CAM.pose ? CAM.pose.p : null;
+  }
+
+  function azimutDuRegard(){
+    // AUCUNE condition sur la lecture.
+    //
+    // J'exigeais une vidéo en pause et déjà parcourue. Mais un clic sur une
+    // vue est une demande explicite et ponctuelle — pas un suivi continu — et
+    // la refuser donnait un bouton qui n'obéit pas (propriétaire,
+    // 2026-08-06 : « je veux juste que le modèle soit tourné dans le même sens
+    // où la caméra regarde »). Ce qu'il fallait éviter, c'est de tourner le
+    // bâtiment EN PERMANENCE pendant la lecture ; ce n'est pas le cas ici.
+    if (!CAM.pose) return null;
+    var f = avantXZ(CAM.pose.q);
+    var n = Math.hypot(f[0], f[1]);
+    if (!(n > 1e-6)) return null;
+    // LA CONVENTION DE `theta`, établie par mesure sur la caméra RÉELLE :
+    // sa position suit (sin θ, cos θ), donc `atan2(x, z) = θ` — vérifié à
+    // zéro d'écart sur cinq angles.
+    //
+    // Je l'ai pourtant « corrigée » une fois, en croyant lire un décalage dans
+    // mes projections. Il n'y en avait pas : `getCameraOrbit()` rend l'orbite
+    // VISÉE, pas celle où la caméra se trouve, et model-viewer l'y amène en
+    // douceur. Je comparais donc un rendu en vol à des chiffres de consigne —
+    // 4,15 m parcourus sur 5,78 demandés. L'écart que je mesurais était du
+    // mouvement, pas une erreur de repère.
+    // Le lacet de la scène est remis à zéro par `arreteLaRotation`, appelée
+    // par chaque vue avant de cadrer : repère du modèle et repère de la scène
+    // coïncident, donc cet azimut s'utilise tel quel.
+    return Math.atan2(-f[0] / n, -f[1] / n) * 180 / Math.PI;
+  }
+
+  /** LE DRONE : la vue suit la visite, de loin et en retard.
+   *
+   * Pendant la lecture, la caméra accompagne le téléphone au lieu de rester
+   * plantée — « comme un drone qui filme de haut le téléphone qui se
+   * promène » (propriétaire, 2026-08-07).
+   *
+   * Tout tient dans l'AMORTISSEMENT. La main tourne à 28°/s en moyenne, avec
+   * des pointes à 419 : recopier ces mouvements donnerait la nausée. Le drone
+   * traîne donc loin derrière — et c'est ce retard qui le fait lire comme un
+   * drone plutôt que comme une caméra sanglée sur la tête.
+   *
+   * Il ne suit ni le tangage ni le roulis : sa hauteur et sa distance ne
+   * bougent pas. Seuls le point visé et le cap glissent, lentement.
+   *
+   * Et il se tait quand la pose est devinée : voler le long d'un trajet
+   * inventé serait pire que de ne pas bouger. */
+  /** Le panneau vidéo est-il ouvert ?
+   *
+   * Tout ce qui vient de la vidéo — le point, le cône, l'arrêt sur image, le
+   * survol — n'a de sens que si elle est visible. Replié, le panneau laissait
+   * un point orange flotter dans le modèle sans que rien n'en explique la
+   * provenance (propriétaire, 2026-08-07). */
+  function videoOuverte(){
+    var sec = document.getElementById("videoSection");
+    if (!sec || sec.hidden) return false;
+    var fold = sec.querySelector("details.fold");
+    return !fold || fold.open;
+  }
+
+  function animeLaVue(mv, s){
+    if (!videoOuverte()) return;
+    var D = CAM.drone;
+    if (!D || !D.actif || !s || s.fiable === false) return;
+    if (CAM.mode !== "ensemble" && CAM.mode !== "dessus") return;
+    // À L'ARRÊT, ON NE SE FIGE PAS : ON ARRIVE.
+    //
+    // Le survol traîne de plusieurs secondes — c'est ce qui le rend agréable —
+    // donc au moment où l'on met en pause il est presque toujours de travers.
+    // L'arrêter net laissait une vue bancale sur l'instant qu'on voulait
+    // justement examiner. Il continue donc au même rythme, et comme la pose ne
+    // bouge plus, il converge tout seul : il se place dans l'axe du regard,
+    // puis s'immobilise (propriétaire, 2026-08-07).
+    //
+    // C'est aussi ce qui donne à l'arrêt sur image sa meilleure vue : l'image
+    // est posée sur le mur, et la caméra finit par la regarder de face.
+    var fit = mv.__fit; if (!fit) return;
+    var f = avantXZ(s.q), n = Math.hypot(f[0], f[1]);
+    if (!(n > 1e-6)) return;
+    var capVise = Math.atan2(-f[0]/n, -f[1]/n) * 180 / Math.PI;
+
+    // DEUX ANIMATIONS, PAS UNE.
+    //
+    // « Vue d'ensemble » SUIT : le point visé glisse vers la personne, le cap
+    // la suit — c'est le drone. « Vue de dessus » ne suit pas, elle
+    // S'ORIENTE : le plan reste cadré sur le bâtiment et tourne seulement dans
+    // la direction du regard (propriétaire, 2026-08-07). Le plan entier reste
+    // donc toujours visible, et la rotation dit où l'on regarde.
+    var suit = (CAM.mode === "ensemble");
+    var cibleVoulue = suit ? s.p : (fit.centreBrut || fit.centre || s.p);
+    // PLUS DOUX QUE SYNCHRONE.
+    //
+    // Rien n'oblige la vue à coller à la visite : elle raconte où l'on est,
+    // pas où l'on regarde à l'instant près (propriétaire, 2026-08-07). Les
+    // À 60 images par seconde, un coefficient de 0,0035 donne une constante
+    // de temps d'environ CINQ SECONDES : le drone met plusieurs secondes à
+    // rattraper un virage, et c'est exactement ce qui le rend agréable. Un
+    // premier essai à 0,008 le laissait encore à 60 % de la vitesse de la
+    // main — mesuré 4,3° par 200 ms contre 7,4 — et ça se voyait. Le plan,
+    // lui, tourne encore deux fois plus lentement.
+    // TROIS FOIS PLUS VIF À L'ARRÊT.
+    //
+    // Pendant la lecture le survol accompagne, et sa lenteur fait tout son
+    // charme. À la pause il ne poursuit plus rien : il se place. Le même
+    // coefficient lui demandait quinze secondes pour rattraper 95° — trop long
+    // quand on veut voir CET instant (propriétaire, 2026-08-07).
+    //
+    // Le lissage exponentiel garde sa courbe : rapide au départ, de plus en
+    // plus lent en approchant. On ne change que son échelle de temps — environ
+    // cinq secondes en lecture, une seconde et demie à l'arrêt.
+    var vid = document.querySelector("#videoWrap video");
+    var presse = (vid && vid.paused) ? 3 : 1;
+    // LE PLAN CHERCHE SON AXE UN PEU PLUS VITE.
+    //
+    // Il tournait à 0,002 — deux fois plus lentement que le survol — et
+    // mettait environ 19 s à ramener 95° d'écart en lecture, 6 s à l'arrêt.
+    // C'est trop patient pour un mouvement dont le seul rôle est de dire où
+    // pointe le téléphone (owner 2026-08-07). À 0,003 il reste plus calme que
+    // le survol, mais il arrive : environ 12 s en lecture, 4 s à l'arrêt.
+    var lissageCap = (suit ? 0.0035 : 0.003) * presse;
+
+    if (D.cible === null || D.mode !== CAM.mode){
+      D.cible = [cibleVoulue[0], cibleVoulue[1], cibleVoulue[2]];
+      D.cap = capVise; D.mode = CAM.mode;
+    } else {
+      for (var i = 0; i < 3; i++) D.cible[i] += (cibleVoulue[i] - D.cible[i]) * 0.006 * presse;
+      // Le cap prend le chemin le plus court, sinon il fait un tour complet
+      // en passant de 179° à −179°.
+      // TANT QUE RIEN N'A ÉTÉ LU, LE PLAN TOURNE DE LUI-MÊME.
+      //
+      // Il suit le cap du téléphone — mais tant que la vidéo n'a pas bougé, ce
+      // cap est figé et le plan resterait immobile. On lui donne alors sa
+      // propre dérive : une fiche qui s'ouvre doit respirer, pas attendre.
+      //
+      // La dérive REMPLACE le suivi, elle ne s'y ajoute pas. Ajoutée, les deux
+      // s'équilibraient — le rappel vers le cap figé annulait la dérive à huit
+      // degrés d'écart, et le plan s'immobilisait là (mesuré : 0,01°/s).
+      var libre = (!suit && vid && vid.paused && vid.currentTime <= 0.05);
+      if (libre){
+        D.cap += 0.05;                      // environ 3° par seconde
+        D.cap = ((D.cap + 180) % 360 + 360) % 360 - 180;
+      } else {
+        var e = ((capVise - D.cap + 540) % 360) - 180;
+        D.cap += e * lissageCap;
+      }
+    }
+    var maintenant = performance.now();
+    if (maintenant - (D.dernier || 0) < 120) return;  // ~8 consignes par seconde
+    D.dernier = maintenant;
+    var phi = suit ? D.phi : MODEL_TOP_PHI;
+    var dist = suit ? D.distance : fit.radius * MODEL_TOP_RADIUS;
+    mv.setAttribute("camera-target", D.cible[0].toFixed(3) + "m " +
+                    D.cible[1].toFixed(3) + "m " + D.cible[2].toFixed(3) + "m");
+    mv.setAttribute("camera-orbit", D.cap.toFixed(1) + "deg " +
+                    phi + "deg " + dist.toFixed(2) + "m");
+  }
+
+  /** Le cône, borné pour ne jamais sortir du bâtiment.
+   *
+   * Un masque CSS découpe l'image ; le cône est de la géométrie 3D et
+   * dépassait par le haut et par le bas. Plutôt que de reconstruire un
+   * polyèdre tronqué, on le borne en LONGUEUR — et sur la POSE RÉELLE, pas sur
+   * une estimation : une borne tirée de la seule ouverture suppose l'appareil
+   * à l'horizontale, et incliné il ressortait quand même.
+   *
+   * La hauteur de chaque coin de la base est AFFINE en l'échelle : y = pose +
+   * k·d. On cherche le plus grand k qui garde les quatre coins entre plancher
+   * et plafond. Quatre divisions suffisent, et c'est exact.
+   *
+   * Appelée AUSSI par la boucle de dessin : calculée seulement au changement
+   * de temps, elle était perdue dès que le cône était reconstruit — au
+   * réarmement des mesures — et il repartait à l'échelle 1 sans que rien ne le
+   * recalcule, la vidéo étant en pause. */
+  /** À quelle distance ce rayon quitte-t-il l'emprise du bâtiment ? */
+  function sortieDeLEmprise(p, dir){
+    var E = MES.emprise; if (!E) return 1e9;
+    var c = E.c, dx = dir[0], dz = dir[2], meilleur = 1e9;
+    for (var i = 0, j = 3; i < 4; j = i++){
+      var ex = c[i].x - c[j].x, ez = c[i].z - c[j].z;
+      var den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-9) continue;
+      var t = ((c[j].x - p[0]) * ez - (c[j].z - p[2]) * ex) / den;
+      var u = ((c[j].x - p[0]) * dz - (c[j].z - p[2]) * dx) / den;
+      if (t > 1e-4 && u >= 0 && u <= 1 && t < meilleur) meilleur = t;
+    }
+    return meilleur;
+  }
+
+  function ajusteLeCone(s){
+    if (!CAM.frustum || !CAM.cadre || !s) return;
+    var k = CAM.echelle || 1;
+    if (MES.emprise){
+      var marge = 0.05, py = s.p[1], C2 = CAM.cadre;
+      var sg2 = [[1,1],[1,-1],[-1,-1],[-1,1]];
+      for (var i = 0; i < 4; i++){
+        var cc = tourne(s.q, [sg2[i][0]*C2.w, sg2[i][1]*C2.h, -C2.L]);
+        var dy = cc[1];
+        if (dy > 1e-4) k = Math.min(k, (MES.emprise.h - marge - py) / dy);
+        else if (dy < -1e-4) k = Math.min(k, (marge - py) / dy);
+        // ET LA BORNE LATÉRALE, sur L'ENVELOPPE DU BÂTIMENT.
+        //
+        // La longueur venait du mur visé par le rayon CENTRAL. En longeant une
+        // cloison, le centre reste dedans pendant que les coins passent au
+        // travers : mesuré, un coin sortait du bâtiment sur 15,8 % des poses.
+        //
+        // Mais borner sur le PREMIER MUR VENU, cloisons intérieures comprises,
+        // réduisait le faisceau à 66 cm dans une chambre — plus rien à voir.
+        // Ce qu'on veut, c'est qu'il ne quitte pas le bâtiment ; traverser une
+        // cloison intérieure est bien moins choquant que dépasser dehors.
+        var hz = Math.hypot(cc[0], cc[2]);
+        if (hz > 1e-4) k = Math.min(k, sortieDeLEmprise(s.p, cc) / hz);
+      }
+      // Un faisceau reste un REPÈRE : au-delà de deux mètres il commence à
+      // traverser la moitié du logement, et le fondu ne suffit plus à le
+      // faire oublier.
+      k = Math.max(0.15, Math.min(k, 2 / C2.L));
+    }
+    if (Math.abs(CAM.frustum.scale.x - k) > 1e-4){
+      CAM.frustum.scale.setScalar(k);
+      if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
+    }
+  }
+
+  /** Jusqu'où porter le plan de l'image : le MUR REGARDÉ.
+   *
+   * Posée à une distance fixe, l'image ne coïncide avec la géométrie qu'au
+   * point de prise de vue exact. Dès qu'on s'en écarte — et comparer, c'est
+   * bouger — elle ne colle plus qu'à sa propre profondeur, donc à rien.
+   * Portée jusqu'au mur, elle s'y plaque : ses bords épousent la portion de
+   * mur réellement vue, puisque l'ouverture et la distance sont toutes deux
+   * exactes (propriétaire, 2026-08-07 : « c'est la distance qu'on projette »).
+   *
+   * Bornée des deux côtés : un rayon qui file par une porte ouverte donnerait
+   * une image de dix mètres qui masque tout le plan. */
+  function distanceDeProjection(){
+    if (!CAM.pose || !CAM.cadre || !MES.murs || !MES.murs.length) return null;
+    var q = CAM.pose.q, p = CAM.pose.p, C = CAM.cadre;
+    // NEUF RAYONS, ET ON PREND LA MÉDIANE.
+    //
+    // Un seul rayon, au centre, est trop fragile : à 1:36 il s'arrêtait sur un
+    // segment de mur de 69 cm — un montant de porte — alors que la paroi
+    // regardée était derrière. L'image se posait donc trop près, « pas assez
+    // loin vu son angle » (propriétaire, 2026-08-07).
+    //
+    // Neuf rayons répartis dans le champ, et la médiane : un montant clippé
+    // par un ou deux d'entre eux ne décide plus de la distance de tous.
+    var d = [], i, j;
+    for (i = -1; i <= 1; i++) for (j = -1; j <= 1; j++){
+      // Un point du plan de base, décalé de 60 % vers les bords.
+      var l = tourne(q, [i * C.w * 0.6, j * C.h * 0.6, -C.L]);
+      var hx = l[0], hz = l[2], hn = Math.hypot(hx, hz);
+      if (hn < 1e-6) continue;
+      var vise = murRegarde(p[0], p[2], hx, hz);
+      // On ignore les bouts de mur : sous 40 cm, c'est un retour ou un
+      // montant, jamais la surface qu'on regarde.
+      if (!vise || !(vise.t > 0)) continue;
+      if (MES.murs[vise.i] && MES.murs[vise.i].longueur < 0.4) continue;
+      // `t` est horizontale ; le long de CE rayon elle est plus longue.
+      var ln = Math.hypot(l[0], l[1], l[2]) || 1;
+      d.push(vise.t / (hn / ln));
+    }
+    if (!d.length) return null;
+    d.sort(function(a, b){ return a - b; });
+    return Math.max(0.8, Math.min(8, d[d.length >> 1]));
+  }
+
+  /** La TOILE posée dans le cône : une image, pas un lecteur. */
+  function toileArret(){
+    var hote = boiteProjection(); if (!hote) return null;
+    var c = hote.querySelector("canvas");
+    if (!c){
+      c = document.createElement("canvas");
+      c.className = "atlas-arret";
+      c.style.cssText = "position:absolute;left:0;top:0;transform-origin:0 0;" +
+        "display:block;opacity:.88";
+      hote.appendChild(c);
+    }
+    return c;
+  }
+
+  /** Gèle l'image courante de la vidéo dans la toile.
+   *
+   * On DESSINE la vidéo, on ne relit jamais ses pixels : dessiner une vidéo
+   * d'une autre origine dans un canvas est autorisé, c'est la relecture
+   * (`getImageData`, `toDataURL`) qui ne l'est pas. Toute la question CORS
+   * tombe donc — et avec elle la dépendance qui rendait l'autre approche
+   * risquée sur la page publiée.
+   */
+  function geleLimage(){
+    var v = document.querySelector("#videoWrap video");
+    var c = toileArret();
+    if (!v || !c || !v.videoWidth || !v.videoHeight) return false;
+    var L = 360, Ht = Math.round(L * v.videoHeight / v.videoWidth);
+    if (c.width !== L || c.height !== Ht){
+      c.width = L; c.height = Ht;
+      c.style.width = L + "px"; c.style.height = Ht + "px";
+    }
+    c.__w = L; c.__h = Ht;
+    try { c.getContext("2d").drawImage(v, 0, 0, L, Ht); }
+    catch (e){ return false; }
+    return true;
+  }
+
+  /** Pose l'image gelée sur le plan de visée du cône, pour la pose `s`.
+   *
+   * Montrée SEULEMENT à l'arrêt. Pendant la lecture on regarde du mouvement :
+   * il faut la vidéo grande, à droite, et le point qui se déplace. À l'arrêt
+   * on n'est plus en train de regarder mais d'EXAMINER — « c'était où, ça ? » —
+   * et c'est là qu'une image fixe posée dans l'espace répond exactement à la
+   * question. Une image fixe reste lisible petite et de biais ; une vidéo,
+   * non (idée du propriétaire, 2026-08-06).
+   */
+  function plaqueArret(mv, s){
+    var v = document.querySelector("#videoWrap video");
+    var hote = document.getElementById("atlas-projection");
+    // PAS À L'INSTANT ZÉRO.
+    //
+    // Une vidéo qu'on vient de poser est « en pause » sans que personne ne
+    // l'ait mise en pause : c'est son état de départ, pas un examen. Et
+    // l'image de t = 0 est la pire de tout l'enregistrement — on vient
+    // d'appuyer sur enregistrer et on redresse encore l'appareil. Mesuré sur
+    // ce partage : 90° de roulis à l'instant zéro du 2e étage, 38° au
+    // rez-de-chaussée, contre 2° dès la deuxième seconde. Le cône ne mentait
+    // pas, il montrait fidèlement un téléphone couché.
+    //
+    // L'arrêt sur image répond à « je m'arrête pour regarder ça ». Tant que
+    // le visiteur n'a rien fait — ni lu, ni déplacé la barre — il n'y a rien
+    // à montrer.
+    if (v && v.currentTime <= 0.05 && v.paused){
+      if (hote) hote.style.opacity = "0";
       return;
     }
-    if (!CAM.frustum) CAM.frustum = construitVolume(mv, CAM.piste);
-    if (!CAM.frustum) return;
-    CAM.offset = offset; CAM.video = video; CAM.dernierT = -1;
-    if (!CAM.boucle){
-      // Une SEULE boucle, qui ne fait rien tant que le temps de lecture n'a pas
-      // changé. Deviner quels événements le navigateur émet pendant qu'on fait
-      // glisser la barre coûte plus cher que comparer un nombre.
-      (function tourne(){
-        CAM.boucle = requestAnimationFrame(tourne);
-        if (document.hidden || !CAM.piste || !CAM.frustum || !CAM.video || !CAM.offset) return;
+    if (!videoOuverte() || CAM.arretVisible === false || !v || v.paused !== true
+        || !CAM.cadre || !s || s.fiable === false){
+      if (hote) hote.style.opacity = "0";
+      return;
+    }
+    // La toile est CRÉÉE ICI si elle manque. En abandonnant quand elle
+    // n'existait pas encore, plus personne ne la fabriquait — c'était
+    // l'ancien écouteur de pause qui s'en chargeait, et je venais de le
+    // retirer. Une dépendance invisible, cassée en supprimant l'autre bout.
+    var toile = toileArret();
+    if (!toile) return;
+    hote = document.getElementById("atlas-projection");
+    // ON REDESSINE À CHAQUE PASSE, sans chercher à savoir si c'est utile.
+    //
+    // J'avais mis un jeton — source et instant — pour ne regeler qu'au
+    // changement. Il ment : `currentTime` annonce l'instant DEMANDÉ, pas
+    // l'image décodée. Après un déplacement dans la barre, la toile prenait
+    // l'ancienne image et se tamponnait au nouvel instant, donc plus rien ne
+    // la corrigeait — un piano affiché pour un couloir, mesuré le 2026-08-06.
+    //
+    // Redessiner un rectangle de 360 × 480 trente fois par seconde ne coûte
+    // rien, et seulement pendant les pauses. Une optimisation qui peut mentir
+    // vaut moins cher à supprimer qu'à réparer.
+    if (!geleLimage() || !toile.__w){
+      hote.style.opacity = "0"; return;
+    }
+    var C = CAM.cadre, p = s.p, q = s.q, i;
+    // Ordre imposé par l'homographie : haut-gauche, haut-droite, bas-droite,
+    // bas-gauche — c'est l'image du carré unité (0,0) (1,0) (1,1) (0,1).
+    var signes = [[1,1],[1,-1],[-1,-1],[-1,1]], noms = ["v0","v1","v2","v3"];
+    var coins3D = [];
+    for (i = 0; i < 4; i++){
+      var k = CAM.echelle || 1;
+      var l = tourne(q, [signes[i][0]*C.w*SENS_V*k, signes[i][1]*C.h*SENS_H*k, -C.L*k]);
+      coins3D.push([p[0]+l[0], p[1]+l[1], p[2]+l[2]]);
+      mv.updateHotspot({ name:"hotspot-"+noms[i],
+        position:(p[0]+l[0])+" "+(p[1]+l[1])+" "+(p[2]+l[2]) });
+    }
+    var pts = [];
+    for (i = 0; i < 4; i++){
+      var e = ecranHS(mv, "hotspot-"+noms[i]);
+      // Un coin DERRIÈRE l'objectif se projette n'importe où : l'image
+      // deviendrait un barbouillage plein écran. On préfère ne rien montrer.
+      if (!e || !isFinite(e.x) || !isFinite(e.y)
+          || Math.abs(e.x) > 6000 || Math.abs(e.y) > 6000){
+        hote.style.opacity = "0"; return;
+      }
+      pts.push([e.x, e.y]);
+    }
+    var H = homographie(pts);
+    if (!H){ hote.style.opacity = "0"; return; }
+    // ── LE DÉCOUPAGE À LA HAUTEUR DE LA PIÈCE ────────────────────────────
+    //
+    // À cinq mètres, un objectif qui ouvre à 71° embrasse 7,7 m de haut —
+    // dans une pièce qui en fait 2,4. L'image dépassait donc de 2,6 m au-
+    // dessus et en dessous du bâtiment : un rideau qui traverse le plan
+    // (propriétaire, 2026-08-07). Elle n'était pas mal placée, elle était
+    // trop grande pour la pièce.
+    //
+    // On ne touche pas à l'image : on lui pose un MASQUE. `clip-path`
+    // s'exprime dans ses coordonnées propres, donc la transformation
+    // l'emporte avec elle et le GPU compose le tout — rien à redessiner.
+    //
+    // Le quadrilatère est un parallélogramme, donc la hauteur y varie de
+    // façon AFFINE : plancher et plafond y tracent deux droites. On découpe
+    // le carré unité par la bande entre les deux.
+    var masque = "";
+    if (MES.emprise){
+      var hg = coins3D[0], hd = coins3D[1], bg = coins3D[3];
+      var y0 = hg[1], du = hd[1] - hg[1], dv = bg[1] - hg[1];
+      var bas = 0, haut = MES.emprise.h;
+      // Sutherland–Hodgman : on rogne le carré par deux demi-plans.
+      var poly = [[0,0],[1,0],[1,1],[0,1]];
+      var rogne = function(pl, sens){
+        // garde les points où sens*(y(u,v) - pl) >= 0
+        var f = function(pt){ return sens * (y0 + du*pt[0] + dv*pt[1] - pl); };
+        var out = [];
+        for (var k = 0; k < poly.length; k++){
+          var A2 = poly[k], B2 = poly[(k+1) % poly.length];
+          var fa = f(A2), fb = f(B2);
+          if (fa >= 0) out.push(A2);
+          if ((fa >= 0) !== (fb >= 0)){
+            var r = fa / (fa - fb);
+            out.push([A2[0] + (B2[0]-A2[0])*r, A2[1] + (B2[1]-A2[1])*r]);
+          }
+        }
+        poly = out;
+      };
+      rogne(bas, 1); if (poly.length) rogne(haut, -1);
+      if (!poly.length){ hote.style.opacity = "0"; return; }
+      // Si la bande couvre tout, inutile de masquer.
+      if (poly.length < 4 || poly.some(function(pt){
+            return pt[0] > 1e-6 && pt[0] < 1-1e-6 || pt[1] > 1e-6 && pt[1] < 1-1e-6; })){
+        masque = "polygon(" + poly.map(function(pt){
+          return (pt[0]*100).toFixed(2) + "% " + (pt[1]*100).toFixed(2) + "%";
+        }).join(",") + ")";
+      }
+    }
+    if (toile.style.clipPath !== masque) toile.style.clipPath = masque;
+    // PLUS TRANSPARENTE QUAND ON EST À L'OBJECTIF.
+    //
+    // De loin, l'image est une vignette posée dans la pièce : elle doit se
+    // lire, donc rester dense. À l'objectif, elle couvre tout l'écran — et
+    // c'est précisément là qu'on veut voir le modèle À TRAVERS elle, puisque
+    // leur superposition est ce qui prouve que la piste, le recentrage et
+    // l'ouverture sont justes. Opaque, cette vue ne démontrerait rien.
+    var proche = 1;
+    try {
+      var hoteScene = CAM.frustum && CAM.frustum.parent;
+      if (hoteScene && CAM.scene && CAM.scene.camera){
+        var pc = hoteScene.worldToLocal(CAM.scene.camera.position.clone());
+        var d = Math.hypot(pc.x - p[0], pc.y - p[1], pc.z - p[2]);
+        // Fondu entre 0,4 m (on est dedans) et 2 m (on a reculé).
+        proche = Math.max(0, Math.min(1, (2 - d) / 1.6));
+      }
+    } catch (e) {}
+    toile.style.opacity = (CAM.opaciteManuelle != null)
+      ? CAM.opaciteManuelle.toFixed(2)
+      : (0.88 - 0.42 * proche).toFixed(2);
+    // ET LE CÔNE DISPARAÎT quand on est à l'objectif : on se tient à son
+    // sommet, donc on voit l'intérieur de son volume, et il noie l'écran
+    // d'orange. Personne ne voit son propre champ de vision de l'intérieur.
+    var doitVoirLeCone = proche <= 0.5;
+    if (CAM.frustum && CAM.frustum.visible !== doitVoirLeCone){
+      CAM.frustum.visible = doitVoirLeCone;
+      if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
+    }
+    var W = toile.__w, Hh = toile.__h;
+    toile.style.transform = "matrix3d(" +
+      [H.a/W, H.d/W, 0, H.g/W,
+       H.b/Hh, H.e/Hh, 0, H.h/Hh,
+       0, 0, 1, 0,
+       H.c, H.f, 0, 1].join(",") + ")";
+    hote.style.opacity = "1";
+  }
+
+  // ── LA MINICARTE (téléphone) ───────────────────────────────────────────
+  //
+  // Sur un téléphone, la fiche empile tout : le modèle en tête, la vidéo trois
+  // sections plus bas. On ne pouvait donc JAMAIS voir le point et la vidéo
+  // ensemble — toute la correspondance qu'on a construite y était invisible.
+  //
+  // On les réunit : l'un occupe le panneau, l'autre se pose dans un coin, et
+  // un appui les échange. Le plan est grand par défaut — c'est ce que le
+  // client vient voir ; il découvre la visite en appuyant.
+  //
+  // La vignette n'accepte QU'un appui. Des contrôles vidéo sur 140 px sont
+  // inutilisables, et un doigt qui traîne sur un mini-plan ferait tourner la
+  // caméra au lieu de faire défiler la page — le piège classique des modèles
+  // 3D sur mobile.
+  var MINI = window.matchMedia("(max-width: 860px)");
+
+  function styleMinicarte(){
+    if (document.getElementById("atlas-mini-css")) return;
+    var st = document.createElement("style");
+    st.id = "atlas-mini-css";
+    st.textContent =
+      "@media (max-width:860px){" +
+      "body.atlas-minicarte .hero-visual{aspect-ratio:auto;height:min(62vh,540px);" +
+      "max-height:none;overflow:hidden}" +
+      // LE PANNEAU PREND LA FORME DE LA VIDÉO QUAND ELLE EST EN GRAND.
+      //
+      // À 62 vh dans un cadre presque carré, une vidéo en portrait était
+      // bornée par la HAUTEUR : elle n'occupait que 384 px de large sur 601
+      // disponibles, le reste en bandes vides (owner 2026-08-07, « agrandir
+      // verticalement »). Rallonger le cadre aurait aidé sur son écran et
+      // rien changé sur un vrai téléphone, où c'est la largeur qui borne.
+      //
+      // La forme de l'image règle les deux d'un coup : la largeur vaut la
+      // hauteur maximale multipliée par le rapport, plafonnée à la place
+      // disponible. Sur téléphone étroit le panneau reste pleine largeur ;
+      // sur une fenêtre plus large il se resserre et grandit en hauteur.
+      // Dans les deux cas l'image remplit le cadre, sans aucune bande.
+      "body.atlas-minicarte.atlas-video-grande .hero-visual{" +
+      "--h-video:min(78vh,760px);" +
+      "height:auto;aspect-ratio:var(--rapport-video,.75);" +
+      "width:min(100%,calc(var(--h-video) * var(--rapport-video,.75)));" +
+      "max-height:var(--h-video);margin-inline:auto}" +
+      /* La vignette, quelle qu'elle soit. */
+      "body.atlas-minicarte .atlas-vignette{position:absolute;right:10px;bottom:10px;" +
+      "width:38%;max-width:200px;margin:0;z-index:6;border-radius:14px;overflow:hidden;" +
+      "box-shadow:0 6px 22px rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.18);" +
+      "cursor:pointer}" +
+      /* Ce qui n'a pas de sens en petit. */
+      // Le titre de la carte est un `summary`, pas un en-tête à moi : c'est lui
+      // qu'il faut masquer, et je visais à côté.
+      // Le titre ne sert à rien ici : posé sur le plan, il annonce une vidéo
+      // qu'on voit déjà — et en grand il passait PAR-DESSUS la vignette
+      // (propriétaire, 2026-08-07). On le retire dans les deux états.
+      "body.atlas-minicarte #videoSection summary{display:none}" +
+      "body.atlas-minicarte .atlas-vignette summary," +
+      "body.atlas-minicarte .atlas-vignette .floor-pills," +
+      "body.atlas-minicarte .atlas-vignette .video-speeds," +
+      "body.atlas-minicarte .atlas-vignette .media-cap," +
+      "body.atlas-minicarte .atlas-vignette .note{display:none}" +
+      "body.atlas-minicarte .atlas-vignette .fold-body{padding:0}" +
+      // LA VIGNETTE VIDÉO N'EST PAS UNE CARTE — c'est une image posée sur le
+      // plan, comme la vignette du modèle.
+      //
+      // Elle gardait le fond et les 22 px de marge de `.card`. Or ce fond est
+      // à 82 % d'opacité et il se posait sur la carte du modèle, elle-même à
+      // 82 % : deux translucides empilés donnent un bloc opaque, et la vidéo
+      // flottait au milieu d'un cadre sombre (propriétaire, capture du
+      // 2026-08-07). La vignette du modèle, elle, est une visionneuse 3D sans
+      // fond — d'où l'asymétrie. Le contour, l'ombre et les coins arrondis
+      // restent : ils viennent de la règle commune aux deux vignettes.
+      "body.atlas-minicarte #videoSection.atlas-vignette{background:transparent;" +
+      "padding:0;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      // Une vignette est une VIGNETTE : on borne sa hauteur et on recadre
+      // l'image, sinon une vidéo en portrait occupe les deux tiers du plan.
+      "body.atlas-minicarte .atlas-vignette{height:34%;max-height:190px}" +
+      "body.atlas-minicarte .atlas-repliee{display:none}" +
+      // Le plan en vignette : même coin, même taille que la vidéo. La règle
+      // de la fiche le colle en `inset:0`, il faut donc être plus fort.
+      // LE PLAN SE POSE AU-DESSUS DE LA BARRE DE LECTURE.
+      //
+      // À 10 px du bas il recouvrait le plein écran et le menu du lecteur
+      // natif (owner 2026-08-07). Seule la vignette du PLAN est concernée :
+      // quand c'est la vidéo qui est en vignette sur le plan, il n'y a aucun
+      // contrôle à dégager, et elle garde donc le coin bas.
+      "body.atlas-minicarte .hero-visual model-viewer.atlas-vignette{" +
+      "position:absolute!important;inset:auto 10px 58px auto!important;" +
+      "width:38%!important;max-width:200px!important;height:34%!important;" +
+      "max-height:190px!important;border-radius:14px!important;z-index:6!important;" +
+      "box-shadow:0 6px 22px rgba(0,0,0,.5)}" +
+      // EN GRAND, LA CARTE VIDÉO DISPARAÎT — il ne reste que l'image.
+      //
+      // Elle gardait son fond, sa bordure et ses coins arrondis pendant que le
+      // plan, lui, occupe le panneau bord à bord : un cadre dans un cadre
+      // (propriétaire, 2026-08-07). La vidéo est en portrait dans un panneau
+      // presque carré, donc elle ne peut pas le remplir — mais les bandes
+      // doivent se fondre dans le panneau, pas dans une carte.
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette){" +
+      "background:transparent!important;border:0!important;box-shadow:none!important;" +
+      "padding:0!important;border-radius:0!important}" +
+      // Une hauteur en pourcentage a besoin d'un parent qui en ait une : sans
+      // ça, la vidéo se calait sur sa taille naturelle et débordait de 90 px
+      // hors du panneau, coupée par le bord.
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) details.fold," +
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) .fold-body," +
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) #videoWrap{height:100%}" +
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) .fold-body{padding:0}" +
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) .video-box{" +
+      "height:100%;display:flex;align-items:center;justify-content:center}" +
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) video{" +
+      "width:100%!important;height:100%!important;object-fit:contain;" +
+      "max-width:none!important;max-height:none!important;aspect-ratio:auto!important;" +
+      "background:transparent}" +
+      // Les pastilles d'étage restent lisibles par-dessus l'image.
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) .floor-pills{" +
+      "position:absolute;left:10px;top:10px;z-index:7;margin:0}" +
+      // LES VITESSES PASSENT DEVANT L'IMAGE, PAS DERRIÈRE.
+      //
+      // En grand, la vidéo est posée en absolu sur tout le panneau : elle
+      // recouvrait la rangée, qui ne dépassait plus que dans la bande vide à
+      // gauche — « 2× » coupé net au bord de l'image (owner 2026-08-07).
+      // Elles reprennent le coin que les pastilles d'étage occupaient avant
+      // de monter dans l'en-tête.
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) .video-speeds{" +
+      "position:absolute;left:10px;top:10px;z-index:8;margin:0}" +
+      "body.atlas-minicarte .atlas-vignette .video-box{height:100%}" +
+      // `contain`, pas `cover` : on veut la vidéo EN ENTIER (owner 2026-08-07).
+      // Le cadre prend la forme de l'image juste en dessous, donc il n'y a
+      // aucune bande vide à craindre — et tant que les dimensions de la vidéo
+      // sont inconnues, mieux vaut une image complète qu'une image rognée.
+      "body.atlas-minicarte .atlas-vignette video{width:100%!important;height:100%!important;" +
+      "object-fit:contain;display:block;pointer-events:none;max-width:none!important;" +
+      "max-height:none!important;aspect-ratio:auto!important}" +
+      // Les contrôles natifs sont inutilisables à cette taille — on les
+      // cache plutôt que de basculer `controls`, que la fiche remet à chaque
+      // changement d'étage.
+      "body.atlas-minicarte .atlas-vignette video::-webkit-media-controls{display:none!important}" +
+      // UN TRIANGLE DE LECTURE SUR LA VIGNETTE VIDÉO.
+      //
+      // Une image fixe de 119 px ne se distingue pas d'une photo : rien ne
+      // disait qu'il y avait une vidéo à lancer, et le seul bouton visible
+      // était celui des unités (owner 2026-08-07). Le triangle le dit, et
+      // l'appui lance vraiment la lecture — voir `echangeMinicarte`.
+      "body.atlas-minicarte #videoSection.atlas-vignette:not(.atlas-joue)::before{content:\"\";" +
+      "position:absolute;left:50%;top:50%;width:42px;height:42px;margin:-21px 0 0 -21px;" +
+      "border-radius:50%;background:rgba(7,27,40,.55);z-index:8;pointer-events:none;" +
+      "box-shadow:0 2px 10px rgba(0,0,0,.45);" +
+      "background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'" +
+      " viewBox='0 0 24 24'><path fill='white' d='M9 6.5v11l9-5.5z'/></svg>\");" +
+      "background-repeat:no-repeat;background-position:center;background-size:22px}" +
+      // L'ÉCHANGE APPARTIENT AU ⇄, ET LE ⇄ EST UN VRAI BOUTON.
+      //
+      // C'était un décor — un pseudo-élément sans écouteur — et c'est le
+      // corps entier de la vignette qui échangeait. Deux conséquences : le
+      // symbole ne faisait rien quand on visait juste, et un appui sur la
+      // vidéo échangeait au lieu de la jouer (owner 2026-08-07).
+      "body.atlas-minicarte .atlas-bascule{display:flex}" +
+      /* La barre se réduit : une minicarte est toujours en vue de dessus
+         orientée, il n\u2019y a plus de vue à choisir. */
+      // `!important` parce que ces éléments portent un style EN LIGNE posé par
+      // mon propre code : sans lui, la feuille de style perd.
+      // TOUT À GAUCHE EN MINICARTE : le coin bas droit est à la vignette.
+      //
+      // La barre écarte ses deux groupes aux extrémités. Sur grand écran
+      // c'est ce qu'on veut ; ici le groupe de droite atterrissait SOUS la
+      // vignette et le bouton d'unités devenait intouchable — vérifié, c'est
+      // la vidéo qu'on atteint à cet endroit.
+      "body.atlas-minicarte .hero-controls{justify-content:flex-start}" +
+      // Les vues ne disparaissent QUE lorsque le plan est en vignette.
+      //
+      // Je les cachais dans tout le mode minicarte, avec pour raison qu'une
+      // vignette est toujours vue de dessus. Vrai pour la vignette — faux
+      // pour le plan en grand, où il ne restait alors que le bouton d'unités
+      // et aucun moyen de changer de vue (owner 2026-08-07).
+      "body.atlas-minicarte.atlas-video-grande .hero-controls .view-btns," +
+      "body.atlas-minicarte .hero-controls .atlas-mesures," +
+      "body.atlas-minicarte .hero-controls .atlas-opacite," +
+      "body.atlas-minicarte .hero-controls .atlas-arret{display:none!important}" +
+      "}";
+    document.head.appendChild(st);
+  }
+
+  function minicarte(){
+    var vis = document.querySelector(".hero-visual");
+    var sec = document.getElementById("videoSection");
+    var main = document.getElementById("fiche");
+    if (!vis || !sec || !main) return;
+    styleMinicarte();
+
+    if (!MINI.matches){
+      // Retour au grand écran : on rend la carte à sa colonne, ET ON EFFACE
+      // TOUT.
+      //
+      // L'échange pose un style EN LIGNE — `position:absolute; inset:0` — sur
+      // celle qui passe en grand. Ne pas l'effacer laissait la carte vidéo
+      // couvrir la page entière sur grand écran, 1500 × 807 depuis le coin
+      // supérieur gauche (propriétaire, 2026-08-07). Un état de mise en page
+      // qui survit à son contexte est pire que pas de mise en page du tout.
+      var etaitMini = document.body.classList.contains("atlas-minicarte");
+      var mvD = document.querySelector("model-viewer.model3d");
+      sec.classList.remove("atlas-vignette", "atlas-repliee");
+      sec.style.cssText = "";
+      // LA VIDÉO AUSSI porte un style en ligne — le même piège, sur un autre
+      // élément. Posé pour qu'elle remplisse le panneau en minicarte, il la
+      // laissait flotter par-dessus sa carte une fois revenu au grand écran
+      // (propriétaire, 2026-08-07).
+      var vD = sec.querySelector("video");
+      if (vD){ vD.style.cssText = ""; vD.controls = true; }
+      if (mvD){
+        mvD.classList.remove("atlas-vignette");
+        try { mvD.setAttribute("camera-controls", ""); } catch (e) {}
+      }
+      if (etaitMini){
+        document.body.classList.remove("atlas-minicarte");
+        main.appendChild(sec);
+        if (window.__atlasLayout) window.__atlasLayout();
+        // La hauteur du panneau 3D est calée sur la carte vidéo. Mesurée quand
+        // la carte était une vignette, elle n'a plus aucun sens ici : on
+        // recalcule une fois que la colonne a repris sa forme.
+        setTimeout(function(){ if (CAM.cale) CAM.cale(); ajusteLePoint(); }, 350);
+        setTimeout(function(){ if (CAM.cale) CAM.cale(); }, 1200);
+      }
+      return;
+    }
+    document.body.classList.add("atlas-minicarte");
+    setTimeout(ajusteLePoint, 60);
+    brancheBalayage();
+    if (sec.parentElement !== vis){
+      vis.appendChild(sec);
+      sec.classList.add("atlas-vignette");
+      var fold = sec.querySelector("details.fold");
+      if (fold) fold.open = true;
+      // REPLIÉE, ELLE S'EFFACE. Une carte fermée n'a rien à occuper — le plan
+      // doit reprendre toute la place, pas la partager avec un rectangle vide.
+      var fold2 = sec.querySelector("details.fold");
+      if (fold2) fold2.addEventListener("toggle", function(){
+        sec.classList.toggle("atlas-repliee", !fold2.open);
+        if (!fold2.open){       // on remet le plan en grand en refermant
+          sec.classList.add("atlas-vignette");
+          sec.style.cssText = "";
+          var mv2 = document.querySelector("model-viewer.model3d");
+          if (mv2) mv2.classList.remove("atlas-vignette");
+        }
+      });
+      sec.addEventListener("click", function(e){
+        if (!MINI.matches) return;
+        if (!sec.classList.contains("atlas-vignette")) return;
+        e.preventDefault(); e.stopPropagation();
+        // LE CORPS DE LA VIGNETTE JOUE ET MET EN PAUSE. L'échange appartient
+        // au bouton ⇄ : sur une vidéo, appuyer veut dire lire.
+        var vv = sec.querySelector("video");
+        if (!vv) return;
+        if (vv.paused){
+          try { var pr = vv.play(); if (pr && pr.catch) pr.catch(function(){}); }
+          catch (err) {}
+        } else vv.pause();
+      }, true);
+    }
+    // PLUS AUCUN ÉCHANGE DEPUIS LE CORPS DU PLAN.
+    //
+    // Il y en avait un, posé quand le ⇄ n'était qu'un décor. Il volait
+    // maintenant les gestes de la caméra : un appui sans glissement échangeait
+    // au lieu de laisser tourner le modèle. Le ⇄ est le seul échange, dans les
+    // deux sens.
+  }
+
+  /** LE BALAYAGE : le doigt déplace le temps.
+   *
+   * La barre native fait deux millimètres de haut sur un téléphone — au pouce,
+   * on tombe rarement où l'on veut. Et c'est précisément notre fonction qui
+   * récompense le déplacement dans le temps : s'arrêter sur un instant pose
+   * l'image sur le mur et amène la caméra dans l'axe.
+   *
+   * RELATIF, pas absolu. Une largeur d'écran pour cinq minutes vaudrait trois
+   * quarts de seconde par pixel : impossible de viser. Une largeur vaut donc
+   * 25 secondes, et l'on répète pour aller loin.
+   *
+   * HORIZONTAL seulement, et tranché tôt : au-delà de huit pixels, on décide
+   * une fois pour toutes si le geste appartient au temps ou au défilement de
+   * la page. Voler le défilement est le pire défaut possible sur mobile.
+   *
+   * Et JAMAIS sur la barre native : les quarante derniers pixels restent au
+   * lecteur.
+   */
+  var LARGEUR_VAUT = 25;          // secondes parcourues par une largeur d'écran
+
+  function brancheBalayage(){
+    var v = document.querySelector("#videoWrap video");
+    if (!v || v.__atlasBalayage) return;
+    v.__atlasBalayage = true;
+    var x0 = 0, y0 = 0, t0 = 0, etat = null, large = 1;
+
+    v.addEventListener("touchstart", function(e){
+      if (!MINI.matches || e.touches.length !== 1) return;
+      var sec = document.getElementById("videoSection");
+      if (sec && sec.classList.contains("atlas-vignette")) return;  // vignette : appui = échange
+      var r = v.getBoundingClientRect();
+      var t = e.touches[0];
+      if (t.clientY > r.bottom - 44) return;      // la barre native commande
+      x0 = t.clientX; y0 = t.clientY; t0 = v.currentTime;
+      large = r.width || 1; etat = "indecis";
+    }, { passive: true });
+
+    v.addEventListener("touchmove", function(e){
+      if (!etat || e.touches.length !== 1) return;
+      var t = e.touches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+      if (etat === "indecis"){
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        etat = (Math.abs(dx) > Math.abs(dy)) ? "balaye" : "defile";
+        if (etat === "balaye" && !v.paused) v.pause();   // l'arrêt sur image apparaît
+        cacheIndice();
+      }
+      if (etat !== "balaye") return;
+      e.preventDefault();                                // on garde le geste
+      var duree = v.duration || 0;
+      if (!duree) return;
+      var vise = t0 + (dx / large) * LARGEUR_VAUT;
+      v.currentTime = Math.max(0, Math.min(duree - 0.05, vise));
+    }, { passive: false });
+
+    var fin = function(){ etat = null; };
+    v.addEventListener("touchend", fin);
+    v.addEventListener("touchcancel", fin);
+  }
+
+  /** Personne ne balaie si rien ne le dit — même problème que la vignette. */
+  function montreIndice(){
+    var sec = document.getElementById("videoSection");
+    if (!sec || !MINI.matches || sec.classList.contains("atlas-vignette")) return;
+    if (sec.querySelector(".atlas-indice")) return;
+    var i = document.createElement("div");
+    i.className = "atlas-indice";
+    i.textContent = (lang === "fr") ? "\u2194 glisser pour parcourir"
+                                    : "\u2194 swipe to scrub";
+    i.style.cssText = "position:absolute;left:50%;bottom:64px;transform:translateX(-50%);" +
+      "z-index:8;font:600 12px -apple-system,BlinkMacSystemFont,sans-serif;color:#fff;" +
+      "background:rgba(8,20,28,.72);padding:6px 12px;border-radius:999px;" +
+      "pointer-events:none;transition:opacity .5s";
+    sec.appendChild(i);
+    setTimeout(cacheIndice, 3500);
+  }
+  function cacheIndice(){
+    var i = document.querySelector(".atlas-indice");
+    if (!i) return;
+    i.style.opacity = "0";
+    setTimeout(function(){ if (i.parentElement) i.parentElement.removeChild(i); }, 600);
+  }
+
+  /** L'échange : ce qui était grand devient vignette, et l'inverse. */
+  function echangeMinicarte(){
+    var vis = document.querySelector(".hero-visual");
+    var sec = document.getElementById("videoSection");
+    var mv = document.querySelector("model-viewer.model3d");
+    if (!vis || !sec || !mv) return;
+    var videoGrande = sec.classList.contains("atlas-vignette");
+    if (videoGrande){
+      sec.classList.remove("atlas-vignette");
+      sec.style.cssText = "position:absolute;inset:0;margin:0;z-index:4";
+      mv.classList.add("atlas-vignette");
+      // ON GARDE LES COMMANDES SUR LA VIGNETTE.
+      //
+      // Le corps de la vignette vidéo fait le métier de la vidéo — lire ; le
+      // corps de la vignette du plan doit faire le sien — tourner (owner
+      // 2026-08-07). L'échange appartient au ⇄, plus au corps.
+      //
+      // `touch-action="pan-y"` est la parade au piège classique : sans elle,
+      // un modèle 3D capture le doigt et la page ne défile plus dès qu'on
+      // touche la vignette. Ici, glisser verticalement fait défiler la page,
+      // glisser horizontalement fait tourner le modèle — et c'est l'axe utile
+      // pour un plan. Zoom et déplacement sont coupés : dans 140 px ils ne
+      // servent qu'à se perdre.
+      try {
+        mv.setAttribute("camera-controls", "");
+        mv.setAttribute("touch-action", "pan-y");
+        mv.setAttribute("disable-zoom", "");
+        mv.setAttribute("disable-pan", "");
+        // ET ON CALME LA ROTATION.
+        //
+        // model-viewer rapporte le glissement à la LARGEUR de l'élément :
+        // dans une vignette de 153 px, 80 px de doigt faisaient tourner de
+        // 157° — un demi-tour pour un geste minuscule (mesuré le
+        // 2026-08-07). 0,35 rend au petit cadre la sensibilité du grand,
+        // dont il fait à peu près le tiers.
+        mv.setAttribute("orbit-sensitivity", "0.35");
+      } catch (e) {}
+      var v = sec.querySelector("video");
+      if (v){
+        v.controls = true;
+        // On NE force plus la lecture ici : agrandir et lire sont devenus
+        // deux gestes distincts, le ⇄ et le corps de la vignette. Une vidéo
+        // qui démarre parce qu'on a changé de cadrage est une surprise.
+        // LE STYLE EN LIGNE, PARCE QUE LA FICHE EN POSE UN AUSSI.
+        //
+        // `applyShape` écrit largeur, hauteur et rapport directement sur
+        // l'élément à chaque re-rendu : une feuille de style, même en
+        // `!important`, ne suffit pas à le tenir — la vidéo repartait à sa
+        // taille naturelle et débordait de 90 px hors du panneau.
+        // EN POSITION ABSOLUE sur la carte, plutôt qu'en pourcentage.
+        //
+        // Une hauteur en pourcentage doit traverser toute la chaîne
+        // `details → fold-body → videoWrap → video-box`, et il suffit qu'un
+        // maillon n'ait pas de hauteur définie pour qu'elle retombe sur la
+        // taille naturelle — la vidéo restait à 628 px dans un panneau de 538,
+        // même avec `!important` et un style en ligne. En se calant sur la
+        // carte, elle n'a plus besoin de personne.
+        v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;" +
+          "object-fit:contain;display:block;max-width:none;max-height:none;" +
+          "aspect-ratio:auto;background:transparent";
+      }
+    } else {
+      sec.classList.add("atlas-vignette");
+      sec.style.cssText = "";
+      mv.classList.remove("atlas-vignette");
+      // En grand, il reprend TOUTES ses commandes.
+      //
+      // ON RÉÉCRIT LES DÉFAUTS, ON NE RETIRE PAS LES ATTRIBUTS.
+      //
+      // `removeAttribute("orbit-sensitivity")` ne rend pas la valeur par
+      // défaut : il met la propriété à `null`, la rotation est multipliée par
+      // rien, et le grand modèle ne tournait plus DU TOUT après un échange
+      // (mesuré le 2026-08-07 — 0° pour 160 px de glissement). Les défauts
+      // sont lus sur un exemplaire neuf du composant : sensibilité 1,
+      // `touch-action` à « none ».
+      try {
+        mv.setAttribute("camera-controls", "");
+        mv.setAttribute("touch-action", "none");
+        mv.setAttribute("orbit-sensitivity", "1");
+        mv.removeAttribute("disable-zoom");   // booléens : l'absence EST le défaut
+        mv.removeAttribute("disable-pan");
+      } catch (e) {}
+      var v2 = sec.querySelector("video");
+      if (v2){
+        v2.controls = false;
+        v2.style.cssText = "";      // la vignette est habillée par la feuille
+      }
+    }
+    setTimeout(ajusteLePoint, 60);
+    brancheBalayage();
+    if (!sec.classList.contains("atlas-vignette")) montreIndice(); else cacheIndice();
+  }
+
+  /** Branche les mesures sur le modèle affiché, et les rebranche quand il
+   *  change.
+   *
+   * Volontairement HORS de la boucle d'animation : un onglet en arrière-plan
+   * n'en reçoit aucune image, et l'armement s'y serait arrêté — la page
+   * revenait au premier plan sans cotes, sans que rien ne le dise. */
+  function brancheModele(){
+    var mv = document.querySelector("model-viewer.model3d");
+    if (!mv) return;
+    if (!mv.__atlasEcoute){
+      mv.__atlasEcoute = true;
+      // Changer d'étage ne remplace PAS l'élément : le même en reçoit un
+      // autre modèle (vérifié au banc). Guetter l'élément ne verrait donc
+      // jamais rien — c'est le CHARGEMENT qu'il faut guetter, et il faut
+      // alors tout refaire : ancrages, murs, emprise, et le volume de visée
+      // dont la scène a changé sous lui.
+      mv.addEventListener("load", function(){
+        MES.mv = null; MES.sale = true; brancheModele();
+      });
+      // Tourner le modèle, ou passer en vue de dessus, doit redessiner.
+      mv.addEventListener("camera-change", function(){ MES.sale = true; });
+    }
+    if (mv !== MES.mv && mv.loaded && armeMesures(mv)){
+      CAM.frustum = null;
+      suitLaCamera();
+    }
+  }
+
+  /** UNE boucle pour toute la page, et elle tourne même sans vidéo.
+   *
+   * Avant, elle n'existait que si une piste caméra avait pu être chargée, et
+   * elle ne redessinait QUE lorsque le temps de lecture changeait. Deux
+   * conséquences vues le 2026-08-06 : sans piste (Drive en 403) il n'y avait
+   * aucune cote, et tourner le modèle ou passer en « vue de dessus » laissait
+   * les cotes plantées à leur ancienne place — « les mesures ne suivent pas le
+   * modèle ». Le prototype, lui, redessinait à chaque image. */
+  function demarreBoucle(){
+    if (CAM.boucle) return;
+    (function tourne(){
+      CAM.boucle = requestAnimationFrame(tourne);
+      if (document.hidden) return;
+      var mv = document.querySelector("model-viewer.model3d");
+      if (!mv) return;
+      if (CAM.piste && CAM.frustum && CAM.video && CAM.offset){
         var t = CAM.video.currentTime;
-        if (t === CAM.dernierT) return;
-        CAM.dernierT = t;
-        var s = poseA(CAM.piste, CAM.offset, t);
-        CAM.frustum.position.set(s.p[0], s.p[1], s.p[2]);
-        CAM.frustum.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
-        CAM.frustum.visible = true;
-        // model-viewer redessine À LA DEMANDE : déplacer un objet dans sa
-        // scène ne la marque pas sale, donc le volume ne bougeait qu'au
-        // moment où autre chose déclenchait un rendu — d'où les saccades.
-        // Dans le prototype, la mise à jour d'un hotspot à chaque image
-        // salissait la scène par effet de bord ; ici il faut le demander.
-        if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
-        var mvNow = document.querySelector("model-viewer.model3d");
-        if (mvNow){
-          try { mvNow.updateHotspot({ name:"hotspot-cam",
+        if (t !== CAM.dernierT){
+          CAM.dernierT = t;
+          var s = poseA(CAM.piste, CAM.offset, t);
+          // La pose est RETENUE : la projection de la vidéo doit se remettre à
+          // jour quand on tourne le modèle, pas seulement quand la lecture
+          // avance.
+          CAM.pose = s;
+          CAM.frustum.position.set(s.p[0], s.p[1], s.p[2]);
+          CAM.frustum.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
+          CAM.frustum.visible = (s.fiable !== false) && videoOuverte();
+          // Le cône s'étire jusqu'au mur. Une échelle UNIFORME conserve
+          // l'ouverture et ne déplace que la base : le volume reste le champ
+          // de vision, il va simplement jusqu'à ce qu'il rencontre.
+          var Lv = distanceDeProjection();
+          // Quand le rayon ne touche rien — une porte ouverte, une pièce en L
+          // — on GARDE la dernière distance connue. Retomber sur une valeur
+          // fixe ferait sauter la taille de l'image d'une image à l'autre,
+          // pour une raison que le visiteur ne peut pas deviner.
+          if (Lv && CAM.cadre) CAM.echelle = Lv / CAM.cadre.L;
+          else if (!CAM.echelle) CAM.echelle = 1;
+          // LE CÔNE EST BORNÉ, L'IMAGE NON.
+          //
+          // Un masque CSS découpe l'image ; le cône, lui, est de la géométrie
+          // 3D et sortait du bâtiment par le haut et par le bas. Plutôt que de
+          // reconstruire un polyèdre tronqué à chaque image, on le borne en
+          // LONGUEUR : au-delà d'une certaine distance son volume dépasse
+          // forcément la hauteur de la pièce.
+          //
+          //     L = hauteur / (2·tan(ouverture/2))
+          //
+          // Ici 2,38 / 1,437 = 1,66 m. Le cône devient alors un repère court —
+          // « la caméra était là, elle regardait par là » — et l'image, posée
+          // plus loin sur le mur, dit ce qu'elle voyait.
+          ajusteLeCone(s);
+          // model-viewer redessine À LA DEMANDE : déplacer un objet dans sa
+          // scène ne la marque pas sale, donc le volume ne bougeait qu'au
+          // moment où autre chose déclenchait un rendu — d'où les saccades.
+          if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
+          try { mv.updateHotspot({ name:"hotspot-cam",
                   position: s.p[0] + " " + s.p[1] + " " + s.p[2] }); } catch (e) {}
           try { suitLeMur(s.p[0], s.p[2], avantXZ(s.q)[0], avantXZ(s.q)[1]); } catch (e) {}
-          try { dessineMesures(mvNow); } catch (e) {}
         }
-      })();
-    }
-    // Le modèle cesse de s'exhiber dès qu'il a quelque chose à montrer.
-    video.addEventListener("play", function(){ try { mv.autoRotate = false; } catch (e) {} });
+      }
+      // ON REDESSINE À CADENCE FIXE, SANS CONDITION.
+      //
+      // J'ai conditionné le redessin d'abord au temps de lecture, puis à
+      // l'événement `camera-change`. Les deux fois, le modèle qui tourne sur
+      // lui-même avant la lecture laissait les cotes plantées en l'air —
+      // « les dimensions ne suivent pas le modèle qui tourne tout seul »
+      // (propriétaire, 2026-08-06). Parier sur les événements qu'une
+      // bibliothèque émet pendant sa propre animation coûte plus cher que de
+      // recalculer : le prototype redessinait à chaque image, et il était
+      // fluide.
+      //
+      // Ce qui protège la vidéo voisine, ce n'est pas la condition : c'est le
+      // plafond à 30 Hz, et surtout la comparaison du tracé dans
+      // `dessineMesures`, qui n'écrit dans le DOM que s'il a changé.
+      // Le point et le cône se cachent avec le panneau. On n'écrit que lorsque
+      // l'état CHANGE : sinon c'est une modification de style à chaque image
+      // pour rien.
+      var ouvert = videoOuverte();
+      if (ouvert !== CAM.videoOuverte){
+        CAM.videoOuverte = ouvert;
+        var pt = mv.querySelector('[slot="hotspot-cam"]');
+        if (pt) pt.style.display = ouvert ? "" : "none";
+      }
+      if (!ouvert && CAM.frustum && CAM.frustum.visible){
+        CAM.frustum.visible = false;
+        if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
+      }
+      // Ceinture : si le point n'a aucune dimension, on le remet en forme.
+      // Il est créé au moment où le modèle s'arme, dans un ordre que je me
+      // suis déjà trompé à écrire une fois.
+      var pt0 = document.querySelector(".atlas-point");
+      if (pt0 && !pt0.style.width) ajusteLePoint();
+      // La moitié allumée du segment doit dire la vue RÉELLE, pas la dernière
+      // cliquée : la ronde d'ouverture change de vue sans que personne clique,
+      // et un segment dont aucune moitié n'est allumée se lit comme cassé.
+      synchroniseLeSegment();
+      ajusteLaVignette();
+      poseLeBoutonDechange();
+      // Le survol s'arme dès que TOUT est là — piste, boutons, ronde.
+      //
+      // Il était armé dans `suitLaCamera`, qui peut tourner avant que les
+      // boutons de vue n'existent : dans ce cas il ne s'armait jamais, et
+      // rien ne bougeait (mesuré le 2026-08-07). Ici on réessaie à chaque
+      // passe jusqu'à ce que ce soit possible, puis plus jamais.
+      // Le lecteur est recréé à chaque changement d'étage : on réarme le
+      // balayage depuis la boucle, avec un verrou sur l'élément lui-même.
+      if (MINI.matches) { try { brancheBalayage(); } catch (e) {} }
+      if (CAM.ronde && CAM.ronde.actif && !CAM.ronde.arme && CAM.piste){
+        var vues = document.querySelectorAll(".view-btns .view-btn");
+        if (vues.length >= 2){
+          CAM.ronde.arme = true;
+          CAM.ronde.demarre([vues[0], vues[1]]);
+          CAM.drone.actif = true;
+        }
+      }
+      if (CAM.pose) { try { animeLaVue(mv, CAM.pose); } catch (e) {} }
+      var maintenant = performance.now();
+      if (maintenant - (MES.dessine || 0) >= 32){
+
+        MES.dessine = maintenant; MES.sale = false;
+        if (MES.emprise) { try { dessineMesures(mv); } catch (e) {} }
+        try { ajusteLeCone(CAM.pose); } catch (e) {}
+        try { plaqueArret(mv, CAM.pose); } catch (e) {}
+      }
+    })();
   }
 
   /** Appelé quand l'étage change ou quand la vidéo est (re)posée. */
@@ -4003,6 +5826,11 @@
     var v = f && f.video;
     if (CAM.frustum){ CAM.frustum.visible = false; }
     CAM.piste = null; CAM.offset = null; CAM.video = null; CAM.dernierT = -1;
+    // L'arrêt sur image appartient à l'étage qu'on quitte : le garder
+    // afficherait la pièce d'à côté en la donnant pour celle-ci.
+    CAM.pose = null;
+    var vue = document.getElementById("atlas-projection");
+    if (vue) vue.style.opacity = "0";
     // Le volume appartient à la scène du modèle : changer d'étage change de
     // modèle, donc il faut le reconstruire.
     CAM.frustum = null;
@@ -4045,20 +5873,105 @@
     var barre = visuel && visuel.querySelector(".hero-controls");
     if (barre && !barre.querySelector(".atlas-unit")){
       var bm = document.createElement("button");
-      bm.type = "button"; bm.className = "hero-btn atlas-mesures";
+      // `view-btn` est la classe RÉELLE des boutons de la fiche ; `hero-btn`
+      // n'existe nulle part, et mes deux boutons s'affichaient donc en
+      // rectangles blancs par défaut (constaté en capture le 2026-08-06).
+      bm.type = "button"; bm.className = "view-btn atlas-mesures";
       bm.textContent = (lang === "fr") ? "Mesures" : "Measurements";
+      bm.classList.add("on");
+      var outils = document.createElement("span");
+      outils.className = "atlas-outils";
+      barre.appendChild(outils);
       bm.addEventListener("click", function(e){
         e.stopPropagation();
         MES.visibles = !MES.visibles;
-        bm.style.opacity = MES.visibles ? "1" : ".5";
+        // Allumé/éteint, pas opaque/translucide : à demi-opacité le bouton se
+        // lisait comme DÉSACTIVÉ, alors qu'il était simplement inactif.
+        bm.classList.toggle("on", MES.visibles);
         var mvv = document.querySelector("model-viewer.model3d");
         if (mvv) { try { dessineMesures(mvv); } catch (err) {} }
       });
-      barre.appendChild(bm);
+      outils.appendChild(bm);
+
+      // L'arrêt sur image posé dans le cône : allumé par défaut, parce qu'il
+      // ne se montre qu'en pause et ne coûte rien le reste du temps. Mais il
+      // couvre une part du plan, donc il doit pouvoir s'éteindre.
+      var ba = document.createElement("button");
+      ba.type = "button"; ba.className = "view-btn atlas-arret-btn on";
+      ba.textContent = (lang === "fr") ? "Arrêt sur image" : "Freeze frame";
+      ba.addEventListener("click", function(e){
+        e.stopPropagation();
+        CAM.arretVisible = !CAM.arretVisible;
+        ba.classList.toggle("on", CAM.arretVisible);
+        // On applique TOUT DE SUITE, sans attendre la boucle d'animation :
+        // elle est ralentie dès que l'onglet passe en arrière-plan, et un
+        // bouton qui met une seconde à agir se lit comme un bouton cassé.
+        var h = document.getElementById("atlas-projection");
+        if (h && !CAM.arretVisible) h.style.opacity = "0";
+        else {
+          var mvv = document.querySelector("model-viewer.model3d");
+          if (mvv) { try { plaqueArret(mvv, CAM.pose); } catch (err) {} }
+        }
+      });
+      // Le bouton et son réglage fin forment UN groupe : le chevron ouvre le
+      // curseur au-dessus, et rien ne prend de place tant qu'on n'y touche pas.
+      var groupe = document.createElement("span");
+      groupe.className = "atlas-arret";
+      groupe.style.display = "none";   // rien à montrer tant qu'il n'y a pas de piste
+      groupe.appendChild(ba);
+      var chevron = document.createElement("button");
+      chevron.type = "button"; chevron.className = "view-btn atlas-reglage";
+      chevron.textContent = "\u25BE";
+      chevron.setAttribute("aria-label", (lang === "fr") ? "Réglage de l'image"
+                                                         : "Image setting");
+      groupe.appendChild(chevron);
+      outils.appendChild(groupe);
+
+      // Un CURSEUR de transparence, pour juger l'alignement à l'œil.
+      //
+      // La règle automatique — dense de loin, translucide à l'objectif — est
+      // un bon défaut, pas une vérité. Pour comparer une arête de fenêtre à
+      // celle du modèle, c'est celui qui regarde qui sait de combien il a
+      // besoin. Dès qu'il y touche, son réglage l'emporte : un curseur qu'une
+      // règle contredit derrière son dos est pire que pas de curseur.
+      var boite = document.createElement("span");
+      boite.className = "atlas-opacite";
+      boite.style.cssText = "display:none;align-items:center;gap:6px;font:600 12px " +
+        "-apple-system,BlinkMacSystemFont,sans-serif;color:var(--accent);" +
+        "background:var(--card);border:1px solid var(--line);border-radius:999px;" +
+        "padding:4px 10px;box-shadow:0 1px 3px rgba(0,0,0,.18)";
+      var curseur = document.createElement("input");
+      curseur.type = "range"; curseur.min = "0"; curseur.max = "100"; curseur.step = "1";
+      curseur.value = "60"; curseur.style.cssText = "width:96px;accent-color:var(--accent)";
+      curseur.setAttribute("aria-label", (lang === "fr") ? "Transparence de l'image"
+                                                         : "Image opacity");
+      var valeur = document.createElement("span");
+      valeur.textContent = "auto";
+      valeur.style.cssText = "min-width:32px;text-align:right";
+      curseur.addEventListener("input", function(e){
+        e.stopPropagation();
+        CAM.opaciteManuelle = (+curseur.value) / 100;
+        valeur.textContent = curseur.value + " %";
+        var mvv = document.querySelector("model-viewer.model3d");
+        if (mvv) { try { plaqueArret(mvv, CAM.pose); } catch (err) {} }
+      });
+      // Un double-clic rend la main à la règle automatique.
+      curseur.addEventListener("dblclick", function(e){
+        e.stopPropagation();
+        CAM.opaciteManuelle = null; valeur.textContent = "auto";
+      });
+      boite.appendChild(curseur); boite.appendChild(valeur);
+      groupe.appendChild(boite);
+      chevron.addEventListener("click", function(e){
+        e.stopPropagation();
+        var ouvert = boite.style.display !== "none";
+        boite.style.display = ouvert ? "none" : "inline-flex";
+        chevron.classList.toggle("on", !ouvert);
+      });
       // Le réglage mètres/pieds pilote celui de TOUTE la fiche : une seule
       // préférence, retenue d'une visite à l'autre.
       var b = document.createElement("button");
-      b.type = "button"; b.className = "hero-btn atlas-unit";
+      b.type = "button"; b.className = "view-btn atlas-unit";
       function ecrit(){ b.textContent = (UNIT.code === "si") ? t.unit_ft : t.unit_m; }
       ecrit();
       b.addEventListener("click", function(e){
@@ -4067,10 +5980,52 @@
         ecrit();
       });
       UNIT.hooks.push(ecrit);
-      barre.appendChild(b);
+      outils.appendChild(b);
+
     }
     var fold = section.querySelector("details.fold");
     if (fold && !fold.open) fold.open = true;   // déplié : on ne cache pas ce qu'on aligne
+
+    // LA VISIONNEUSE PREND LA HAUTEUR DE LA CARTE VIDÉO.
+    //
+    // Mesuré : 588 px pour le modèle contre 770 pour la vidéo. Deux panneaux
+    // côte à côte qui ne finissent pas sur la même ligne se lisent comme deux
+    // médias sans rapport — c'était l'observation d'origine, et elle vaut pour
+    // le bas comme pour le haut.
+    //
+    // Impossible en CSS seul : les deux colonnes sont des cellules de grille
+    // indépendantes, et aucune ne peut lire la hauteur de l'autre. On observe
+    // donc la carte vidéo — la vidéo ne prend sa forme définitive qu'à
+    // l'arrivée de ses métadonnées, bien après la mise en page.
+    if (!section.__hauteurSuivie && typeof ResizeObserver === "function"){
+      section.__hauteurSuivie = true;
+      // C'est le CONTENEUR qu'on règle, pas la visionneuse : celle-ci est en
+      // `position:absolute; inset:0`, donc sa hauteur ne vient pas d'elle mais
+      // de `.hero-visual` — un `aspect-ratio: 4/3` plafonné à `52vh`. Régler
+      // la visionneuse posait bien un `height: 770px`… sans le moindre effet.
+      var cale = function(){
+        var vis = document.querySelector(".hero-visual");
+        if (!vis) return;
+        // En colonne, chacun sa hauteur : l'un sous l'autre, les aligner
+        // n'aurait aucun sens et étirerait le modèle pour rien.
+        if (!window.matchMedia("(min-width:1000px)").matches){
+          vis.style.height = ""; vis.style.aspectRatio = ""; vis.style.maxHeight = "";
+          return;
+        }
+        var h = section.getBoundingClientRect().height;
+        if (h < 200) return;
+        vis.style.aspectRatio = "auto";
+        vis.style.maxHeight = "none";
+        vis.style.height = Math.round(h) + "px";
+      };
+      CAM.cale = cale;
+      // Régler la hauteur du modèle ne change pas celle de la vidéo — elles
+      // sont dans deux colonnes distinctes — donc pas de boucle.
+      new ResizeObserver(cale).observe(section);
+      window.addEventListener("resize", cale);
+      cale();
+      setTimeout(cale, 900);
+    }
 
     if (document.getElementById("atlas-duo-css")) return;
     var css = document.createElement("style");
@@ -4079,11 +6034,26 @@
       ".split-right{display:flex;flex-direction:column}" +
       "#videoSection{order:-1}" +          /* en tête, sans toucher au DOM */
       "#videoSection .fold-body{padding-top:0}" +
-      "#videoSection #videoWrap{display:flex;align-items:center;justify-content:center;" +
-      "min-height:min(62vh,440px)}" +
-      "#videoSection #videoWrap video{max-height:min(62vh,440px);width:auto;max-width:100%}" +
-      "@media (max-width:860px){#videoSection #videoWrap{min-height:0}" +
-      "#videoSection #videoWrap video{max-height:none;width:100%}}";
+      /* Une bascule ALLUMÉE se voit. La fiche n'a pas d'état actif pour
+         `.view-btn` — l'orange qu'on y voit est sa couleur de texte — donc
+         rien ne disait que c'en était une. On reprend la convention des
+         pastilles d'étage, que le visiteur a déjà sous les yeux. */
+      ".hero-visual .hero-controls{z-index:4}" +
+      ".hero-controls .view-btn.on{background:var(--accent);" +
+      "color:var(--accent-ink);border-color:transparent}" +
+      // ON NE TOUCHE PLUS À LA TAILLE DE LA VIDÉO.
+      //
+      // Deux règles à moi la cassaient. `display:flex` sans direction mettait
+      // la rangée des vitesses À CÔTÉ du lecteur et lui volait la largeur : le
+      // `min(100%, …)` de la fiche tombait à 145 px — la vidéo minuscule
+      // venait de là, pas de la fiche. Puis, en bornant sa hauteur, je suis
+      // entré en boucle avec sa propre passe de mise en page, qui recalcule la
+      // largeur d'après le rapport : la vidéo clignotait et se rechargeait
+      // sans arrêt (owner, 2026-08-06).
+      //
+      // La fiche sait déjà se dimensionner. Ma seule affaire ici est l'ORDRE :
+      // la vidéo en tête de la colonne de droite, alignée avec le modèle.
+      "#videoSection .fold-body>#videoWrap{display:block}";
     document.head.appendChild(css);
   }
 
@@ -4098,7 +6068,17 @@
   var CELL = 0.05, PORTE = 0.55;
   var MES = { murs: [], grille: null, emprise: null, svg: null,
               murCourant: -1, candidat: -1, tenue: 0, sursis: 0,
-              pan: null, lisse: null, affichee: 0, troncons: {} };
+              pan: null, lisse: null, affichee: 0, troncons: {},
+              // `visibles` manquait ici : le bouton « Mesures » basculait donc
+              // un champ que personne ne lisait, et ne faisait RIEN.
+              visibles: true,
+              // Le model-viewer AUQUEL les cotes sont armées. La fiche remplace
+              // l'élément à chaque changement d'étage ; sans le retenir, les
+              // points d'ancrage restaient sur l'ancien, détaché — cotes figées.
+              mv: null,
+              // Redessiner ne dépend PAS que de la vidéo : tourner le modèle ou
+              // passer en vue de dessus doit suivre. C'est ce qui manquait.
+              sale: true };
   var CONFIRMATIONS = 12, SURSIS = 40;
 
   function ecranHS(mv, nom){
@@ -4109,6 +6089,26 @@
     var toile = mv.shadowRoot && mv.shadowRoot.querySelector("canvas");
     var k = (toile && toile.clientWidth) ? mv.clientWidth / toile.clientWidth : 1;
     return { x: q.canvasPosition.x * k, y: q.canvasPosition.y * k };
+  }
+
+  /** Le point se dimensionne d'après le PANNEAU, pas en pixels fixes.
+   *
+   * À 18 px fixes, il occupait 2 % de la largeur sur grand écran et 10 % sur
+   * une minicarte de 177 px — un gros pâté orange au milieu du plan
+   * (propriétaire, 2026-08-07). Le cône, lui, est en 3D : il rétrécit tout
+   * seul. Le point doit suivre la même proportion. */
+  function ajusteLePoint(){
+    var mvP = document.querySelector("model-viewer.model3d");
+    var d = document.querySelector(".atlas-point");
+    if (!mvP || !d) return;
+    // On mesure la VISIONNEUSE, pas son conteneur : quand c'est le plan qui
+    // devient vignette, le conteneur garde sa taille et le point restait gros.
+    var large = mvP.getBoundingClientRect().width || 900;
+    var t = Math.max(7, Math.min(18, Math.round(large * 0.019)));
+    d.style.cssText = "position:absolute;left:" + (-t/2) + "px;top:" + (-t/2) + "px;" +
+      "width:" + t + "px;height:" + t + "px;border-radius:50%;background:#e8703a;" +
+      "box-shadow:0 0 0 " + Math.round(t/3) + "px rgba(232,112,58,.22)," +
+      "0 0 " + Math.round(t) + "px rgba(232,112,58,.6)";
   }
 
   function posePoints(mv){
@@ -4122,13 +6122,18 @@
       pt.setAttribute("data-normal", "0 1 0");
       pt.style.cssText = "width:0;height:0;pointer-events:none";
       var d = document.createElement("div");
-      d.style.cssText = "position:absolute;left:-9px;top:-9px;width:18px;height:18px;" +
-        "border-radius:50%;background:#e8703a;" +
-        "box-shadow:0 0 0 6px rgba(232,112,58,.22),0 0 16px rgba(232,112,58,.6)";
+      d.className = "atlas-point";
       pt.appendChild(d);
       mv.appendChild(pt);
+      // APRÈS l'insertion, pas avant : `ajusteLePoint` cherche le point dans
+      // le document, et appelé une ligne trop tôt il ne trouvait rien, sortait,
+      // et le point restait sans dimension — invisible sur grand écran, où
+      // rien d'autre ne le rappelait (régression du 2026-08-07).
+      ajusteLePoint();
     }
-    ["m0","m1","m2","m3","mc","r0","r1"].forEach(function(n){
+    // v0..v3 : les quatre coins du plan de base du cône — le CADRE de l'image
+    // à cet instant. C'est sur eux que la vidéo vient se poser.
+    ["m0","m1","m2","m3","mc","r0","r1","v0","v1","v2","v3"].forEach(function(n){
       if (mv.querySelector('[slot="hotspot-' + n + '"]')) return;
       var d = document.createElement("div");
       d.setAttribute("slot", "hotspot-" + n);
@@ -4136,6 +6141,35 @@
       d.style.cssText = "width:0;height:0;pointer-events:none";
       mv.appendChild(d);
     });
+  }
+
+  /** Arme les mesures sur CE model-viewer : ancrages, murs, emprise.
+   *
+   * Appelée à chaque MODÈLE chargé. Le changement d'étage ne remplace pas
+   * l'élément — vérifié au banc le 2026-08-06, c'est le même qui reçoit un
+   * autre modèle — donc surveiller l'élément ne suffit pas : sans réarmement
+   * sur `load`, les murs et l'emprise restaient ceux de l'étage précédent. */
+  function armeMesures(mv){
+    var syms = Object.getOwnPropertySymbols(mv), symScene = null, i;
+    for (i = 0; i < syms.length; i++)
+      if (syms[i].description === "scene") symScene = syms[i];
+    if (!symScene) return false;
+    var racine = null, ech = null;
+    mv[symScene].traverse(function(o){
+      if (!racine && o.name === "room") racine = o;
+      if (!ech && o.isMesh) ech = o;
+    });
+    var hote = racine || (ech && ech.parent);
+    if (!hote) return false;
+    MES.murs = []; MES.emprise = null; MES.grille = null; MES.troncons = {};
+    MES.murCourant = -1; MES.candidat = -1; MES.pan = null;
+    MES.fige = null; MES.opac = 0;
+    // Pas de `catch` muet : une exception avalée m'a caché pendant plusieurs
+    // passes que les points d'ancrage n'étaient jamais créés.
+    try { extraitMurs(mv, hote); }
+    catch (e){ console.warn("[Atlas] mesures indisponibles", e); return false; }
+    MES.mv = mv; MES.sale = true; MES.dernierDessin = null;
+    return true;
   }
 
   function extraitMurs(mv, racine){
@@ -4289,25 +6323,51 @@
    *  et une boîte alignée sur ces axes est plus GRANDE que lui — mesuré,
    *  8,55 × 9,09 annoncés pour 7,72 × 8,37 réels. Ce n'était pas un défaut de
    *  présentation mais une mesure fausse de 83 cm. */
+  /** L'emprise orientée SUR LE BÂTIMENT — par le rectangle d'AIRE MINIMALE.
+   *
+   * La moyenne circulaire des directions de murs, pondérée par leur longueur,
+   * paraissait le bon estimateur ; elle ne l'est pas. Les cloisons intérieures
+   * et les retours de placard votent avec le même poids que les murs de
+   * façade, et le rectangle sortait de travers : la cote du grand côté
+   * n'était même pas parallèle au mur qu'elle annonçait (capture du
+   * propriétaire, 2026-08-06 — « les mesures doivent faire une rotation pour
+   * être alignées avec le modèle »).
+   *
+   * Le rectangle d'aire minimale, lui, ne se laisse pas influencer : une
+   * cloison de biais n'agrandit l'aire dans aucune orientation, donc elle ne
+   * pèse pas. Un balayage suffit — un demi-degré d'erreur d'angle ne se voit
+   * pas, et à ce pas le calcul reste instantané. */
   function oriente(){
-    var sx=0, sy=0, i;
-    for (i=0;i<MES.murs.length;i++){
-      var m=MES.murs[i], a=Math.atan2(m.z1-m.z0, m.x1-m.x0);
-      sx += m.longueur*Math.cos(4*a); sy += m.longueur*Math.sin(4*a);
-    }
     if (!MES.murs.length) return;
-    var th=Math.atan2(sy,sx)/4, ux=Math.cos(th), uz=Math.sin(th), vx=-uz, vz=ux;
-    var u0=1e9,u1=-1e9,v0=1e9,v1=-1e9, h=0;
-    for (i=0;i<MES.murs.length;i++){
-      var w=MES.murs[i]; h=Math.max(h,w.h);
-      [[w.x0,w.z0],[w.x1,w.z1]].forEach(function(q){
-        var a=q[0]*ux+q[1]*uz, b=q[0]*vx+q[1]*vz;
-        if(a<u0)u0=a; if(a>u1)u1=a; if(b<v0)v0=b; if(b>v1)v1=b;
-      });
+    var pts = [], h = 0, i;
+    for (i = 0; i < MES.murs.length; i++){
+      var w = MES.murs[i];
+      h = Math.max(h, w.h);
+      pts.push([w.x0, w.z0], [w.x1, w.z1]);
     }
-    function coin(a,b){ return { x:a*ux+b*vx, z:a*uz+b*vz }; }
-    MES.emprise={ c:[coin(u0,v0),coin(u1,v0),coin(u1,v1),coin(u0,v1)],
-                  largeur:u1-u0, profondeur:v1-v0, h:h };
+    var meilleur = null;
+    for (var d = 0; d < 90; d += 0.25){
+      var th = d * Math.PI / 180, ux = Math.cos(th), uz = Math.sin(th);
+      var u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
+      for (i = 0; i < pts.length; i++){
+        var a = pts[i][0]*ux + pts[i][1]*uz, b = -pts[i][0]*uz + pts[i][1]*ux;
+        if (a < u0) u0 = a; if (a > u1) u1 = a;
+        if (b < v0) v0 = b; if (b > v1) v1 = b;
+      }
+      var aire = (u1-u0) * (v1-v0);
+      if (!meilleur || aire < meilleur.aire)
+        meilleur = { aire:aire, th:th, u0:u0, u1:u1, v0:v0, v1:v1 };
+    }
+    var ux = Math.cos(meilleur.th), uz = Math.sin(meilleur.th);
+    var vx = -uz, vz = ux;
+    function coin(a, b){ return { x:a*ux + b*vx, z:a*uz + b*vz }; }
+    MES.emprise = {
+      c:[coin(meilleur.u0, meilleur.v0), coin(meilleur.u1, meilleur.v0),
+         coin(meilleur.u1, meilleur.v1), coin(meilleur.u0, meilleur.v1)],
+      largeur: meilleur.u1 - meilleur.u0,
+      profondeur: meilleur.v1 - meilleur.v0,
+      angle: +(meilleur.th * 180 / Math.PI).toFixed(1),
+      h: h };
   }
 
   function placeCotes(mv){
@@ -4322,8 +6382,13 @@
   }
 
   function calque(mv){
-    if (MES.svg && MES.svg.isConnected) return MES.svg;
     var hote = mv.parentElement; if (!hote) return null;
+    // Le parent doit être VÉRIFIÉ, pas seulement la connexion : au changement
+    // d'étage la fiche remplace le model-viewer, et un calque resté sur
+    // l'ancien parent dessinait des cotes par-dessus un modèle disparu.
+    if (MES.svg && MES.svg.isConnected && MES.svg.parentElement === hote)
+      return MES.svg;
+    if (MES.svg && MES.svg.parentElement) MES.svg.parentElement.removeChild(MES.svg);
     if (getComputedStyle(hote).position === "static") hote.style.position = "relative";
     var svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
     svg.setAttribute("class","atlas-cotes");
@@ -4332,21 +6397,29 @@
     if (!document.getElementById("atlas-cotes-css")){
       var st=document.createElement("style"); st.id="atlas-cotes-css";
       st.textContent=
-        ".atlas-cotes line{stroke:rgba(255,255,255,.55);stroke-width:1.2}"+
-        ".atlas-cotes line.att{stroke:rgba(255,255,255,.22);stroke-dasharray:3 4}"+
-        ".atlas-cotes circle{fill:rgba(255,255,255,.8)}"+
-        ".atlas-cotes text{fill:#fff;font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;"+
-        "text-anchor:middle;paint-order:stroke;stroke:rgba(10,22,30,.85);stroke-width:4px}"+
+        ".atlas-cotes line{stroke:rgba(255,255,255,.45);stroke-width:1.2}"+
+        ".atlas-cotes line.att{stroke:rgba(255,255,255,.18);stroke-dasharray:3 4}"+
+        ".atlas-cotes circle{fill:rgba(255,255,255,.6)}"+
+        /* Ce qui détache le chiffre, c'est l'OMBRE, pas l'épaisseur.
+           J'ai d'abord élargi le contour en le rendant transparent (6 px à
+           32 %) : plus doux, mais visiblement trop épais — il grossissait les
+           lettres. Un liseré fin suffit à tenir sur les fonds clairs, et une
+           ombre portée fait le reste sans toucher au dessin de la lettre. */
+        ".atlas-cotes text{fill:rgba(255,255,255,.95);"+
+        "font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;"+
+        "text-anchor:middle;paint-order:stroke;stroke:rgba(10,22,30,.3);"+
+        "stroke-width:2px;stroke-linejoin:round;"+
+        "filter:drop-shadow(0 1px 2px rgba(6,16,22,.55))}"+
         /* Le pan regardé : pointillé et transparent — une annotation, pas une
            arête du modèle. */
-        ".atlas-cotes line.mur{stroke:rgba(232,112,58,.45);stroke-width:1.6;"+
+        ".atlas-cotes line.mur{stroke:rgba(232,112,58,.42);stroke-width:1.6;"+
         "stroke-dasharray:7 6;stroke-linecap:round}"+
-        ".atlas-cotes circle.mur{fill:rgba(232,112,58,.5)}"+
-        ".atlas-cotes text.mur{fill:rgba(248,217,200,.85);font-size:13.5px;"+
-        "stroke:rgba(10,22,30,.65);stroke-width:4px}";
+        ".atlas-cotes circle.mur{fill:rgba(232,112,58,.45)}"+
+        ".atlas-cotes text.mur{fill:rgba(248,217,200,.92);font-size:13.5px;"+
+        "stroke:rgba(10,22,30,.26);stroke-width:2px;stroke-linejoin:round}";
       document.head.appendChild(st);
     }
-    MES.svg=svg; return svg;
+    MES.svg=svg; MES.dernierDessin=null; return svg;
   }
 
   function murRegarde(ox,oz,dx,dz){
@@ -4359,7 +6432,7 @@
       var tt=((m.x0-ox)*ez-(m.z0-oz)*ex)/den, u=((m.x0-ox)*dz-(m.z0-oz)*dx)/den;
       if (tt>0.25 && tt<bestT && u>=0 && u<=1){ bestT=tt; best=i; bestU=u; }
     }
-    return best<0 ? null : { i:best, u:bestU };
+    return best<0 ? null : { i:best, u:bestU, t:bestT };
   }
 
   function suitLeMur(px,pz,fx,fz){
@@ -4415,10 +6488,13 @@
 
   function dessineMesures(mv){
     var svg=calque(mv); if(!svg) return;
-    svg.setAttribute("width", mv.clientWidth);
-    svg.setAttribute("height", mv.clientHeight);
+    if (+svg.getAttribute("width") !== mv.clientWidth
+     || +svg.getAttribute("height") !== mv.clientHeight){
+      svg.setAttribute("width", mv.clientWidth);
+      svg.setAttribute("height", mv.clientHeight);
+    }
     var d="";
-    var E=MES.emprise;
+    var E=MES.visibles ? MES.emprise : null;
     if (E){
       var c=ecranHS(mv,"hotspot-mc");
       // La hauteur se décale plus loin : ses deux extrémités se projettent
@@ -4426,9 +6502,19 @@
       var paires=[["hotspot-m0","hotspot-m1",E.largeur,34],
                   ["hotspot-m1","hotspot-m2",E.profondeur,34],
                   ["hotspot-m1","hotspot-m3",E.h,78]];
+      // Une cote dont les extrémités sont HORS CADRE n'est pas une cote : mes
+      // étiquettes, écrêtées à la marge, s'entassaient toutes dans le même
+      // coin dès qu'on s'approchait — trois nombres illisibles empilés là où
+      // il n'y a plus rien à mesurer (vu en vue « Depuis la caméra »).
+      // On mesure l'ensemble quand on voit l'ensemble.
+      var dedans = function(P){
+        return P && P.x > -0.25*mv.clientWidth  && P.x < 1.25*mv.clientWidth
+                 && P.y > -0.25*mv.clientHeight && P.y < 1.25*mv.clientHeight;
+      };
       for (var i=0;i<paires.length;i++){
         var A=ecranHS(mv,paires[i][0]), B=ecranHS(mv,paires[i][1]);
         if (!A||!B||!c) continue;
+        if (!dedans(A) || !dedans(B)) continue;
         // Une cote se décale PERPENDICULAIREMENT à elle-même — la règle du
         // dessin technique, et la seule qui marche pour les trois.
         var mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
@@ -4450,34 +6536,68 @@
          + (lenTxt(paires[i][2])||"") + '</text>';
       }
     }
-    d += dessineMur(mv);
+    if (MES.visibles) d += dessineMur(mv);
+    // On n'écrit QUE si le dessin a changé : réanalyser le même SVG force une
+    // remise en page pour rien, et c'est cette remise en page qui secouait la
+    // vidéo voisine.
+    if (d === MES.dernierDessin) return;
+    MES.dernierDessin = d;
     svg.innerHTML = d;
   }
 
+  /** La cote du mur regardé : POSÉE SUR LE MUR, et seule l'opacité bouge.
+   *
+   * Elle glissait auparavant — extrémités et chiffre filtrés vers leur cible à
+   * chaque image — pour éviter les sauts. Mais une cote qui remue en
+   * permanence ne se lit pas, et suggère une mesure qui hésite alors qu'elle
+   * ne bouge pas : « les dimensions des murs doivent rester attachées au mur,
+   * pas bouger constamment ; elles ne font que s'afficher en fondu quand la
+   * caméra pointe vers le mur » (propriétaire, 2026-08-06).
+   *
+   * Donc : au moment où la caméra se pose sur un mur, on FIGE son pan et sa
+   * longueur, et on ne touche plus à rien. Changer de mur, c'est un fondu
+   * sortant complet, puis un fondu entrant sur le nouveau — jamais une
+   * interpolation de l'un vers l'autre, qui afficherait en chemin des
+   * longueurs qui n'existent pas. */
   function dessineMur(mv){
-    if (MES.murCourant<0 || !MES.pan) return "";
-    // Les extrémités GLISSENT vers leur cible au lieu d'y sauter, et le chiffre
-    // est FILTRÉ, pas seulement borné : une zone morte laisse passer une suite
-    // de petits pas qui, mis bout à bout, font un demi-mètre.
-    if (!MES.lisse) MES.lisse={x0:MES.pan.x0,z0:MES.pan.z0,x1:MES.pan.x1,z1:MES.pan.z1};
-    else ["x0","z0","x1","z1"].forEach(function(k){
-      MES.lisse[k] += (MES.pan[k]-MES.lisse[k])*0.08;
-    });
-    var L=Math.hypot(MES.lisse.x1-MES.lisse.x0, MES.lisse.z1-MES.lisse.z0);
-    MES.affichee += (L-MES.affichee)*0.08;
-    var h=MES.pan.h;
-    mv.updateHotspot({ name:"hotspot-r0", position:MES.lisse.x0+" "+(h/2)+" "+MES.lisse.z0 });
-    mv.updateHotspot({ name:"hotspot-r1", position:MES.lisse.x1+" "+(h/2)+" "+MES.lisse.z1 });
+    var vise = (MES.murCourant >= 0 && MES.pan) ? MES.murCourant : -1;
+    function fige(){
+      return { mur:MES.murCourant, x0:MES.pan.x0, z0:MES.pan.z0,
+               x1:MES.pan.x1, z1:MES.pan.z1, h:MES.pan.h,
+               L:Math.hypot(MES.pan.x1-MES.pan.x0, MES.pan.z1-MES.pan.z0) };
+    }
+    // ~250 ms de fondu : assez pour ne pas clignoter, assez court pour que la
+    // cote soit là quand on regarde encore le mur.
+    var PAS = 0.12;
+    if (MES.opac == null) MES.opac = 0;
+    if (!MES.fige){
+      if (vise < 0) return "";
+      MES.fige = fige(); MES.opac = 0;
+    } else if (MES.fige.mur !== vise){
+      MES.opac -= PAS;
+      if (MES.opac <= 0){
+        MES.opac = 0;
+        MES.fige = (vise >= 0) ? fige() : null;
+      }
+    } else {
+      MES.opac = Math.min(1, MES.opac + PAS);
+    }
+    if (!MES.fige || MES.opac <= 0.02) return "";
+
+    var f = MES.fige;
+    mv.updateHotspot({ name:"hotspot-r0", position:f.x0+" "+(f.h/2)+" "+f.z0 });
+    mv.updateHotspot({ name:"hotspot-r1", position:f.x1+" "+(f.h/2)+" "+f.z1 });
     var A=ecranHS(mv,"hotspot-r0"), B=ecranHS(mv,"hotspot-r1");
     if (!A||!B) return "";
     var ang=Math.atan2(B.y-A.y,B.x-A.x)*180/Math.PI;
     ang=((ang+90)%180+180)%180-90;
     var mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
-    return '<line class="mur" x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'"/>'
+    return '<g opacity="'+MES.opac.toFixed(2)+'">'
+         + '<line class="mur" x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'"/>'
          + '<circle class="mur" cx="'+A.x+'" cy="'+A.y+'" r="3"/>'
          + '<circle class="mur" cx="'+B.x+'" cy="'+B.y+'" r="3"/>'
          + '<text class="mur" x="'+mx+'" y="'+my+'" transform="rotate('+ang.toFixed(1)+' '+mx+' '+my+')" dy="-8">'
-         + (lenTxt(MES.affichee)||"") + '</text>';
+         + (lenTxt(f.L)||"") + '</text></g>';
   }
 
   FLOORS.hooks.push(function(){ majCamera(); });
@@ -4486,8 +6606,18 @@
   // panneaux de façon asynchrone (manifeste, visionneuse, lecteur), et il n'y a
   // pas d'instant unique où tout est prêt. On réessaie donc quelques secondes,
   // puis on s'arrête — plutôt que de parier sur un ordre d'arrivée.
+  // La boucle démarre tout de suite : elle arme les cotes dès qu'un modèle
+  // est chargé, même si la vidéo n'arrive jamais. Les mesures viennent du
+  // modèle ; les faire attendre le lecteur, c'était les perdre pour rien.
+  demarreBoucle();
+  minicarte();
+  window.addEventListener("resize", function(){ setTimeout(ajusteLePoint, 80); });
+  try { MINI.addEventListener("change", minicarte); }
+  catch (e) { window.addEventListener("resize", minicarte); }
   (function amorce(essais){
     if (essais <= 0) return;
+    brancheModele();
+    minicarte();
     var pret = document.querySelector("model-viewer.model3d")
             && document.querySelector("#videoWrap video");
     if (pret){ accoleLaVideo(); if (!CAM.piste) majCamera(); }
