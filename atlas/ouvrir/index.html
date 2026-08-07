@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T22:23Z";
+  var ATLAS_BUILD = "2026-08-07T22:26Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3545,8 +3545,14 @@
     if (!sec) return false;
     if (sec.closest(".hero-visual")) return true;          // téléphone : dans le héros
     var par = sec.parentElement;
-    return !!(par && par.classList.contains("split-right")
-              && par.firstElementChild === sec);           // grand écran : en tête de colonne
+    if (!par || !par.classList.contains("split-right")) return false;
+    // Le premier enfant VISIBLE, pas le premier enfant. La carte d'en-tête
+    // vidée se masque mais reste dans le DOM : elle occupait la première
+    // place et la vidéo n'était donc jamais « en tête » (constaté en ligne
+    // le 2026-08-07).
+    var premier = par.firstElementChild;
+    while (premier && premier.hidden) premier = premier.nextElementSibling;
+    return premier === sec;
   }
 
   function buildChips(){
