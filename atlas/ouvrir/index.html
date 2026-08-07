@@ -646,7 +646,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-06T22:40Z";
+  var ATLAS_BUILD = "2026-08-06T23:35Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3842,7 +3842,7 @@
   // ancienne translation — et le volume se posait à un endroit qui n'existait
   // pas (mesuré sur le banc : -2,85 1,83 -6,24, la translation d'aucun des deux
   // modèles). Une boucle qui survit à ce qu'elle observe doit tout relire.
-  var CAM = { piste: null, offset: null, video: null, frustum: null,
+  var CAM = { piste: null, offset: null, video: null, frustum: null, scene: null,
               boucle: 0, dernierT: -1 };
 
   /** La trace publiée par l'app (`a3.camera-track.v1`), 80 Ko environ. */
@@ -3909,8 +3909,17 @@
       vol.add(piece(plan, 0.42));
       vol.visible = false;
       hote.add(vol);
+      CAM.scene = mv[symScene];
+      try { extraitMurs(mv, hote); } catch (e) {}
       return vol;
     } catch (e){ return null; }
+  }
+
+  /** La direction du regard, projetée au sol : -Z de la caméra tourné par le
+   *  quaternion. */
+  function avantXZ(q){
+    var x=q[0], y=q[1], z=q[2], w=q[3];
+    return [-2*(x*z + w*y), -(1 - 2*(x*x + y*y))];
   }
 
   /** L'interpolation courte des quaternions : au-delà on bascule de signe. */
@@ -3966,6 +3975,19 @@
         CAM.frustum.position.set(s.p[0], s.p[1], s.p[2]);
         CAM.frustum.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
         CAM.frustum.visible = true;
+        // model-viewer redessine À LA DEMANDE : déplacer un objet dans sa
+        // scène ne la marque pas sale, donc le volume ne bougeait qu'au
+        // moment où autre chose déclenchait un rendu — d'où les saccades.
+        // Dans le prototype, la mise à jour d'un hotspot à chaque image
+        // salissait la scène par effet de bord ; ici il faut le demander.
+        if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
+        var mvNow = document.querySelector("model-viewer.model3d");
+        if (mvNow){
+          try { mvNow.updateHotspot({ name:"hotspot-cam",
+                  position: s.p[0] + " " + s.p[1] + " " + s.p[2] }); } catch (e) {}
+          try { suitLeMur(s.p[0], s.p[2], avantXZ(s.q)[0], avantXZ(s.q)[1]); } catch (e) {}
+          try { dessineMesures(mvNow); } catch (e) {}
+        }
       })();
     }
     // Le modèle cesse de s'exhiber dès qu'il a quelque chose à montrer.
@@ -3990,6 +4012,442 @@
       setTimeout(suitLaCamera, 300);        // laisse la visionneuse se poser
     });
   }
+  /** La vidéo À CÔTÉ du modèle, mêmes bords.
+   *
+   * Alex, 2026-08-06 : « la vidéo doit être à côté, bien alignée comme dans le
+   * prototype ». Elle l'était déjà en colonne, mais enfermée dans une carte
+   * dépliante en bas de la droite — 139 px plus bas que le modèle, mesuré. Deux
+   * panneaux qui ne partagent pas leur ligne de base se lisent comme deux
+   * médias sans rapport, et c'était justement l'observation d'origine.
+   *
+   * On DÉPLACE l'élément existant plutôt que d'en fabriquer un autre : le
+   * re-rendu au changement d'étage écrit dans `#videoWrap`, et le déplacer
+   * garde ce chemin intact. */
+  function accoleLaVideo(){
+    var visuel = document.querySelector(".hero-visual");
+    var wrap = document.getElementById("videoWrap");
+    var section = document.getElementById("videoSection");
+    if (!visuel || !wrap || visuel.querySelector("#videoWrap")) return;
+    if (!section || section.hidden) return;
+    var pills = section.querySelector(".floor-pills");
+    var duo = document.createElement("div");
+    duo.className = "hero-duo";
+    var colonne = document.createElement("div");
+    colonne.className = "hero-duo-video";
+    colonne.appendChild(wrap);
+    // Les pastilles SOUS la vidéo, pas au-dessus : au-dessus elles décalaient
+    // le panneau de 55 px et les deux ne partageaient plus leur ligne de base
+    // (mesuré). Deux panneaux désalignés se lisent comme deux médias sans
+    // rapport — exactement ce qu'on cherche à défaire.
+    if (pills) colonne.appendChild(pills);
+    visuel.parentNode.insertBefore(duo, visuel);
+    duo.appendChild(visuel);
+    duo.appendChild(colonne);
+    section.hidden = true;              // la carte d'origine n'a plus de contenu
+    var css = document.createElement("style");
+    css.textContent =
+      ".hero-duo{display:grid;grid-template-columns:1fr minmax(280px,360px);" +
+      "gap:16px;align-items:stretch}" +
+      ".hero-duo > .hero-visual{margin:0}" +
+      ".hero-duo-video{display:flex;flex-direction:column;gap:8px;min-width:0}" +
+      ".hero-duo-video #videoWrap{flex:1;display:flex;align-items:center;justify-content:center}" +
+      ".hero-duo-video video{max-height:100%;width:auto}" +
+      "@media (max-width:860px){.hero-duo{grid-template-columns:1fr}}";
+    document.head.appendChild(css);
+  }
+
+
+  // ── LES MESURES ───────────────────────────────────────────────────────────
+  // Les cotes d'ensemble (emprise du bâtiment) et la cote du pan regardé.
+  //
+  // Les murs se reconnaissent à leur GÉOMÉTRIE, jamais à leur nom : le GLB perd
+  // les noms (180 maillages tous appelés « mesh »). Un mur va du plancher au
+  // plafond — meubles, linteaux et panneaux de porte s'écartent sur ce seul
+  // critère.
+  var CELL = 0.05, PORTE = 0.55;
+  var MES = { murs: [], grille: null, emprise: null, svg: null,
+              murCourant: -1, candidat: -1, tenue: 0, sursis: 0,
+              pan: null, lisse: null, affichee: 0, troncons: {} };
+  var CONFIRMATIONS = 12, SURSIS = 40;
+
+  function ecranHS(mv, nom){
+    var q = mv.queryHotspot(nom);
+    if (!q || !q.canvasPosition) return null;
+    // `canvasPosition` est DÉJÀ en pixels CSS : diviser par la largeur du
+    // tampon de rendu écrasait tout le dessin dans le quart supérieur gauche.
+    var toile = mv.shadowRoot && mv.shadowRoot.querySelector("canvas");
+    var k = (toile && toile.clientWidth) ? mv.clientWidth / toile.clientWidth : 1;
+    return { x: q.canvasPosition.x * k, y: q.canvasPosition.y * k };
+  }
+
+  function posePoints(mv){
+    // Le POINT : un disque doux à la position de la prise de vue. Doux, pas
+    // net — la pose est là où ARKit CROYAIT être, et un curseur au pixel près
+    // mentirait sur une précision qu'on n'a pas.
+    if (!mv.querySelector('[slot="hotspot-cam"]')){
+      var pt = document.createElement("div");
+      pt.setAttribute("slot", "hotspot-cam");
+      pt.setAttribute("data-position", "0 0 0");
+      pt.setAttribute("data-normal", "0 1 0");
+      pt.style.cssText = "width:0;height:0;pointer-events:none";
+      var d = document.createElement("div");
+      d.style.cssText = "position:absolute;left:-9px;top:-9px;width:18px;height:18px;" +
+        "border-radius:50%;background:#e8703a;" +
+        "box-shadow:0 0 0 6px rgba(232,112,58,.22),0 0 16px rgba(232,112,58,.6)";
+      pt.appendChild(d);
+      mv.appendChild(pt);
+    }
+    ["m0","m1","m2","m3","mc","r0","r1"].forEach(function(n){
+      if (mv.querySelector('[slot="hotspot-' + n + '"]')) return;
+      var d = document.createElement("div");
+      d.setAttribute("slot", "hotspot-" + n);
+      d.setAttribute("data-position", "0 0 0");
+      d.style.cssText = "width:0;height:0;pointer-events:none";
+      mv.appendChild(d);
+    });
+  }
+
+  function extraitMurs(mv, racine){
+    var inv = racine.matrixWorld.clone().invert(), bruts = [], tri = [];
+    racine.traverse(function(o){
+      if (!o.isMesh || !o.geometry.attributes.position) return;
+      var M = inv.clone().multiply(o.matrixWorld).elements, pos = o.geometry.attributes.position;
+      var pts = [], y0 = 1e9, y1 = -1e9, i, a, b, c, Y;
+      for (i = 0; i < pos.count; i++){
+        a = pos.getX(i); b = pos.getY(i); c = pos.getZ(i);
+        pts.push([M[0]*a+M[4]*b+M[8]*c+M[12], M[2]*a+M[6]*b+M[10]*c+M[14]]);
+        Y = M[1]*a+M[5]*b+M[9]*c+M[13];
+        if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
+      }
+      if (!(y1 >= 1.6 && y0 <= 0.4) || pts.length < 3) return;
+      var idx = o.geometry.index, nn = idx ? idx.count : pos.count;
+      for (i = 0; i < nn; i += 3){
+        tri.push([pts[idx?idx.getX(i):i], pts[idx?idx.getX(i+1):i+1], pts[idx?idx.getX(i+2):i+2]]);
+      }
+      var mx = 0, mz = 0, q;
+      for (i = 0; i < pts.length; i++){ mx += pts[i][0]; mz += pts[i][1]; }
+      mx /= pts.length; mz /= pts.length;
+      var sxx = 0, szz = 0, sxz = 0, dx, dz;
+      for (i = 0; i < pts.length; i++){
+        dx = pts[i][0]-mx; dz = pts[i][1]-mz; sxx += dx*dx; szz += dz*dz; sxz += dx*dz;
+      }
+      var ang = 0.5*Math.atan2(2*sxz, sxx-szz), ux = Math.cos(ang), uz = Math.sin(ang);
+      var a0 = 1e9, a1 = -1e9, tt;
+      for (i = 0; i < pts.length; i++){
+        tt = (pts[i][0]-mx)*ux + (pts[i][1]-mz)*uz;
+        if (tt < a0) a0 = tt; if (tt > a1) a1 = tt;
+      }
+      bruts.push({ cx:mx, cz:mz, ux:ux, uz:uz, a0:a0, a1:a1, h:y1-y0,
+                   ang:((ang*180/Math.PI)%180+180)%180,
+                   off:-Math.sin(ang)*mx + Math.cos(ang)*mz });
+    });
+    // Un mur percé d'une porte arrive en MORCEAUX : on recolle les pans
+    // alignés. Mais aligné ≠ continu — deux tronçons de part et d'autre d'un
+    // couloir donneraient un mur de 8 m qui n'existe pas.
+    var pris = [], murs = [], i, j;
+    for (i = 0; i < bruts.length; i++){
+      if (pris[i]) continue;
+      var g = [bruts[i]]; pris[i] = 1;
+      for (j = i+1; j < bruts.length; j++){
+        if (pris[j]) continue;
+        var d = Math.abs(bruts[i].ang - bruts[j].ang); d = Math.min(d, 180-d);
+        if (d < 8 && Math.abs(bruts[i].off - bruts[j].off) < 0.25){ g.push(bruts[j]); pris[j] = 1; }
+      }
+      var cx = g[0].cx, cz = g[0].cz, ux = g[0].ux, uz = g[0].uz;
+      var mor = g.map(function(m){
+        var tt = (m.cx-cx)*ux + (m.cz-cz)*uz;
+        return { a: tt+m.a0, b: tt+m.a1, h: m.h };
+      }).sort(function(p1,p2){ return p1.a - p2.a; });
+      var t0 = mor[0].a, t1 = mor[0].b, h = mor[0].h;
+      function pousse(){
+        murs.push({ x0:cx+ux*t0, z0:cz+uz*t0, x1:cx+ux*t1, z1:cz+uz*t1,
+                    longueur:t1-t0, h:h });
+      }
+      for (var k = 1; k < mor.length; k++){
+        if (mor[k].a - t1 <= 1.20){ t1 = Math.max(t1, mor[k].b); h = Math.max(h, mor[k].h); }
+        else { pousse(); t0 = mor[k].a; t1 = mor[k].b; h = mor[k].h; }
+      }
+      pousse();
+    }
+    MES.murs = murs.filter(function(m){ return m.longueur > 0.5; });
+    segmente(tri);
+    oriente();
+    posePoints(mv);
+    placeCotes(mv);
+  }
+
+  function morpho(src, W, H, r, mode){
+    var a = new Uint8Array(W*H), b = new Uint8Array(W*H), x, y, k, v, xx, yy;
+    for (y = 0; y < H; y++) for (x = 0; x < W; x++){
+      v = mode?0:1;
+      for (k = -r; k <= r; k++){ xx = x+k; if (xx<0||xx>=W) continue;
+        v = mode ? Math.max(v, src[y*W+xx]) : Math.min(v, src[y*W+xx]); }
+      a[y*W+x] = v;
+    }
+    for (x = 0; x < W; x++) for (y = 0; y < H; y++){
+      v = mode?0:1;
+      for (k = -r; k <= r; k++){ yy = y+k; if (yy<0||yy>=H) continue;
+        v = mode ? Math.max(v, a[yy*W+x]) : Math.min(v, a[yy*W+x]); }
+      b[y*W+x] = v;
+    }
+    return b;
+  }
+
+  function segmente(tri){
+    var x0=1e9,x1=-1e9,z0=1e9,z1=-1e9,i,j;
+    for (i=0;i<tri.length;i++) for (j=0;j<3;j++){
+      var q=tri[i][j];
+      if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0]; if(q[1]<z0)z0=q[1]; if(q[1]>z1)z1=q[1];
+    }
+    if (!(x1>x0)) return;
+    var W=Math.ceil((x1-x0)/CELL), H=Math.ceil((z1-z0)/CELL);
+    var t=document.createElement("canvas"); t.width=W; t.height=H;
+    var g=t.getContext("2d"); g.fillStyle="#fff";
+    for (i=0;i<tri.length;i++){
+      g.beginPath();
+      g.moveTo((tri[i][0][0]-x0)/CELL,(tri[i][0][1]-z0)/CELL);
+      g.lineTo((tri[i][1][0]-x0)/CELL,(tri[i][1][1]-z0)/CELL);
+      g.lineTo((tri[i][2][0]-x0)/CELL,(tri[i][2][1]-z0)/CELL);
+      g.closePath(); g.fill();
+    }
+    var px=g.getImageData(0,0,W,H).data, mur=new Uint8Array(W*H);
+    for (i=0;i<W*H;i++) mur[i] = px[i*4+3] > 40 ? 1 : 0;
+    // On referme les portes avant de segmenter : sinon le remplissage fuit
+    // d'une chambre à l'autre. Seuil non arbitraire — 1,10 m, la largeur d'une
+    // porte ; une baie de 2 m reste ouverte, elle ne sépare pas deux pièces.
+    var r=Math.round(PORTE/CELL);
+    mur=morpho(mur,W,H,r,1); mur=morpho(mur,W,H,r,0);
+    var lab=new Int32Array(W*H); for(i=0;i<W*H;i++) lab[i]=-1;
+    var n=0;
+    for (var d=0; d<W*H; d++){
+      if (mur[d] || lab[d]>=0) continue;
+      var id=n++, pile=[d]; lab[d]=id;
+      while (pile.length){
+        var kk=pile.pop(), cx=kk%W;
+        var vois=[[kk-1,cx>0],[kk+1,cx<W-1],[kk-W,true],[kk+W,true]];
+        for (j=0;j<4;j++){
+          var m=vois[j][0];
+          if (!vois[j][1] || m<0 || m>=W*H || lab[m]>=0 || mur[m]) continue;
+          lab[m]=id; pile.push(m);
+        }
+      }
+    }
+    MES.grille={ lab:lab, W:W, H:H, x0:x0, z0:z0 };
+  }
+
+  function regionEn(x,z){
+    var G=MES.grille; if(!G) return -1;
+    var cx=Math.floor((x-G.x0)/CELL), cz=Math.floor((z-G.z0)/CELL);
+    if (cx<0||cz<0||cx>=G.W||cz>=G.H) return -1;
+    return G.lab[cz*G.W+cx];
+  }
+  /** Quelqu'un qui longe une cloison tombe dans une cellule « mur » : refuser
+   *  d'afficher pour 20 cm serait absurde. */
+  function regionProche(x,z){
+    var d=regionEn(x,z); if (d>=0) return d;
+    for (var r=1;r<=12;r++) for (var a=0;a<16;a++){
+      var th=a*Math.PI/8, id=regionEn(x+Math.cos(th)*r*CELL, z+Math.sin(th)*r*CELL);
+      if (id>=0) return id;
+    }
+    return -1;
+  }
+
+  /** L'emprise ORIENTÉE SUR LE BÂTIMENT, pas sur les axes du fichier.
+   *  RoomPlan garde les axes de la session ARKit : un bâtiment y est de biais,
+   *  et une boîte alignée sur ces axes est plus GRANDE que lui — mesuré,
+   *  8,55 × 9,09 annoncés pour 7,72 × 8,37 réels. Ce n'était pas un défaut de
+   *  présentation mais une mesure fausse de 83 cm. */
+  function oriente(){
+    var sx=0, sy=0, i;
+    for (i=0;i<MES.murs.length;i++){
+      var m=MES.murs[i], a=Math.atan2(m.z1-m.z0, m.x1-m.x0);
+      sx += m.longueur*Math.cos(4*a); sy += m.longueur*Math.sin(4*a);
+    }
+    if (!MES.murs.length) return;
+    var th=Math.atan2(sy,sx)/4, ux=Math.cos(th), uz=Math.sin(th), vx=-uz, vz=ux;
+    var u0=1e9,u1=-1e9,v0=1e9,v1=-1e9, h=0;
+    for (i=0;i<MES.murs.length;i++){
+      var w=MES.murs[i]; h=Math.max(h,w.h);
+      [[w.x0,w.z0],[w.x1,w.z1]].forEach(function(q){
+        var a=q[0]*ux+q[1]*uz, b=q[0]*vx+q[1]*vz;
+        if(a<u0)u0=a; if(a>u1)u1=a; if(b<v0)v0=b; if(b>v1)v1=b;
+      });
+    }
+    function coin(a,b){ return { x:a*ux+b*vx, z:a*uz+b*vz }; }
+    MES.emprise={ c:[coin(u0,v0),coin(u1,v0),coin(u1,v1),coin(u0,v1)],
+                  largeur:u1-u0, profondeur:v1-v0, h:h };
+  }
+
+  function placeCotes(mv){
+    var E=MES.emprise; if(!E) return;
+    var c=E.c;
+    mv.updateHotspot({ name:"hotspot-m0", position:c[0].x+" 0 "+c[0].z });
+    mv.updateHotspot({ name:"hotspot-m1", position:c[1].x+" 0 "+c[1].z });
+    mv.updateHotspot({ name:"hotspot-m2", position:c[2].x+" 0 "+c[2].z });
+    mv.updateHotspot({ name:"hotspot-m3", position:c[1].x+" "+E.h+" "+c[1].z });
+    mv.updateHotspot({ name:"hotspot-mc",
+      position:((c[0].x+c[2].x)/2)+" "+(E.h/2)+" "+((c[0].z+c[2].z)/2) });
+  }
+
+  function calque(mv){
+    if (MES.svg && MES.svg.isConnected) return MES.svg;
+    var hote = mv.parentElement; if (!hote) return null;
+    if (getComputedStyle(hote).position === "static") hote.style.position = "relative";
+    var svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    svg.setAttribute("class","atlas-cotes");
+    svg.style.cssText="position:absolute;left:0;top:0;pointer-events:none;z-index:2";
+    hote.appendChild(svg);
+    if (!document.getElementById("atlas-cotes-css")){
+      var st=document.createElement("style"); st.id="atlas-cotes-css";
+      st.textContent=
+        ".atlas-cotes line{stroke:rgba(255,255,255,.55);stroke-width:1.2}"+
+        ".atlas-cotes line.att{stroke:rgba(255,255,255,.22);stroke-dasharray:3 4}"+
+        ".atlas-cotes circle{fill:rgba(255,255,255,.8)}"+
+        ".atlas-cotes text{fill:#fff;font:600 13px -apple-system,BlinkMacSystemFont,sans-serif;"+
+        "text-anchor:middle;paint-order:stroke;stroke:rgba(10,22,30,.85);stroke-width:4px}"+
+        /* Le pan regardé : pointillé et transparent — une annotation, pas une
+           arête du modèle. */
+        ".atlas-cotes line.mur{stroke:rgba(232,112,58,.45);stroke-width:1.6;"+
+        "stroke-dasharray:7 6;stroke-linecap:round}"+
+        ".atlas-cotes circle.mur{fill:rgba(232,112,58,.5)}"+
+        ".atlas-cotes text.mur{fill:rgba(248,217,200,.85);font-size:13.5px;"+
+        "stroke:rgba(10,22,30,.65);stroke-width:4px}";
+      document.head.appendChild(st);
+    }
+    MES.svg=svg; return svg;
+  }
+
+  function murRegarde(ox,oz,dx,dz){
+    var n=Math.hypot(dx,dz); if(n<1e-6) return null;
+    dx/=n; dz/=n;
+    var best=-1,bestT=14,bestU=0;
+    for (var i=0;i<MES.murs.length;i++){
+      var m=MES.murs[i], ex=m.x1-m.x0, ez=m.z1-m.z0, den=dx*ez-dz*ex;
+      if (Math.abs(den)<1e-9) continue;
+      var tt=((m.x0-ox)*ez-(m.z0-oz)*ex)/den, u=((m.x0-ox)*dz-(m.z0-oz)*dx)/den;
+      if (tt>0.25 && tt<bestT && u>=0 && u<=1){ bestT=tt; best=i; bestU=u; }
+    }
+    return best<0 ? null : { i:best, u:bestU };
+  }
+
+  function suitLeMur(px,pz,fx,fz){
+    var vise=murRegarde(px,pz,fx,fz), vu=vise?vise.i:-1;
+    // Hystérésis : on ne bascule qu'après plusieurs visées consécutives — ce
+    // qui distingue un regard qui se déplace d'une main qui tremble. La
+    // PREMIÈRE prise est immédiate : l'amortir aussi empêchait la cote
+    // d'apparaître.
+    if (vu===MES.murCourant){ MES.candidat=-1; MES.tenue=0; }
+    else if (MES.murCourant<0){ MES.murCourant=vu; MES.candidat=-1; MES.tenue=0; }
+    else if (vu===MES.candidat){ if(++MES.tenue>=CONFIRMATIONS){ MES.murCourant=vu; MES.candidat=-1; MES.tenue=0; } }
+    else { MES.candidat=vu; MES.tenue=1; }
+    if (!vise){
+      // Sursis : traverser une porte ne doit pas faire clignoter la cote.
+      if (MES.murCourant>=0 && ++MES.sursis<SURSIS) return;
+      MES.murCourant=-1; MES.pan=null; MES.lisse=null; MES.sursis=0; return;
+    }
+    MES.sursis=0;
+    if (MES.murCourant<0) return;
+    var w=MES.murs[MES.murCourant];
+    var L=Math.hypot(w.x1-w.x0,w.z1-w.z0), ux=(w.x1-w.x0)/L, uz=(w.z1-w.z0)/L;
+    var sV=Math.max(0,Math.min(L,(MES.murCourant===vise.i?vise.u:0.5)*L));
+    var ici=regionProche(px,pz);
+    if (ici<0) return;
+    // Les tronçons sont calculés UNE FOIS par (mur, pièce). Ils dépendaient du
+    // point visé, et la sonde étant un booléen tous les 10 cm, le moindre
+    // déplacement du regard faisait sauter la longueur de 2,90 à 2,13 m. « Le
+    // mur de cette pièce » est un fait géométrique, pas une fonction du regard.
+    var cle=MES.murCourant+"|"+ici;
+    if (!MES.troncons[cle]){
+      var nx=-uz, nz=ux, hx=w.x0+ux*sV, hz=w.z0+uz*sV;
+      if (nx*(px-hx)+nz*(pz-hz)<0){ nx=-nx; nz=-nz; }
+      function dedans(tt){
+        var ds=[0.20,0.35,0.55,0.80];
+        for (var k=0;k<ds.length;k++)
+          if (regionEn(w.x0+ux*tt+nx*ds[k], w.z0+uz*tt+nz*ds[k])===ici) return true;
+        return false;
+      }
+      var runs=[], deb=null;
+      for (var tt=0; tt<=L+1e-6; tt+=0.10){
+        if (dedans(tt)){ if(deb===null) deb=tt; }
+        else { if(deb!==null && tt-deb>=0.35) runs.push([deb, tt-0.10]); deb=null; }
+      }
+      if (deb!==null && L-deb>=0.35) runs.push([deb, L]);
+      MES.troncons[cle]=runs;
+    }
+    var a=null,b=null, rr=MES.troncons[cle];
+    for (var k2=0;k2<rr.length;k2++)
+      if (sV>=rr[k2][0]-0.6 && sV<=rr[k2][1]+0.6){ a=rr[k2][0]; b=rr[k2][1]; break; }
+    if (a===null) return;
+    MES.pan={ x0:w.x0+ux*a, z0:w.z0+uz*a, x1:w.x0+ux*b, z1:w.z0+uz*b, h:w.h };
+  }
+
+  function dessineMesures(mv){
+    var svg=calque(mv); if(!svg) return;
+    svg.setAttribute("width", mv.clientWidth);
+    svg.setAttribute("height", mv.clientHeight);
+    var d="";
+    var E=MES.emprise;
+    if (E){
+      var c=ecranHS(mv,"hotspot-mc");
+      // La hauteur se décale plus loin : ses deux extrémités se projettent
+      // presque au même point vues de dessus.
+      var paires=[["hotspot-m0","hotspot-m1",E.largeur,34],
+                  ["hotspot-m1","hotspot-m2",E.profondeur,34],
+                  ["hotspot-m1","hotspot-m3",E.h,78]];
+      for (var i=0;i<paires.length;i++){
+        var A=ecranHS(mv,paires[i][0]), B=ecranHS(mv,paires[i][1]);
+        if (!A||!B||!c) continue;
+        // Une cote se décale PERPENDICULAIREMENT à elle-même — la règle du
+        // dessin technique, et la seule qui marche pour les trois.
+        var mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+        var lx=B.x-A.x, ly=B.y-A.y, l=Math.hypot(lx,ly)||1;
+        var pxx=-ly/l, pyy=lx/l;
+        if (pxx*(mx-c.x)+pyy*(my-c.y)<0){ pxx=-pxx; pyy=-pyy; }
+        var D=paires[i][3], ox=pxx*D, oy=pyy*D;
+        var A2={x:A.x+ox,y:A.y+oy}, B2={x:B.x+ox,y:B.y+oy};
+        var ang=Math.atan2(B2.y-A2.y,B2.x-A2.x)*180/Math.PI;
+        ang=((ang+90)%180+180)%180-90;
+        var mg=30;
+        var tx=Math.max(mg,Math.min(mv.clientWidth-mg, mx+ox*1.35));
+        var ty=Math.max(mg,Math.min(mv.clientHeight-mg, my+oy*1.35));
+        d+='<line class="att" x1="'+A.x+'" y1="'+A.y+'" x2="'+A2.x+'" y2="'+A2.y+'"/>'
+         + '<line class="att" x1="'+B.x+'" y1="'+B.y+'" x2="'+B2.x+'" y2="'+B2.y+'"/>'
+         + '<line x1="'+A2.x+'" y1="'+A2.y+'" x2="'+B2.x+'" y2="'+B2.y+'"/>'
+         + '<circle cx="'+A2.x+'" cy="'+A2.y+'" r="2.6"/><circle cx="'+B2.x+'" cy="'+B2.y+'" r="2.6"/>'
+         + '<text x="'+tx+'" y="'+ty+'" transform="rotate('+ang.toFixed(1)+' '+tx+' '+ty+')" dy="-6">'
+         + (lenTxt(paires[i][2])||"") + '</text>';
+      }
+    }
+    d += dessineMur(mv);
+    svg.innerHTML = d;
+  }
+
+  function dessineMur(mv){
+    if (MES.murCourant<0 || !MES.pan) return "";
+    // Les extrémités GLISSENT vers leur cible au lieu d'y sauter, et le chiffre
+    // est FILTRÉ, pas seulement borné : une zone morte laisse passer une suite
+    // de petits pas qui, mis bout à bout, font un demi-mètre.
+    if (!MES.lisse) MES.lisse={x0:MES.pan.x0,z0:MES.pan.z0,x1:MES.pan.x1,z1:MES.pan.z1};
+    else ["x0","z0","x1","z1"].forEach(function(k){
+      MES.lisse[k] += (MES.pan[k]-MES.lisse[k])*0.08;
+    });
+    var L=Math.hypot(MES.lisse.x1-MES.lisse.x0, MES.lisse.z1-MES.lisse.z0);
+    MES.affichee += (L-MES.affichee)*0.08;
+    var h=MES.pan.h;
+    mv.updateHotspot({ name:"hotspot-r0", position:MES.lisse.x0+" "+(h/2)+" "+MES.lisse.z0 });
+    mv.updateHotspot({ name:"hotspot-r1", position:MES.lisse.x1+" "+(h/2)+" "+MES.lisse.z1 });
+    var A=ecranHS(mv,"hotspot-r0"), B=ecranHS(mv,"hotspot-r1");
+    if (!A||!B) return "";
+    var ang=Math.atan2(B.y-A.y,B.x-A.x)*180/Math.PI;
+    ang=((ang+90)%180+180)%180-90;
+    var mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+    return '<line class="mur" x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'"/>'
+         + '<circle class="mur" cx="'+A.x+'" cy="'+A.y+'" r="3"/>'
+         + '<circle class="mur" cx="'+B.x+'" cy="'+B.y+'" r="3"/>'
+         + '<text class="mur" x="'+mx+'" y="'+my+'" transform="rotate('+ang.toFixed(1)+' '+mx+' '+my+')" dy="-8">'
+         + (lenTxt(MES.affichee)||"") + '</text>';
+  }
+
   FLOORS.hooks.push(function(){ majCamera(); });
   // Le crochet d'étage ne suffit pas : au PREMIER affichage il n'y a aucun
   // changement d'étage, donc rien ne se déclenchait. La fiche assemble ses
@@ -4000,10 +4458,16 @@
     if (essais <= 0) return;
     var pret = document.querySelector("model-viewer.model3d")
             && document.querySelector("#videoWrap video");
-    if (pret && !CAM.piste) majCamera();
+    if (pret){ accoleLaVideo(); if (!CAM.piste) majCamera(); }
     if (CAM.frustum) return;
     setTimeout(function(){ amorce(essais - 1); }, 600);
   })(20);
+  // Un seul réglage d'unité pour toute la fiche : les cotes suivent celui qui
+  // existe déjà, elles n'en ajoutent pas un second.
+  UNIT.hooks.push(function(){
+    var mv = document.querySelector("model-viewer.model3d");
+    if (mv && MES.emprise) { try { dessineMesures(mv); } catch (e) {} }
+  });
   window.__atlasMajCamera = majCamera;
 })();
 </script>
