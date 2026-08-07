@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T22:53Z";
+  var ATLAS_BUILD = "2026-08-07T23:09Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3717,6 +3717,7 @@
     }
 
     posePastillesEnTete();
+    surveilleLeHeros();
     poseLetageSurLeTitre();
     ecritLeSousTitre();
     masqueLEnteteVide();
@@ -5780,9 +5781,38 @@
    * aucune cote, et tourner le modèle ou passer en « vue de dessus » laissait
    * les cotes plantées à leur ancienne place — « les mesures ne suivent pas le
    * modèle ». Le prototype, lui, redessinait à chaque image. */
+  /** La boucle ne tourne QUE si le modèle est à l'écran.
+   *
+   * Mesuré : 61 images par seconde même en bas de page, modèle complètement
+   * hors champ — le plan continuait de tourner, les cotes de se redessiner et
+   * model-viewer de rendre, pour personne. Sur téléphone c'est la première
+   * source de consommation de la fiche (owner 2026-08-07).
+   *
+   * L'onglet caché est déjà traité par le navigateur, qui suspend
+   * `requestAnimationFrame` de lui-même ; ici c'est le DÉFILEMENT qu'on
+   * couvre, que rien ne surveillait.
+   *
+   * Une marge de 200 px fait redémarrer la boucle juste avant que le modèle
+   * réapparaisse : il ne doit jamais se montrer figé.
+   */
+  var HEROS_VISIBLE = true;
+  function surveilleLeHeros(){
+    var vis = document.querySelector(".hero-visual");
+    if (!vis || vis.__atlasVu || typeof IntersectionObserver !== "function") return;
+    vis.__atlasVu = true;
+    new IntersectionObserver(function(entrees){
+      var avant = HEROS_VISIBLE;
+      HEROS_VISIBLE = entrees.some(function(e){ return e.isIntersecting; });
+      if (HEROS_VISIBLE && !avant) demarreBoucle();
+    }, { rootMargin: "200px" }).observe(vis);
+  }
+
   function demarreBoucle(){
     if (CAM.boucle) return;
     (function tourne(){
+      // On CESSE de se replanifier plutôt que de tourner à vide : une image
+      // sautée coûte quand même son réveil de processeur.
+      if (!HEROS_VISIBLE){ CAM.boucle = 0; return; }
       CAM.boucle = requestAnimationFrame(tourne);
       if (document.hidden) return;
       var mv = document.querySelector("model-viewer.model3d");
@@ -5849,6 +5879,16 @@
       // Le point et le cône se cachent avec le panneau. On n'écrit que lorsque
       // l'état CHANGE : sinon c'est une modification de style à chaque image
       // pour rien.
+      // LE MÉNAGE N'A PAS BESOIN DE SOIXANTE FOIS PAR SECONDE.
+      //
+      // Tout ce qui suit — état du panneau, forme du point, moitié allumée du
+      // segment, place du bouton d'échange, armement du balayage — répare et
+      // synchronise. Rien n'y est perçu à l'image près, et `poseLeBoutonDechange`
+      // lit deux rectangles, ce qui force le navigateur à recalculer la mise
+      // en page. Cinq fois par seconde suffit et ne se voit pas.
+      var horloge = performance.now();
+      if (horloge - (CAM.dernierMenage || 0) >= 200){
+      CAM.dernierMenage = horloge;
       var ouvert = videoOuverte();
       if (ouvert !== CAM.videoOuverte){
         CAM.videoOuverte = ouvert;
@@ -5886,6 +5926,7 @@
           CAM.ronde.demarre([vues[0], vues[1]]);
           CAM.drone.actif = true;
         }
+      }
       }
       if (CAM.pose) { try { animeLaVue(mv, CAM.pose); } catch (e) {} }
       var maintenant = performance.now();
