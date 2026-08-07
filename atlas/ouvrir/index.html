@@ -646,7 +646,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-05T01:15Z";
+  var ATLAS_BUILD = "2026-08-06T22:40Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3819,6 +3819,192 @@
     });
     document.getElementById("historySection").hidden = false;
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // LA POSITION DE LA PRISE DE VUE SUR LE MODÈLE 3D
+  //
+  // Quand la vidéo joue, un volume orange montre où était le téléphone et ce
+  // qu'il cadrait. L'observation d'origine (Alex, 2026-08-05) : « le modèle 3D
+  // fait juste tourner par lui-même » — il occupait l'espace faute de sens.
+  // Ici la rotation s'arrête et le modèle se met à SITUER l'image.
+  //
+  // Pas de mode à choisir : c'est un ÉTAT. Un sélecteur aurait tué l'effet —
+  // le lien entre les deux panneaux ne se découvre pas dans un menu.
+  //
+  // TOUT est additif et silencieux en cas d'absence : une fiche sans trace de
+  // caméra reste exactement la fiche d'aujourd'hui, sans marqueur et sans
+  // message. Une fonction absente vaut mieux qu'une explication.
+  // ══════════════════════════════════════════════════════════════════════════
+  // Tout ce que la boucle doit lire vit ICI, jamais dans une fermeture.
+  //
+  // Première version : la boucle capturait la translation et le lecteur à sa
+  // création. Au changement d'étage elle gardait les anciens — nouvelle trace,
+  // ancienne translation — et le volume se posait à un endroit qui n'existait
+  // pas (mesuré sur le banc : -2,85 1,83 -6,24, la translation d'aucun des deux
+  // modèles). Une boucle qui survit à ce qu'elle observe doit tout relire.
+  var CAM = { piste: null, offset: null, video: null, frustum: null,
+              boucle: 0, dernierT: -1 };
+
+  /** La trace publiée par l'app (`a3.camera-track.v1`), 80 Ko environ. */
+  function chargeTrace(video){
+    var id = video && video.cameraTrackDriveId;
+    if (!validId(id) || !DRIVE_API_KEY) return Promise.resolve(null);
+    return fetch(mediaUrl(id), { mode:"cors", credentials:"omit" })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(t){
+        if (!t || t.schema !== "a3.camera-track.v1" || !t.t || !t.p || !t.q) return null;
+        return t;
+      })
+      .catch(function(){ return null; });
+  }
+
+  /** Le volume de visée, construit dans la scène de model-viewer.
+   *
+   * La bibliothèque n'expose aucune API pour ajouter de la géométrie : on
+   * atteint sa scène par son symbole PRIVÉ, et on récupère les classes Three
+   * depuis un maillage DÉJÀ CHARGÉ — donc la même instance, pas une seconde
+   * copie qui divergerait. Non documenté : verrouillé sur la version épinglée,
+   * et en cas d'échec on ne montre rien plutôt qu'un objet faux.
+   */
+  function construitVolume(mv, track){
+    try {
+      var syms = Object.getOwnPropertySymbols(mv);
+      var symScene = null;
+      for (var i = 0; i < syms.length; i++){ if (syms[i].description === "scene") symScene = syms[i]; }
+      if (!symScene) return null;
+      var racine = null, ech = null;
+      mv[symScene].traverse(function(o){
+        if (!racine && o.name === "room") racine = o;
+        if (!ech && o.isMesh) ech = o;
+      });
+      if (!ech) return null;
+      var hote = racine || ech.parent;
+      if (!hote) return null;
+      var Mesh = ech.constructor, Geo = ech.geometry.constructor;
+      var Attr = ech.geometry.attributes.position.constructor;
+      var mat0 = Array.isArray(ech.material) ? ech.material[0] : ech.material;
+      var Mat = mat0.constructor;
+      // L'ouverture arrive DÉJÀ dans le repère de l'image : l'app a fait la
+      // conversion depuis le capteur (paysage) une fois pour toutes. La
+      // reprendre ici dessinerait un volume couché sur une visite debout.
+      var L = 1.35;
+      var w = L * Math.tan((track.fovWideDeg || 57) * Math.PI / 360);
+      var h = L * Math.tan((track.fovTallDeg || 71) * Math.PI / 360);
+      var c = [[-w,h,-L],[w,h,-L],[w,-h,-L],[-w,-h,-L]], parois = [];
+      for (var k = 0; k < 4; k++){
+        parois = parois.concat([0,0,0], c[k], c[(k+1)%4]);
+      }
+      var plan = [].concat(c[0],c[1],c[2],c[0],c[2],c[3]);
+      function piece(v, op){
+        var g = new Geo();
+        g.setAttribute("position", new Attr(new Float32Array(v), 3));
+        g.computeVertexNormals();
+        var m = new Mat({ color:0xe8703a, emissive:0xe8703a, emissiveIntensity:1.4,
+                          transparent:true, opacity:op, depthWrite:false, side:2,
+                          roughness:1, metalness:0 });
+        var mesh = new Mesh(g, m); mesh.renderOrder = 999; return mesh;
+      }
+      var vol = new (hote.constructor)();
+      vol.add(piece(parois, 0.18));
+      vol.add(piece(plan, 0.42));
+      vol.visible = false;
+      hote.add(vol);
+      return vol;
+    } catch (e){ return null; }
+  }
+
+  /** L'interpolation courte des quaternions : au-delà on bascule de signe. */
+  function melangeQ(a, b, u){
+    var d = a[0]*b[0]+a[1]*b[1]+a[2]*b[2]+a[3]*b[3], s = d < 0 ? -1 : 1;
+    var q = [a[0]+(s*b[0]-a[0])*u, a[1]+(s*b[1]-a[1])*u,
+             a[2]+(s*b[2]-a[2])*u, a[3]+(s*b[3]-a[3])*u];
+    var n = Math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3]) || 1;
+    return [q[0]/n, q[1]/n, q[2]/n, q[3]/n];
+  }
+
+  function poseA(track, offset, temps){
+    var T = track.t, lo = 0, hi = T.length - 1;
+    while (lo < hi){ var m = (lo+hi) >> 1; if (T[m] < temps) lo = m+1; else hi = m; }
+    var i = Math.max(1, lo);
+    var u = Math.min(1, Math.max(0, (temps - T[i-1]) / Math.max(1e-6, T[i] - T[i-1])));
+    var a = track.p[i-1], b = track.p[i];
+    return {
+      // La TRANSLATION de recentrage vient du manifeste : le modèle publié est
+      // recentré sur son propre plan, et sans elle les poses tombent à 2,5 m à
+      // côté du bâtiment (mesuré le 2026-08-06).
+      p: [a[0]+(b[0]-a[0])*u + offset[0],
+          a[1]+(b[1]-a[1])*u + offset[1],
+          a[2]+(b[2]-a[2])*u + offset[2]],
+      q: melangeQ(track.q[i-1], track.q[i], u)
+    };
+  }
+
+  /** Branche la trace sur la visionneuse et le lecteur du moment. */
+  function suitLaCamera(){
+    var mv = document.querySelector("model-viewer.model3d");
+    var video = document.querySelector("#videoWrap video");
+    var f = FLOORS.list[FLOORS.current];
+    var offset = f && f.model && f.model.recenterOffset;
+    if (!mv || !video || !CAM.piste || !offset || offset.length !== 3){
+      if (CAM.frustum) CAM.frustum.visible = false;
+      return;
+    }
+    if (!CAM.frustum) CAM.frustum = construitVolume(mv, CAM.piste);
+    if (!CAM.frustum) return;
+    CAM.offset = offset; CAM.video = video; CAM.dernierT = -1;
+    if (!CAM.boucle){
+      // Une SEULE boucle, qui ne fait rien tant que le temps de lecture n'a pas
+      // changé. Deviner quels événements le navigateur émet pendant qu'on fait
+      // glisser la barre coûte plus cher que comparer un nombre.
+      (function tourne(){
+        CAM.boucle = requestAnimationFrame(tourne);
+        if (document.hidden || !CAM.piste || !CAM.frustum || !CAM.video || !CAM.offset) return;
+        var t = CAM.video.currentTime;
+        if (t === CAM.dernierT) return;
+        CAM.dernierT = t;
+        var s = poseA(CAM.piste, CAM.offset, t);
+        CAM.frustum.position.set(s.p[0], s.p[1], s.p[2]);
+        CAM.frustum.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
+        CAM.frustum.visible = true;
+      })();
+    }
+    // Le modèle cesse de s'exhiber dès qu'il a quelque chose à montrer.
+    video.addEventListener("play", function(){ try { mv.autoRotate = false; } catch (e) {} });
+  }
+
+  /** Appelé quand l'étage change ou quand la vidéo est (re)posée. */
+  function majCamera(){
+    var f = FLOORS.list[FLOORS.current];
+    var v = f && f.video;
+    if (CAM.frustum){ CAM.frustum.visible = false; }
+    CAM.piste = null; CAM.offset = null; CAM.video = null; CAM.dernierT = -1;
+    // Le volume appartient à la scène du modèle : changer d'étage change de
+    // modèle, donc il faut le reconstruire.
+    CAM.frustum = null;
+    if (!v) return;
+    chargeTrace(v).then(function(track){
+      if (!track) return;
+      var g = FLOORS.list[FLOORS.current];
+      if (!g || g.video !== v) return;      // l'étage a changé entre-temps
+      CAM.piste = track;
+      setTimeout(suitLaCamera, 300);        // laisse la visionneuse se poser
+    });
+  }
+  FLOORS.hooks.push(function(){ majCamera(); });
+  // Le crochet d'étage ne suffit pas : au PREMIER affichage il n'y a aucun
+  // changement d'étage, donc rien ne se déclenchait. La fiche assemble ses
+  // panneaux de façon asynchrone (manifeste, visionneuse, lecteur), et il n'y a
+  // pas d'instant unique où tout est prêt. On réessaie donc quelques secondes,
+  // puis on s'arrête — plutôt que de parier sur un ordre d'arrivée.
+  (function amorce(essais){
+    if (essais <= 0) return;
+    var pret = document.querySelector("model-viewer.model3d")
+            && document.querySelector("#videoWrap video");
+    if (pret && !CAM.piste) majCamera();
+    if (CAM.frustum) return;
+    setTimeout(function(){ amorce(essais - 1); }, 600);
+  })(20);
+  window.__atlasMajCamera = majCamera;
 })();
 </script>
 </body>
