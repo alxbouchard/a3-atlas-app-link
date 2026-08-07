@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T22:19Z";
+  var ATLAS_BUILD = "2026-08-07T22:23Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3679,7 +3679,16 @@
    * voulu, pas une redondance.
    */
   function posePastillesEnTete(){
-    var marque = document.querySelector(".wrap > .brand");
+    // ON CHERCHE LE LOGO, PAS SA PLACE.
+    //
+    // `".wrap > .brand"` ne tenait que jusqu'à la première passe : celle-ci
+    // déplace le logo DANS la barre, son parent n'est donc plus `.wrap`, le
+    // sélecteur ne trouvait plus rien et la fonction sortait avant de créer
+    // les pastilles. Or à la première passe les étages ne sont pas encore
+    // connus — le banc, servi depuis le disque, les avait par chance ; le
+    // vrai réseau ne les a pas. Résultat en production : aucun sélecteur
+    // d'étage nulle part, les trois d'origine étant masqués (2026-08-07).
+    var marque = document.querySelector(".brand");
     if (!marque) return;
     var tete = document.querySelector(".entete");
     if (!tete){
