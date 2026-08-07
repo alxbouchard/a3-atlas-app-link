@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T22:26Z";
+  var ATLAS_BUILD = "2026-08-07T22:28Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -5262,8 +5262,23 @@
     st.id = "atlas-mini-css";
     st.textContent =
       "@media (max-width:860px){" +
-      "body.atlas-minicarte .hero-visual{aspect-ratio:auto;height:min(62vh,540px);" +
+      // LE PLAN A DROIT À LA MÊME HAUTEUR QUE LA VIDÉO.
+      //
+      // Il plafonnait à 62 vh quand la vidéo monte à 78 : le panneau du plan
+      // était le plus serré des deux, alors que c'est lui qu'on lit le plus
+      // longtemps (owner 2026-08-07).
+      "body.atlas-minicarte .hero-visual{aspect-ratio:auto;height:min(78vh,760px);" +
       "max-height:none;overflow:hidden}" +
+      // ET LA VIGNETTE VIDÉO LIBÈRE LA BARRE.
+      //
+      // Posée à 10 px du bas, elle recouvrait la moitié droite du segment des
+      // vues : sur un téléphone de 390 px, la rangée et la vignette ne
+      // tiennent pas sur la même ligne (constaté sur iPhone, 2026-08-07).
+      // Elle remonte au-dessus de la barre, qui retrouve toute la largeur —
+      // exactement ce qu'on a déjà fait de l'autre côté pour dégager les
+      // commandes du lecteur.
+      "body.atlas-minicarte:not(.atlas-video-grande) #videoSection.atlas-vignette{" +
+      "bottom:64px}" +
       // LE PANNEAU PREND LA FORME DE LA VIDÉO QUAND ELLE EST EN GRAND.
       //
       // À 62 vh dans un cadre presque carré, une vidéo en portrait était
