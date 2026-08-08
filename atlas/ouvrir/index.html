@@ -99,6 +99,11 @@
   /* Le nom prend la place qu'il reste et se coupe plutôt que de pousser les
      pastilles hors du centre. */
   /* L'étage de la vidéo : une précision sur le titre, pas un second titre. */
+  .atlas-panne{margin:10px 4px 14px; padding:12px 14px; border-radius:14px;
+    border:1px solid var(--line); background:var(--card); color:var(--ink);
+    font-size:14px; line-height:1.45}
+  .atlas-panne b{display:block; margin-bottom:2px}
+  .atlas-panne span{color:var(--muted)}
   .etage-du-media{color:var(--muted); font-weight:500; font-size:13px}
   /* La description de la propriété, sous son nom. */
   .hero #subtitle{margin:6px 0 0; color:var(--muted); font-size:15px}
@@ -728,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-08T22:14Z";
+  var ATLAS_BUILD = "2026-08-08T23:09Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1599,7 +1604,114 @@
         if (!DRIVE_API_KEY) throw new Error("indisponible");
         return fetchOnce(mediaUrl(id), FETCH_TIMEOUT_MS);
       })
-      .then(function(txt){ rememberJson(id, txt); return JSON.parse(txt); });
+      .then(function(txt){ rememberJson(id, txt); return JSON.parse(txt); })
+      .catch(function(e){
+        // Un seul point de signalement pour tous les compagnons : la double
+        // tentative (accès direct puis clé d'API) ne compte que pour UN échec.
+        signaleUnEchec("json:" + id);
+        throw e;
+      });
+  }
+
+  /** QUAND PLUS RIEN N'ARRIVE, ON LE DIT — SANS PRÉTENDRE SAVOIR POURQUOI.
+   *
+   * Une fiche bloquée et une fiche vide se ressemblent exactement : le
+   * visiteur ne voit pas « il manque des choses », il voit une propriété qui
+   * n'a rien à montrer. Pire, ça ressemble à un lien révoqué, qui a pourtant
+   * son propre message. La vérité est souvent « repassez dans dix minutes ».
+   *
+   * ON NE DIAGNOSTIQUE PAS. Quand le navigateur refuse une réponse pour
+   * cause d'origine, le code ne reçoit ni le code d'erreur, ni les en-têtes,
+   * ni la page d'explication — juste un échec nu, identique à celui d'un
+   * Wi-Fi coupé. Le message décrit donc le symptôme et le remède ; il reste
+   * vrai que la cause soit un blocage, une panne ou une coupure.
+   *
+   * DEUX ÉCHECS, PAS UN. Un fichier qui manque est ordinaire — un partage
+   * léger n'a ni historique ni surfaces, et ces requêtes-là ne partent même
+   * pas. Ce qui trahit une panne d'accès, c'est que plusieurs demandes
+   * INDÉPENDANTES échouent ensemble.
+   */
+  var ECHECS = Object.create(null);
+  function signaleUnEchec(quoi){
+    if (ECHECS[quoi]) return;
+    ECHECS[quoi] = true;
+    var n = 0; for (var k in ECHECS) n++;
+    if (n >= 2) montreLaPanne();
+  }
+  function montreLaPanne(){
+    if (document.getElementById("atlas-panne")) return;
+    // Un lien désactivé a déjà son message, et c'est une RÉPONSE, pas un échec.
+    var rev = document.getElementById("revokedSection");
+    if (rev && !rev.hidden) return;
+    var tete = document.querySelector(".entete");
+    var hote = tete && tete.parentElement;
+    if (!hote) return;
+    var horsLigne = (navigator.onLine === false);
+    var el = document.createElement("div");
+    el.id = "atlas-panne";
+    el.className = "atlas-panne";
+    el.setAttribute("role", "status");
+    var titre = document.createElement("b");
+    titre.textContent = horsLigne
+      ? (lang === "fr" ? "Vous semblez hors ligne." : "You appear to be offline.")
+      : (lang === "fr" ? "Le contenu ne se charge pas pour le moment."
+                       : "The content isn't loading right now.");
+    var corps = document.createElement("span");
+    corps.textContent = horsLigne
+      ? (lang === "fr" ? " Les fichiers de la propriété n'ont pas pu être téléchargés. Reconnectez-vous, puis rechargez la page."
+                       : " The property files could not be downloaded. Reconnect, then reload the page.")
+      : (lang === "fr" ? " Ce n'est pas la propriété : les fichiers sont là, c'est l'accès depuis votre connexion qui est temporairement limité. Réessayez dans quelques minutes, ou depuis un autre réseau."
+                       : " It isn't the property: the files are there, but access from your connection is temporarily limited. Try again in a few minutes, or from another network.");
+    el.appendChild(titre); el.appendChild(corps);
+    hote.insertBefore(el, tete.nextSibling);
+  }
+
+  /** L'AGRÉGAT, CHARGÉ UNE FOIS, ET QUI SERT LES AUTRES.
+   *
+   * La fiche le téléchargeait DÉJÀ à chaque ouverture — 170 Ko — pour n'y lire
+   * que trois choses : la présence de GPS, les équipements et l'adresse. Il
+   * était payé et presque inutilisé, pendant que trois autres fichiers étaient
+   * téléchargés séparément pour des données qu'il contient à l'identique.
+   *
+   * Vérifié sur un partage réel (2026-08-08) : `agrégat.context` est
+   * STRICTEMENT identique à `context.json`, `agrégat.derivedValues` au tableau
+   * de `derived.json`, et `agrégat.history` à `history.json#events`. Ce n'est
+   * pas « équivalent » ni « suffisant » : c'est le même objet.
+   *
+   * `media.json` reste, lui : l'agrégat n'a ni `recenterOffset` — sans quoi
+   * les poses tombent à deux mètres à côté du bâtiment — ni le tableau des
+   * vidéos par étage, donc aucune trace caméra, ni les légendes de photos.
+   *
+   * Chaque requête en moins compte doublement : Google limite l'accès d'une
+   * adresse qui télécharge beaucoup de fichiers sans s'authentifier, et c'est
+   * exactement ce que fait la fiche.
+   */
+  var _agregat = null;
+  function agregat(){
+    if (_agregat) return _agregat;
+    _agregat = (DRIVE_API_KEY && validId(aiContextId))
+      ? fetchJson(aiContextId)
+          .then(function(a){ return (a && a.schemaVersion === "atlas.ai.v1") ? a : null; })
+          .catch(function(){ return null; })
+      : Promise.resolve(null);
+    return _agregat;
+  }
+
+  /** Sert un compagnon depuis l'agrégat quand il s'y trouve, sinon le télécharge.
+   *
+   * L'extracteur REFABRIQUE l'enveloppe attendue (`schemaVersion` + charge
+   * utile) : l'agrégat range ces données à plat, sous sa propre version de
+   * schéma. On ne l'autorise donc que si l'agrégat s'annonce en `atlas.ai.v1`,
+   * la version sur laquelle l'identité a été vérifiée.
+   */
+  function compagnon(id, extrait){
+    return agregat().then(function(a){
+      var pret = null;
+      if (a){ try { pret = extrait(a); } catch (e) { pret = null; } }
+      if (pret) return pret;
+      if (!validId(id)) return Promise.reject(new Error("compagnon absent"));
+      return fetchJson(id);
+    });
   }
 
   // A revoked share must LOOK revoked. Drive answers a definite 404 for a
@@ -1629,7 +1741,8 @@
   // Authoritative GPS note: read preciseLocationIncluded from the aggregate
   // (atlas-ai-context.json). Old links without `a` stay neutral. Never guessed.
   if (DRIVE_API_KEY && validId(aiContextId)){
-    fetchJson(aiContextId).then(function(agg){
+    agregat().then(function(agg){
+      if (!agg) return;
       var pli = agg && agg.shareScope ? agg.shareScope.preciseLocationIncluded : undefined;
       setPrivacyNote(pli === true ? true : (pli === false ? false : null));
       try{ collectEquipment(agg); }catch(e){ /* the rest of the page stays intact */ }
@@ -1637,8 +1750,8 @@
     }).catch(function(){ /* unreachable → keep the neutral note */ });
   }
 
-  if (DRIVE_API_KEY && validId(ctxJson)){
-    fetchJson(ctxJson).then(function(doc){
+  if (DRIVE_API_KEY && (validId(ctxJson) || validId(aiContextId))){
+    compagnon(ctxJson, function(a){ return a.context || null; }).then(function(doc){
       // Hard-guard the schema before touching the DOM.
       if (!doc || doc.schemaVersion !== "atlas.context.v1"){ showFallbackNote(); return; }
       try{
@@ -3210,7 +3323,11 @@
           mv.addEventListener("error", function(){
             var current = FLOORS.list[FLOORS.current];
             var id = (current && current.model && current.model.driveId) || first.driveId;
-            if (mv.__triedFallbackFor === id) return;
+            if (mv.__triedFallbackFor === id){
+              // Le repli a échoué à son tour : ce n'est plus un aléa.
+              signaleUnEchec("modele");
+              return;
+            }
             mv.__triedFallbackFor = id;
             mv.setAttribute("src", driveModelFallbackUrl(id));
           });
@@ -4286,8 +4403,13 @@
   function derivedVal(m){ return (typeof m==="number" && isFinite(m)) ? m : null; }
 
   function runDerivedEnrichment(){
-    if (!(DRIVE_API_KEY && validId(derivedId))) return;
-    fetchJson(derivedId).then(function(doc){
+    // L'agrégat suffit : il porte `derivedValues` à l'identique.
+    if (!(DRIVE_API_KEY && (validId(derivedId) || validId(aiContextId)))) return;
+    compagnon(derivedId, function(a){
+      return (Array.isArray(a.derivedValues) && a.derivedValues.length)
+        ? { schemaVersion: "atlas.context.derived.v1", derivedValues: a.derivedValues }
+        : null;
+    }).then(function(doc){
       if (!doc || doc.schemaVersion !== "atlas.context.derived.v1") return;
       try{ applySurfaces(doc); }catch(e){ /* baseline stays intact */ }
     }).catch(function(){ /* silent */ });
@@ -4407,8 +4529,13 @@
   var HIST_ICONS = { export:"⬆️", visit_photo:"📸", scan_photos:"🖼️", room_scanned:"📐" };
 
   function runHistoryEnrichment(){
-    if (!(DRIVE_API_KEY && validId(historyId))) return;
-    fetchJson(historyId).then(function(doc){
+    // Idem : `agrégat.history` EST le tableau d'événements.
+    if (!(DRIVE_API_KEY && (validId(historyId) || validId(aiContextId)))) return;
+    compagnon(historyId, function(a){
+      return (Array.isArray(a.history) && a.history.length)
+        ? { schemaVersion: "atlas.history.v1", events: a.history }
+        : null;
+    }).then(function(doc){
       if (!doc || doc.schemaVersion !== "atlas.history.v1") return;
       _historyDoc = doc;   // kept so applyMedia can re-link photos once media loads
       try{ applyHistory(doc); }catch(e){ /* baseline stays intact */ }
