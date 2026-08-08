@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-08T23:09Z";
+  var ATLAS_BUILD = "2026-08-08T23:39Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1599,10 +1599,29 @@
     if (cached){
       try { return Promise.resolve(JSON.parse(cached)); } catch (e) { /* corrompu : on refait */ }
     }
-    return fetchOnce(driveRaw(id), FETCH_TIMEOUT_MS)
-      .catch(function(){
-        if (!DRIVE_API_KEY) throw new Error("indisponible");
-        return fetchOnce(mediaUrl(id), FETCH_TIMEOUT_MS);
+    // L'API À CLÉ D'ABORD, L'ACCÈS DIRECT EN SECOURS.
+    //
+    // L'ordre était inverse, et il coûtait DEUX requêtes par compagnon dont
+    // une vouée à l'échec : `drive.usercontent` refuse les demandes de
+    // navigateur venues d'un autre site — 403, puis erreur d'origine faute
+    // d'en-tête sur la page d'erreur. Mesuré le 2026-08-08 : le même fichier
+    // répond 200 avec l'en-tête CORS à une requête sans navigateur, et
+    // échoue depuis la page. L'API `www.googleapis.com`, elle, est faite
+    // pour ça et répondait à chaque fois — mais en second, donc après un
+    // échec systématique.
+    //
+    // Doublement coûteux : c'est le NOMBRE de requêtes anonymes qui déclenche
+    // la limitation de Google, et on en payait deux pour un fichier.
+    //
+    // L'accès direct reste en secours : il couvre le cas où la clé échoue —
+    // quota dépassé, restriction de référent — alors que le fichier est
+    // toujours public.
+    var premier = DRIVE_API_KEY ? mediaUrl(id) : driveRaw(id);
+    var secours = DRIVE_API_KEY ? driveRaw(id) : null;
+    return fetchOnce(premier, FETCH_TIMEOUT_MS)
+      .catch(function(e){
+        if (!secours) throw e;
+        return fetchOnce(secours, FETCH_TIMEOUT_MS);
       })
       .then(function(txt){ rememberJson(id, txt); return JSON.parse(txt); })
       .catch(function(e){
