@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-08T23:39Z";
+  var ATLAS_BUILD = "2026-08-08T23:46Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3343,8 +3343,16 @@
             var current = FLOORS.list[FLOORS.current];
             var id = (current && current.model && current.model.driveId) || first.driveId;
             if (mv.__triedFallbackFor === id){
-              // Le repli a échoué à son tour : ce n'est plus un aléa.
-              signaleUnEchec("modele");
+              // LE MODÈLE SEUL SUFFIT À DIRE LA PANNE.
+              //
+              // La règle des deux échecs vaut pour les compagnons : un partage
+              // léger n'a ni historique ni surfaces, et leur absence est
+              // ordinaire. Le modèle, lui, n'est demandé QUE si le manifeste
+              // l'a déclaré — son échec est donc toujours un vrai échec, et
+              // une fiche sans sa 3D est une fiche amputée. Constaté le
+              // 2026-08-08 : modèle et vidéo manquants, aucun message, parce
+              // que les compagnons venaient du cache et ne comptaient pas.
+              montreLaPanne();
               return;
             }
             mv.__triedFallbackFor = id;
@@ -4671,16 +4679,31 @@
                        distance: 9, dernier: 0, mode: null } };
 
   /** La trace publiée par l'app (`a3.camera-track.v1`), 80 Ko environ. */
+  /** UNE SEULE DEMANDE PAR TRACE, MÊME SI ON LA REDEMANDE.
+   *
+   * `majCamera` est rappelée à chaque changement d'étage et chaque fois que
+   * le lecteur est reposé. Tant que la première réponse n'était pas arrivée,
+   * chaque appel relançait un téléchargement : mesuré le 2026-08-08, DEUX
+   * fois sur le banc et CINQ fois en ligne pour la même trace de 80 Ko — plus
+   * le réseau est lent, plus on insiste. Or ces requêtes comptent toutes dans
+   * le quota anonyme que Google surveille.
+   *
+   * On mémorise la PROMESSE, pas le résultat : les appels qui arrivent
+   * pendant le téléchargement attendent celui qui est déjà en cours.
+   */
+  var TRACES = Object.create(null);
   function chargeTrace(video){
     var id = video && video.cameraTrackDriveId;
     if (!validId(id) || !DRIVE_API_KEY) return Promise.resolve(null);
-    return fetch(mediaUrl(id), { mode:"cors", credentials:"omit" })
+    if (TRACES[id]) return TRACES[id];
+    TRACES[id] = fetch(mediaUrl(id), { mode:"cors", credentials:"omit" })
       .then(function(r){ return r.ok ? r.json() : null; })
       .then(function(t){
         if (!t || t.schema !== "a3.camera-track.v1" || !t.t || !t.p || !t.q) return null;
         return t;
       })
       .catch(function(){ return null; });
+    return TRACES[id];
   }
 
   /** Le volume de visée, construit dans la scène de model-viewer.
