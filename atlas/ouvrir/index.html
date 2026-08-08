@@ -111,7 +111,7 @@
     align-items:center; justify-content:center; border:0; border-radius:50%;
     background:rgba(7,27,40,.55); color:#fff; cursor:pointer;
     font:700 15px -apple-system,BlinkMacSystemFont,sans-serif;
-    box-shadow:0 2px 8px rgba(0,0,0,.45); -webkit-backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
     backdrop-filter:blur(6px)}
   .entete .nom-propriete{font-family:var(--serif); font-size:17px; font-weight:500;
     letter-spacing:0; text-transform:none; color:var(--ink); overflow:hidden;
@@ -728,7 +728,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-07T23:18Z";
+  var ATLAS_BUILD = "2026-08-08T22:14Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -5353,7 +5353,13 @@
       /* La vignette, quelle qu'elle soit. */
       "body.atlas-minicarte .atlas-vignette{position:absolute;right:10px;bottom:10px;" +
       "width:38%;max-width:200px;margin:0;z-index:6;border-radius:14px;overflow:hidden;" +
-      "box-shadow:0 6px 22px rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.18);" +
+      // PAS D'OMBRE PORTÉE (owner 2026-08-08 : « ça fait pas 2026 »).
+      //
+      // Ce qui détache la vignette du plan, ce n'est pas une ombre : c'est
+      // son bord net et ses coins arrondis. Le filet passe en gris neutre
+      // plutôt qu'en blanc translucide, sinon il disparaît sur un plan clair —
+      // et c'est justement l'ombre qui masquait ce défaut.
+      "border:1px solid rgba(128,128,128,.45);" +
       "cursor:pointer}" +
       /* Ce qui n'a pas de sens en petit. */
       // Le titre de la carte est un `summary`, pas un en-tête à moi : c'est lui
@@ -5378,8 +5384,11 @@
       // 2026-08-07). La vignette du modèle, elle, est une visionneuse 3D sans
       // fond — d'où l'asymétrie. Le contour, l'ombre et les coins arrondis
       // restent : ils viennent de la règle commune aux deux vignettes.
+      // `box-shadow:none` aussi : la vignette est une CARTE, et `.card` porte
+      // sa propre ombre — `0 22px 70px`. Retirer celle de la vignette ne
+      // suffisait donc pas, il en restait une plus large en dessous.
       "body.atlas-minicarte #videoSection.atlas-vignette{background:transparent;" +
-      "padding:0;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      "padding:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
       // Une vignette est une VIGNETTE : on borne sa hauteur et on recadre
       // l'image, sinon une vidéo en portrait occupe les deux tiers du plan.
       "body.atlas-minicarte .atlas-vignette{height:34%;max-height:190px}" +
@@ -5396,7 +5405,7 @@
       "position:absolute!important;inset:auto 10px 58px auto!important;" +
       "width:38%!important;max-width:200px!important;height:34%!important;" +
       "max-height:190px!important;border-radius:14px!important;z-index:6!important;" +
-      "box-shadow:0 6px 22px rgba(0,0,0,.5)}" +
+      "box-shadow:none!important}" +
       // EN GRAND, LA CARTE VIDÉO DISPARAÎT — il ne reste que l'image.
       //
       // Elle gardait son fond, sa bordure et ses coins arrondis pendant que le
@@ -5453,7 +5462,7 @@
       "body.atlas-minicarte #videoSection.atlas-vignette:not(.atlas-joue)::before{content:\"\";" +
       "position:absolute;left:50%;top:50%;width:42px;height:42px;margin:-21px 0 0 -21px;" +
       "border-radius:50%;background:rgba(7,27,40,.55);z-index:8;pointer-events:none;" +
-      "box-shadow:0 2px 10px rgba(0,0,0,.45);" +
+
       "background-image:url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'" +
       " viewBox='0 0 24 24'><path fill='white' d='M9 6.5v11l9-5.5z'/></svg>\");" +
       "background-repeat:no-repeat;background-position:center;background-size:22px}" +
