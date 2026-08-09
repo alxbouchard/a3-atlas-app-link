@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T06:18Z";
+  var ATLAS_BUILD = "2026-08-09T06:26Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -6048,9 +6048,20 @@
     return (performance.now() - (CAM.dernierGeste || 0)) > REPOS_APRES;
   }
   function reveille(){
-    var dormait = auRepos();
     marqueUnGeste();
-    if (dormait) demarreBoucle();
+    // ON RELANCE TOUJOURS, SANS SE DEMANDER SI ÇA DORMAIT.
+    //
+    // Je ne relançais que si `auRepos()` disait oui. Or cette fonction répond
+    // « non » dès qu'une lecture est en cours — c'est sa règle principale.
+    // Au moment où l'événement `play` arrive, la vidéo joue DÉJÀ : la page
+    // était donc jugée éveillée, et la boucle arrêtée par l'endormissement ne
+    // repartait jamais. La vidéo tournait, la carte restait figée (owner
+    // 2026-08-09). Le test échouait précisément dans le cas qu'il devait
+    // couvrir.
+    //
+    // `demarreBoucle` se garde déjà lui-même (`if (CAM.boucle) return`) :
+    // l'appeler à chaque geste ne coûte rien, et ne peut pas mentir.
+    demarreBoucle();
   }
   (function ecouteLesGestes(){
     marqueUnGeste();
