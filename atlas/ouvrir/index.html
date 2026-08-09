@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T07:33Z";
+  var ATLAS_BUILD = "2026-08-09T11:38Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2807,7 +2807,7 @@
    *
    * Rien ne s'efface quand on regarde d'aplomb : de là, rien ne bouche.
    */
-  var VOILE = { objets: null, actif: false, dernier: 0 };
+  var VOILE = { objets: null, actif: false, rasant: false, dernier: 0 };
   var VOILE_HAUTEUR = 1.2;      // ce qui est plus bas ne bouche pas la vue
   var VOILE_OPACITE = 0.16;     // un fantôme, pas une disparition
   var VOILE_VITESSE = 0.12;     // fondu : ~0,3 s, sinon ça clignote en tournant
@@ -2895,8 +2895,18 @@
       horizon.normalize();
 
       // D'aplomb, rien ne bouche : le voile n'a aucune raison d'être.
+      //
+      // DEUX SEUILS ICI AUSSI. J'avais mis une hystérésis sur la distance et
+      // oublié l'angle : en faisant tourner le modèle à la souris, on traverse
+      // la limite de plongée sans arrêt, et le voile battait à chaque passage
+      // (propriétaire, 2026-08-09 — « beaucoup de on/off constant »). La
+      // décision était pourtant stable en vue automatique, ce qui m'a d'abord
+      // fait chercher du côté du rendu.
       var montant = -regard.y;                       // 1 = d'aplomb, 0 = horizontal
-      var rasant = montant < 0.80;
+      var rasant = VOILE.rasant
+        ? montant < 0.88          // déjà ouvert : il faut monter franchement
+        : montant < 0.74;         // fermé : il faut plonger franchement
+      VOILE.rasant = rasant;
 
       // La distance, rapportée à celle où le modèle remplit le cadre.
       var rayon = sc.boundingBox.min.distanceTo(sc.boundingBox.max) / 2;
