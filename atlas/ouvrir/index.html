@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T07:07Z";
+  var ATLAS_BUILD = "2026-08-09T07:13Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2811,11 +2811,19 @@
   var VOILE_HAUTEUR = 1.2;      // ce qui est plus bas ne bouche pas la vue
   var VOILE_OPACITE = 0.16;     // un fantôme, pas une disparition
   var VOILE_VITESSE = 0.12;     // fondu : ~0,3 s, sinon ça clignote en tournant
-  // La distance dit l'intention mieux que l'angle : de loin on regarde un
-  // bâtiment, de près on inspecte une pièce (owner 2026-08-09). Exprimée en
-  // fraction de la distance à laquelle le modèle remplit le cadre.
-  var VOILE_LOIN = 1.00;        // à cette distance, tout est solide
-  var VOILE_PRES = 0.55;        // à celle-ci, le voile est complet
+  // DEUX ÉTATS, PAS UN DÉGRADÉ (owner 2026-08-09).
+  //
+  // Loin les murs sont pleins, près ils sont transparents. Un dosage continu
+  // donnait des demi-teintes qui n'apportaient rien : on ne regarde jamais un
+  // mur « à moitié ».
+  //
+  // Deux seuils, pas un : le voile s'OUVRE plus près qu'il ne se REFERME.
+  // Avec un seuil unique, s'arrêter pile dessus fait clignoter le mur à
+  // chaque micro-mouvement de la caméra. Exprimés en fraction de la distance
+  // à laquelle le modèle remplit le cadre — sinon le réglage ne vaudrait que
+  // pour un bâtiment de cette taille.
+  var VOILE_OUVRE = 0.78;       // en deçà, les murs proches s'effacent
+  var VOILE_FERME = 0.90;       // au-delà, ils redeviennent pleins
 
   function recenseLesObjets(sc, V){
     var liste = [];
@@ -2858,22 +2866,23 @@
       var regard = new V(); sc.camera.getWorldDirection(regard);
       var centre = sc.boundingBox.getCenter(new V());
 
-      // DEUX DOSAGES QUI SE MULTIPLIENT, AUCUN TOUT-OU-RIEN.
-      //
-      // L'angle : d'aplomb rien ne bouche, donc rien ne s'efface ; plus le
-      // regard devient rasant, plus le voile a lieu d'être.
+      // D'aplomb, rien ne bouche : le voile n'a aucune raison d'être.
       var montant = -regard.y;                       // 1 = d'aplomb, 0 = horizontal
-      var kAngle = borne((0.88 - montant) / 0.28);
+      var rasant = montant < 0.80;
 
-      // La distance, rapportée à celle où le modèle remplit le cadre — sinon
-      // le réglage dépendrait de la taille du bâtiment.
+      // La distance, rapportée à celle où le modèle remplit le cadre.
       var rayon = sc.boundingBox.min.distanceTo(sc.boundingBox.max) / 2;
       var champ = parseFloat(mvDuVoile() && mvDuVoile().getAttribute("field-of-view")) || 32;
       var dPlein = rayon / Math.sin((champ * Math.PI) / 360);
-      var d = sc.camera.position.distanceTo(centre);
-      var kDist = borne((VOILE_LOIN - d / dPlein) / (VOILE_LOIN - VOILE_PRES));
+      var part = sc.camera.position.distanceTo(centre) / dPlein;
 
-      var force = kAngle * kDist;
+      // L'hystérésis : on n'ouvre et on ne referme qu'en FRANCHISSANT un
+      // seuil, jamais en l'effleurant.
+      if (!rasant) VOILE.actif = false;
+      else if (part < VOILE_OUVRE) VOILE.actif = true;
+      else if (part > VOILE_FERME) VOILE.actif = false;
+
+      var force = VOILE.actif ? 1 : 0;
       var d0 = centre.dot(regard);
       for (var i = 0; i < VOILE.objets.length; i++){
         var e = VOILE.objets[i], dmax = -1e9;
