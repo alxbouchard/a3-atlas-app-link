@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T07:25Z";
+  var ATLAS_BUILD = "2026-08-09T07:33Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2880,6 +2880,20 @@
       var regard = new V(); sc.camera.getWorldDirection(regard);
       var centre = sc.boundingBox.getCenter(new V());
 
+      // LE PLAN DE COUPE EST VERTICAL, TOUJOURS.
+      //
+      // Je le prenais perpendiculaire au regard : il s'inclinait donc dès
+      // qu'on plongeait un peu, et un mur vertical proche avait son sommet
+      // devant le plan et sa base derrière. Plus « entièrement dans la moitié
+      // proche », donc jamais voilé — ça marchait à l'horizontale et échouait
+      // à trente degrés de plongée (mesuré le 2026-08-09).
+      //
+      // Un mur est vertical : sa qualité de « proche » est HORIZONTALE. On
+      // aplatit donc la direction du regard avant de trancher.
+      var horizon = new V(regard.x, 0, regard.z);
+      if (horizon.length() < 1e-4) horizon.set(0, 0, 1);   // regard d'aplomb
+      horizon.normalize();
+
       // D'aplomb, rien ne bouche : le voile n'a aucune raison d'être.
       var montant = -regard.y;                       // 1 = d'aplomb, 0 = horizontal
       var rasant = montant < 0.80;
@@ -2897,7 +2911,7 @@
       else if (part > VOILE_FERME) VOILE.actif = false;
 
       var force = VOILE.actif ? 1 : 0;
-      var d0 = centre.dot(regard);
+      var d0 = centre.dot(horizon);
       for (var i = 0; i < VOILE.objets.length; i++){
         var e = VOILE.objets[i], dmax = -1e9;
         e.m.updateWorldMatrix(true, false);
@@ -2905,7 +2919,7 @@
           // Recalculé à chaque décision, cinq fois par seconde : le modèle
           // peut avoir bougé depuis le recensement.
           e.coin.copy(e.locaux[k]).applyMatrix4(e.m.matrixWorld);
-          dmax = Math.max(dmax, e.coin.dot(regard));
+          dmax = Math.max(dmax, e.coin.dot(horizon));
         }
         e.vise = (dmax < d0) ? force : 0;
       }
