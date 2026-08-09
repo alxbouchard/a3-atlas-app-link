@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T07:13Z";
+  var ATLAS_BUILD = "2026-08-09T07:25Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2822,8 +2822,13 @@
   // chaque micro-mouvement de la caméra. Exprimés en fraction de la distance
   // à laquelle le modèle remplit le cadre — sinon le réglage ne vaudrait que
   // pour un bâtiment de cette taille.
-  var VOILE_OUVRE = 0.78;       // en deçà, les murs proches s'effacent
-  var VOILE_FERME = 0.90;       // au-delà, ils redeviennent pleins
+  //
+  // Relevés le 2026-08-09 sur une position choisie par le propriétaire : à
+  // 0,86 il voulait voir l'intérieur, et le seuil de 0,78 le lui refusait.
+  // « Vue d'ensemble » cadre à environ 1,3 : elle reste donc pleine, ce qui
+  // est le but — on regarde alors un bâtiment, pas une pièce.
+  var VOILE_OUVRE = 0.95;       // en deçà, les murs proches s'effacent
+  var VOILE_FERME = 1.10;       // au-delà, ils redeviennent pleins
 
   function recenseLesObjets(sc, V){
     var liste = [];
@@ -2835,15 +2840,24 @@
       if (!g || !g.attributes || !g.attributes.position) return;
       if (!g.boundingBox) g.computeBoundingBox();
       o.updateWorldMatrix(true, false);
-      var bb = g.boundingBox, coins = [], bas = 1e9, haut = -1e9;
+      // ON GARDE LES COINS EN COORDONNÉES LOCALES, JAMAIS DU MONDE.
+      //
+      // Je les mémorisais une fois pour toutes en coordonnées du monde. Or
+      // model-viewer RECADRE le modèle après le chargement : il le déplace, et
+      // mes coins désignaient alors des positions périmées. Trois grands murs
+      // se retrouvaient classés « au fond » alors qu'ils bouchaient la vue
+      // (mesuré le 2026-08-09). Un repère qui bouge n'est pas un repère.
+      var bb = g.boundingBox, locaux = [], bas = 1e9, haut = -1e9;
       for (var i = 0; i < 8; i++){
-        var v = new V(i & 1 ? bb.max.x : bb.min.x,
+        var l = new V(i & 1 ? bb.max.x : bb.min.x,
                       i & 2 ? bb.max.y : bb.min.y,
-                      i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld);
-        coins.push(v); bas = Math.min(bas, v.y); haut = Math.max(haut, v.y);
+                      i & 4 ? bb.max.z : bb.min.z);
+        locaux.push(l);
+        var v = l.clone().applyMatrix4(o.matrixWorld);
+        bas = Math.min(bas, v.y); haut = Math.max(haut, v.y);
       }
       if (haut - bas <= VOILE_HAUTEUR) return;      // trop bas pour boucher
-      liste.push({ m: o, coins: coins, voile: 0,
+      liste.push({ m: o, locaux: locaux, coin: new V(), voile: 0,
                    opacite0: o.material.opacity,
                    transparent0: o.material.transparent,
                    profondeur0: o.material.depthWrite });
@@ -2886,25 +2900,40 @@
       var d0 = centre.dot(regard);
       for (var i = 0; i < VOILE.objets.length; i++){
         var e = VOILE.objets[i], dmax = -1e9;
-        for (var k = 0; k < 8; k++) dmax = Math.max(dmax, e.coins[k].dot(regard));
+        e.m.updateWorldMatrix(true, false);
+        for (var k = 0; k < 8; k++){
+          // Recalculé à chaque décision, cinq fois par seconde : le modèle
+          // peut avoir bougé depuis le recensement.
+          e.coin.copy(e.locaux[k]).applyMatrix4(e.m.matrixWorld);
+          dmax = Math.max(dmax, e.coin.dot(regard));
+        }
         e.vise = (dmax < d0) ? force : 0;
       }
     }
 
     // Le fondu, lui, court à chaque image : c'est lui qui rend la chose douce.
+    // ON RÉÉCRIT À CHAQUE IMAGE, SANS CONDITION.
+    //
+    // J'avais un raccourci : le fondu terminé, on passait au suivant sans
+    // toucher au matériau. Économie illusoire et défaut réel — quelque chose
+    // remet l'opacité à 1 après nous (model-viewer recharge ses matériaux à
+    // l'occasion), et plus rien ne la corrigeait : le voile était calculé à
+    // 1 pendant que le mur restait plein (mesuré le 2026-08-09, `voile: 1`
+    // et `op: 1` sur le même objet).
+    //
+    // Cinquante affectations par image ne coûtent rien ; un mur qui refuse de
+    // s'ouvrir coûte la fonction entière.
     var bouge = false;
     for (var j = 0; j < VOILE.objets.length; j++){
       var o = VOILE.objets[j], but = o.vise || 0;
-      if (Math.abs(o.voile - but) < 0.004){ o.voile = but; continue; }
-      o.voile += (but - o.voile) * VOILE_VITESSE;
-      bouge = true;
+      if (Math.abs(o.voile - but) < 0.004) o.voile = but;
+      else { o.voile += (but - o.voile) * VOILE_VITESSE; bouge = true; }
       var mat = o.m.material;
       var op = o.opacite0 + (VOILE_OPACITE - o.opacite0) * o.voile;
-      mat.opacity = op;
+      if (mat.opacity !== op){ mat.opacity = op; mat.needsUpdate = true; bouge = true; }
       mat.transparent = o.voile > 0.01 ? true : o.transparent0;
       // Sans ça, un mur effacé continue d'occulter ce qu'il y a derrière.
       mat.depthWrite = o.voile > 0.5 ? false : o.profondeur0;
-      mat.needsUpdate = true;
     }
     if (bouge && sc.queueRender) sc.queueRender();
   }
