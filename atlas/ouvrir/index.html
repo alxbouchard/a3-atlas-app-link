@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T06:43Z";
+  var ATLAS_BUILD = "2026-08-09T06:49Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2811,6 +2811,11 @@
   var VOILE_HAUTEUR = 1.2;      // ce qui est plus bas ne bouche pas la vue
   var VOILE_OPACITE = 0.16;     // un fantôme, pas une disparition
   var VOILE_VITESSE = 0.12;     // fondu : ~0,3 s, sinon ça clignote en tournant
+  // La distance dit l'intention mieux que l'angle : de loin on regarde un
+  // bâtiment, de près on inspecte une pièce (owner 2026-08-09). Exprimée en
+  // fraction de la distance à laquelle le modèle remplit le cadre.
+  var VOILE_LOIN = 1.00;        // à cette distance, tout est solide
+  var VOILE_PRES = 0.55;        // à celle-ci, le voile est complet
 
   function recenseLesObjets(sc, V){
     var liste = [];
@@ -2838,6 +2843,9 @@
     return liste;
   }
 
+  function borne(x){ return x < 0 ? 0 : (x > 1 ? 1 : x); }
+  function mvDuVoile(){ return document.querySelector("model-viewer.model3d"); }
+
   function voileLaMoitieProche(){
     var sc = CAM.scene; if (!sc || !sc.camera || !sc.boundingBox) return;
     var V = sc.camera.position.constructor;
@@ -2848,13 +2856,29 @@
     if (maintenant - VOILE.dernier >= 200){
       VOILE.dernier = maintenant;
       var regard = new V(); sc.camera.getWorldDirection(regard);
-      // D'aplomb, rien ne bouche : on rend tout à sa matière.
-      var rasant = regard.y > -0.72;
-      var d0 = sc.boundingBox.getCenter(new V()).dot(regard);
+      var centre = sc.boundingBox.getCenter(new V());
+
+      // DEUX DOSAGES QUI SE MULTIPLIENT, AUCUN TOUT-OU-RIEN.
+      //
+      // L'angle : d'aplomb rien ne bouche, donc rien ne s'efface ; plus le
+      // regard devient rasant, plus le voile a lieu d'être.
+      var montant = -regard.y;                       // 1 = d'aplomb, 0 = horizontal
+      var kAngle = borne((0.88 - montant) / 0.28);
+
+      // La distance, rapportée à celle où le modèle remplit le cadre — sinon
+      // le réglage dépendrait de la taille du bâtiment.
+      var rayon = sc.boundingBox.min.distanceTo(sc.boundingBox.max) / 2;
+      var champ = parseFloat(mvDuVoile() && mvDuVoile().getAttribute("field-of-view")) || 32;
+      var dPlein = rayon / Math.sin((champ * Math.PI) / 360);
+      var d = sc.camera.position.distanceTo(centre);
+      var kDist = borne((VOILE_LOIN - d / dPlein) / (VOILE_LOIN - VOILE_PRES));
+
+      var force = kAngle * kDist;
+      var d0 = centre.dot(regard);
       for (var i = 0; i < VOILE.objets.length; i++){
         var e = VOILE.objets[i], dmax = -1e9;
         for (var k = 0; k < 8; k++) dmax = Math.max(dmax, e.coins[k].dot(regard));
-        e.vise = (rasant && dmax < d0) ? 1 : 0;
+        e.vise = (dmax < d0) ? force : 0;
       }
     }
 
@@ -2862,7 +2886,7 @@
     var bouge = false;
     for (var j = 0; j < VOILE.objets.length; j++){
       var o = VOILE.objets[j], but = o.vise || 0;
-      if (Math.abs(o.voile - but) < 0.01){ o.voile = but; continue; }
+      if (Math.abs(o.voile - but) < 0.004){ o.voile = but; continue; }
       o.voile += (but - o.voile) * VOILE_VITESSE;
       bouge = true;
       var mat = o.m.material;
