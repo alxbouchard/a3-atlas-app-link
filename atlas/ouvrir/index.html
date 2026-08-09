@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T11:38Z";
+  var ATLAS_BUILD = "2026-08-09T11:45Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2809,6 +2809,8 @@
    */
   var VOILE = { objets: null, actif: false, rasant: false, dernier: 0 };
   var VOILE_HAUTEUR = 1.2;      // ce qui est plus bas ne bouche pas la vue
+  var VOILE_EPAISSEUR = 0.45;   // au-delà, c'est un meuble, pas une paroi
+  var VOILE_LONGUEUR = 0.6;     // un fragment de mur court quand même un peu
   var VOILE_OPACITE = 0.16;     // un fantôme, pas une disparition
   var VOILE_VITESSE = 0.12;     // fondu : ~0,3 s, sinon ça clignote en tournant
   // DEUX ÉTATS, PAS UN DÉGRADÉ (owner 2026-08-09).
@@ -2847,16 +2849,34 @@
       // mes coins désignaient alors des positions périmées. Trois grands murs
       // se retrouvaient classés « au fond » alors qu'ils bouchaient la vue
       // (mesuré le 2026-08-09). Un repère qui bouge n'est pas un repère.
-      var bb = g.boundingBox, locaux = [], bas = 1e9, haut = -1e9;
+      var bb = g.boundingBox, locaux = [], mn = null, mx = null;
       for (var i = 0; i < 8; i++){
         var l = new V(i & 1 ? bb.max.x : bb.min.x,
                       i & 2 ? bb.max.y : bb.min.y,
                       i & 4 ? bb.max.z : bb.min.z);
         locaux.push(l);
         var v = l.clone().applyMatrix4(o.matrixWorld);
-        bas = Math.min(bas, v.y); haut = Math.max(haut, v.y);
+        if (!mn){ mn = v.clone(); mx = v.clone(); }
+        mn.min(v); mx.max(v);
       }
-      if (haut - bas <= VOILE_HAUTEUR) return;      // trop bas pour boucher
+      // HAUT, OU BIEN TRANCHE MINCE ET LONGUE.
+      //
+      // La seule hauteur laissait en l'air les LINTEAUX et les ALLÈGES — les
+      // morceaux de mur au-dessus et au-dessous des portes et fenêtres. Ils
+      // font 20 à 70 cm de haut, donc ils passaient sous le seuil, et ils
+      // restaient suspendus quand leur mur s'effaçait (propriétaire,
+      // 2026-08-09).
+      //
+      // Baisser le seuil de hauteur aurait effacé les meubles. La forme les
+      // sépare mieux : un morceau de mur est MINCE dans une direction
+      // horizontale — 17 à 44 cm mesuré — et long. Une table, un lit, un
+      // comptoir, une chaise font tous plus de 45 cm dans leur plus petite
+      // dimension horizontale.
+      var epais = Math.min(mx.x - mn.x, mx.z - mn.z);
+      var longueur = Math.max(mx.x - mn.x, mx.z - mn.z);
+      var estMur = (mx.y - mn.y) > VOILE_HAUTEUR
+                || (epais < VOILE_EPAISSEUR && longueur > VOILE_LONGUEUR);
+      if (!estMur) return;
       liste.push({ m: o, locaux: locaux, coin: new V(), voile: 0,
                    opacite0: o.material.opacity,
                    transparent0: o.material.transparent,
