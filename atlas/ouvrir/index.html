@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T05:37Z";
+  var ATLAS_BUILD = "2026-08-09T06:18Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2026,9 +2026,58 @@
   // Photos & video exist only for Complet shares by design.
   //   Photos → lh3 CDN <img> (no CORS, no key).  Video → Drive preview iframe.
   // =====================================================================
+  /** Le manifeste média, reconstitué depuis l'agrégat quand il le porte.
+   *
+   * Longtemps l'agrégat ne pouvait PAS remplacer `media.json` : il lui
+   * manquait `recenterOffset` — sans quoi rien ne replace une pose dans le
+   * modèle — le tableau des vidéos par étage avec leurs traces de caméra, les
+   * légendes de photos et le lien avant/après. L'app les y met depuis le
+   * build 114 (2026-08-08).
+   *
+   * LE MARQUEUR EST `videos`. Un agrégat d'avant 114 n'a pas ce tableau du
+   * tout — même vide, sa présence prouve qu'il vient du constructeur enrichi.
+   * On ne devine donc jamais : ou bien l'agrégat porte tout, ou bien on
+   * télécharge `media.json` comme avant.
+   *
+   * Deux noms diffèrent entre les deux formes, et c'est tout : l'agrégat dit
+   * `linkedSpace` là où le manifeste dit `roomId`, et `evidenceNature` là où
+   * il dit `context`.
+   */
+  function mediaDepuisLAgregat(a){
+    var m = a && a.media;
+    if (!m || !Array.isArray(m.videos)) return null;
+    function liste(x){ return Array.isArray(x) ? x : []; }
+    return {
+      schemaVersion: "atlas.media.v1",
+      models: liste(m.models).map(function(o){
+        var e = { driveId: o.driveId, label: o.label };
+        if (o.recenterOffset) e.recenterOffset = o.recenterOffset;
+        if (o.wallThicknessM != null) e.wallThicknessM = o.wallThicknessM;
+        return e;
+      }),
+      plans: liste(m.plans).map(function(o){
+        return { driveId: o.driveId, kind: o.kind, label: o.label };
+      }),
+      photos: liste(m.photos).map(function(o){
+        var e = { driveId: o.driveId, filename: o.filename };
+        if (o.linkedSpace) e.roomId = o.linkedSpace;
+        if (o.captionFR) e.captionFR = o.captionFR;
+        if (o.beforeRef) e.beforeRef = o.beforeRef;
+        if (o.evidenceNature) e.context = o.evidenceNature;
+        return e;
+      }),
+      videos: liste(m.videos).map(function(o){
+        var e = { driveId: o.driveId, label: o.label };
+        if (o.cameraTrackDriveId) e.cameraTrackDriveId = o.cameraTrackDriveId;
+        return e;
+      }),
+      video: m.video ? { driveId: m.video.driveId, label: m.video.label } : null
+    };
+  }
+
   function runMediaEnrichment(){
-    if (!(DRIVE_API_KEY && validId(mediaId))) return;
-    fetchJson(mediaId).then(function(manifest){
+    if (!(DRIVE_API_KEY && (validId(mediaId) || validId(aiContextId)))) return;
+    compagnon(mediaId, mediaDepuisLAgregat).then(function(manifest){
       if (!manifest || manifest.schemaVersion !== "atlas.media.v1") return;
       try{ applyMedia(manifest); }catch(e){ /* baseline + context stay intact */ }
     }).catch(function(){ /* no network / non-2xx / parse — silent */ });
