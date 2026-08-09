@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T06:26Z";
+  var ATLAS_BUILD = "2026-08-09T06:43Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2782,6 +2782,100 @@
     if (b.style.right !== droite) b.style.right = droite;
   }
 
+  /** LA MOITIÉ PROCHE S'EFFACE, POUR QU'ON VOIE DEDANS.
+   *
+   * Vu de biais, le mur qui nous fait face bouche tout : on regarde une
+   * façade blanche au lieu d'un logement (propriétaire, 2026-08-09). Une
+   * maquette d'architecte règle ça depuis toujours en retirant la paroi
+   * avant.
+   *
+   * LA RÈGLE, ET ELLE NE CLASSE RIEN : un objet plus haut que 1,20 m et
+   * ENTIÈREMENT dans la moitié proche s'efface.
+   *
+   * — « entièrement » fait tout le travail : un plancher, ou un mur qui court
+   *   le long du regard, est à cheval sur le plan médian et reste opaque.
+   *   C'est ce qui conserve la silhouette et le fond sur lequel l'intérieur
+   *   se détache.
+   * — « plus haut que 1,20 m » garde les meubles et les comptoirs. Sans ça la
+   *   pièce se vide au lieu de s'ouvrir.
+   *
+   * J'ai d'abord essayé de reconnaître les murs à leur forme — haut, mince,
+   * long. Mauvaise piste : les longs murs sont découpés en tronçons, aucun ne
+   * dépasse 3,12 m, et le filtre n'attrapait que 20,4 m des 31,6 m de
+   * pourtour. Mesurer une position est fiable ; deviner une nature ne l'est
+   * pas.
+   *
+   * Rien ne s'efface quand on regarde d'aplomb : de là, rien ne bouche.
+   */
+  var VOILE = { objets: null, actif: false, dernier: 0 };
+  var VOILE_HAUTEUR = 1.2;      // ce qui est plus bas ne bouche pas la vue
+  var VOILE_OPACITE = 0.16;     // un fantôme, pas une disparition
+  var VOILE_VITESSE = 0.12;     // fondu : ~0,3 s, sinon ça clignote en tournant
+
+  function recenseLesObjets(sc, V){
+    var liste = [];
+    sc.traverse(function(o){
+      if (!o.isMesh || !o.material) return;
+      // Ni le cône ni l'arrêt sur image : ce sont NOS objets.
+      for (var p = o; p; p = p.parent) if (p === CAM.frustum) return;
+      var g = o.geometry;
+      if (!g || !g.attributes || !g.attributes.position) return;
+      if (!g.boundingBox) g.computeBoundingBox();
+      o.updateWorldMatrix(true, false);
+      var bb = g.boundingBox, coins = [], bas = 1e9, haut = -1e9;
+      for (var i = 0; i < 8; i++){
+        var v = new V(i & 1 ? bb.max.x : bb.min.x,
+                      i & 2 ? bb.max.y : bb.min.y,
+                      i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld);
+        coins.push(v); bas = Math.min(bas, v.y); haut = Math.max(haut, v.y);
+      }
+      if (haut - bas <= VOILE_HAUTEUR) return;      // trop bas pour boucher
+      liste.push({ m: o, coins: coins, voile: 0,
+                   opacite0: o.material.opacity,
+                   transparent0: o.material.transparent,
+                   profondeur0: o.material.depthWrite });
+    });
+    return liste;
+  }
+
+  function voileLaMoitieProche(){
+    var sc = CAM.scene; if (!sc || !sc.camera || !sc.boundingBox) return;
+    var V = sc.camera.position.constructor;
+    if (!VOILE.objets) VOILE.objets = recenseLesObjets(sc, V);
+    if (!VOILE.objets.length) return;
+
+    var maintenant = performance.now();
+    if (maintenant - VOILE.dernier >= 200){
+      VOILE.dernier = maintenant;
+      var regard = new V(); sc.camera.getWorldDirection(regard);
+      // D'aplomb, rien ne bouche : on rend tout à sa matière.
+      var rasant = regard.y > -0.72;
+      var d0 = sc.boundingBox.getCenter(new V()).dot(regard);
+      for (var i = 0; i < VOILE.objets.length; i++){
+        var e = VOILE.objets[i], dmax = -1e9;
+        for (var k = 0; k < 8; k++) dmax = Math.max(dmax, e.coins[k].dot(regard));
+        e.vise = (rasant && dmax < d0) ? 1 : 0;
+      }
+    }
+
+    // Le fondu, lui, court à chaque image : c'est lui qui rend la chose douce.
+    var bouge = false;
+    for (var j = 0; j < VOILE.objets.length; j++){
+      var o = VOILE.objets[j], but = o.vise || 0;
+      if (Math.abs(o.voile - but) < 0.01){ o.voile = but; continue; }
+      o.voile += (but - o.voile) * VOILE_VITESSE;
+      bouge = true;
+      var mat = o.m.material;
+      var op = o.opacite0 + (VOILE_OPACITE - o.opacite0) * o.voile;
+      mat.opacity = op;
+      mat.transparent = o.voile > 0.01 ? true : o.transparent0;
+      // Sans ça, un mur effacé continue d'occulter ce qu'il y a derrière.
+      mat.depthWrite = o.voile > 0.5 ? false : o.profondeur0;
+      mat.needsUpdate = true;
+    }
+    if (bouge && sc.queueRender) sc.queueRender();
+  }
+
   /** Allume la moitié du segment qui correspond au mode en cours. */
   function synchroniseLeSegment(){
     var seg = document.querySelector(".hero-visual .view-btns");
@@ -3422,6 +3516,7 @@
             mv.__floor = i;
             mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
             mv.__fit = null; mv.__triedFallbackFor = null;
+            VOILE.objets = null;   // un autre étage, d'autres murs
             mv.setAttribute("src", driveModelUrl(f.model.driveId));
             keepModelLook(mv);
           });
@@ -6184,6 +6279,7 @@
       // et un segment dont aucune moitié n'est allumée se lit comme cassé.
       synchroniseLeSegment();
       ajusteLaVignette();
+      try { voileLaMoitieProche(); } catch (e) { /* la fiche tient sans */ }
       poseLeBoutonDechange();
       // Le survol s'arme dès que TOUT est là — piste, boutons, ronde.
       //
