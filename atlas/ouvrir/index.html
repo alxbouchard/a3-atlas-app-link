@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-09T06:49Z";
+  var ATLAS_BUILD = "2026-08-09T07:07Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -6303,7 +6303,6 @@
       // et un segment dont aucune moitié n'est allumée se lit comme cassé.
       synchroniseLeSegment();
       ajusteLaVignette();
-      try { voileLaMoitieProche(); } catch (e) { /* la fiche tient sans */ }
       poseLeBoutonDechange();
       // Le survol s'arme dès que TOUT est là — piste, boutons, ronde.
       //
@@ -6323,6 +6322,14 @@
         }
       }
       }
+      // HORS DU MÉNAGE : le fondu court à chaque image.
+      //
+      // Placé dans le bloc à 5 Hz, il avançait de 12 % cinq fois par seconde
+      // au lieu de soixante : plus de trois secondes pour ouvrir un mur, alors
+      // que la caméra arrivait en trois cents millisecondes (2026-08-09). La
+      // DÉCISION — quels objets voiler — reste throttlée à l'intérieur de la
+      // fonction ; c'est elle qui coûte, pas l'interpolation.
+      try { voileLaMoitieProche(); } catch (e) { /* la fiche tient sans */ }
       if (CAM.pose) { try { animeLaVue(mv, CAM.pose); } catch (e) {} }
       var maintenant = performance.now();
       if (maintenant - (MES.dessine || 0) >= 32){
