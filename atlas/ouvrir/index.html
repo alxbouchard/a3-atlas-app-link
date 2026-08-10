@@ -6390,7 +6390,15 @@
       });
       sec.addEventListener("click", function(e){
         if (!MINI.matches) return;
-        if (!sec.classList.contains("atlas-vignette")) return;
+        // DANS LES DEUX CADRES, PAS SEULEMENT DANS LA VIGNETTE.
+        //
+        // Cette condition datait du temps où la vidéo en grand avait les
+        // contrôles de Safari : l'appui y était le sien, pas le nôtre. Les
+        // contrôles retirés, plus rien ne jouait ni ne mettait en pause en
+        // grand cadre — « ça marche dans le PIP mais pas quand je switch »
+        // (owner, 2026-08-10). Une commande retirée doit être remplacée
+        // partout où elle servait, pas seulement là où on regardait.
+        if (BALAYAGE.vientDeParcourir) return;   // un glissement n'est pas un appui
         // LES COMMANDES POSÉES SUR LA VIGNETTE GARDENT LEURS CLICS.
         //
         // Cet écouteur est en phase de CAPTURE : il s'exécute AVANT l'élément
@@ -6400,7 +6408,13 @@
         // décrivait : « quand je clique sur le X, c'est la vidéo qui se met
         // sur pause » (2026-08-10). Le corps de la vignette joue et met en
         // pause ; ses boutons, eux, font leur propre travail.
-        if (e.target.closest && e.target.closest(".ferme-visite, .atlas-bascule")) return;
+        // Tout ce qui est un bouton garde son clic. La liste nommait deux
+        // commandes ; en grand cadre il y en a d'autres — les vitesses —
+        // et cet écouteur en capture les aurait avalées en devenant
+        // universel. On décrit la NATURE de ce qu'on épargne, pas la liste
+        // de ce qui existait le jour où on l'a écrit.
+        if (e.target.closest
+            && e.target.closest("button, .video-speeds, .ferme-visite, .atlas-bascule")) return;
         e.preventDefault(); e.stopPropagation();
         // LE CORPS DE LA VIGNETTE JOUE ET MET EN PAUSE. L'échange appartient
         // au bouton ⇄ : sur une vidéo, appuyer veut dire lire.
@@ -6440,6 +6454,7 @@
    */
   var LARGEUR_VAUT = 25;          // secondes parcourues par une largeur d'écran
 
+  var BALAYAGE = { vientDeParcourir: false };
   function brancheBalayage(){
     var v = document.querySelector("#videoWrap video");
     if (!v || v.__atlasBalayage) return;
@@ -6452,7 +6467,8 @@
       if (sec && sec.classList.contains("atlas-vignette")) return;  // vignette : appui = échange
       var r = v.getBoundingClientRect();
       var t = e.touches[0];
-      if (t.clientY > r.bottom - 44) return;      // la barre native commande
+      // Plus de zone morte en bas : la barre native qui commandait ces
+      // 44 px n'existe plus, et le fil qu'on dessine ne se touche pas.
       x0 = t.clientX; y0 = t.clientY; t0 = v.currentTime;
       large = r.width || 1; etat = "indecis";
     }, { passive: true });
@@ -6474,7 +6490,15 @@
       v.currentTime = Math.max(0, Math.min(duree - 0.05, vise));
     }, { passive: false });
 
-    var fin = function(){ etat = null; };
+    // Un balayage se termine par un `click` que le navigateur synthétise :
+    // sans ce drapeau, parcourir la vidéo la mettait en pause en arrivant.
+    var fin = function(){
+      BALAYAGE.vientDeParcourir = (etat === "balaye");
+      if (BALAYAGE.vientDeParcourir){
+        setTimeout(function(){ BALAYAGE.vientDeParcourir = false; }, 350);
+      }
+      etat = null;
+    };
     v.addEventListener("touchend", fin);
     v.addEventListener("touchcancel", fin);
   }
