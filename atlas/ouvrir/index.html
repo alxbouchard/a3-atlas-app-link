@@ -310,8 +310,14 @@
 
   /* ---- Scan video: the file's own shape, not a forced 16:9 ---- */
   .video-box{display:flex; justify-content:center; align-items:center; width:100%;
-    background:#000; border-radius:14px; overflow:hidden}
+    background:#000; border-radius:14px; overflow:hidden; position:relative}
   .video-box video{display:block; max-width:100%; max-height:min(70vh,620px)}
+  /* Le fil de progression : un repère, jamais une commande. `pointer-events`
+     à `none` pour que l'appui traverse et joue la vidéo, même posé dessus. */
+  .video-fil{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:3;
+    background:rgba(255,255,255,.22); pointer-events:none; transition:opacity .3s}
+  .video-fil i{display:block; height:100%; width:0; background:var(--accent);
+    transition:width .25s linear}
   .video-speeds{display:flex; gap:8px; margin-top:10px}
   .video-speed{border:1px solid var(--line); background:var(--card); color:inherit;
     border-radius:999px; padding:6px 14px; font-size:14px; font-weight:600; cursor:pointer}
@@ -4710,7 +4716,27 @@
     box.className = "video-box";
     var el = document.createElement("video");
     el.className = "scan-video";
-    el.controls = true;
+    // **AUCUN CONTRÔLE NATIF, ET PAS DE SON** (owner, 2026-08-10).
+    //
+    // Safari iOS pose sur toute vidéo en pause un calque à lui : triangle
+    // central, deux boutons ±10 s, et un voile gris sur l'image. Il n'est pas
+    // habillable — les pseudo-éléments `-webkit-media-controls-*` sont une
+    // invention de Chrome, et la règle qu'on avait déployée n'a rien mordu sur
+    // iPhone. La seule façon de le faire disparaître est de ne pas demander de
+    // contrôles du tout.
+    //
+    // Ce qu'on perd est couvert autrement : l'appui joue et met en pause, le
+    // glissement parcourt, le ⇄ passe en grand cadre, et **le point sur le
+    // plan dit où l'on est** — bien mieux qu'un temps écoulé. Il ne reste que
+    // le fil de progression, qu'on dessine nous-mêmes, fin et non cliquable.
+    //
+    // Le son est coupé sans retour possible : une vidéo de relevé n'a rien à
+    // faire entendre — des pas, une respiration, parfois une conversation qui
+    // ne regarde pas le destinataire.
+    el.controls = false;
+    el.muted = true;
+    el.defaultMuted = true;
+    el.setAttribute("muted", "");
     el.preload = "metadata";
     el.setAttribute("playsinline", "");
     el.setAttribute("webkit-playsinline", "");
@@ -4752,6 +4778,31 @@
     el.addEventListener("error", function(){ if (!played) tryNextSource(); });
     tryNextSource();
     box.appendChild(el);
+
+    // LE SEUL RESTE DE LA BARRE DE LECTURE : UN FIL.
+    //
+    // Sans contrôles natifs, plus rien ne dit si la visite dure quarante
+    // secondes ou six minutes, ni où le glissement vient de nous poser. Ce
+    // trait le dit d'un coup d'œil. Il ne se clique pas — c'est un repère, pas
+    // une commande : le doigt sert à lire, mettre en pause et parcourir, et
+    // deux façons de faire la même chose sur trois pixels de haut, ce serait
+    // une pour se tromper.
+    var fil = document.createElement("div");
+    fil.className = "video-fil";
+    var filPlein = document.createElement("i");
+    fil.appendChild(filPlein);
+    box.appendChild(fil);
+    function majLeFil(){
+      var d = el.duration;
+      if (!isFinite(d) || d <= 0){ fil.style.opacity = "0"; return; }
+      fil.style.opacity = "1";
+      filPlein.style.width = Math.max(0, Math.min(100, (el.currentTime / d) * 100)) + "%";
+    }
+    el.addEventListener("timeupdate", majLeFil);
+    el.addEventListener("loadedmetadata", majLeFil);
+    el.addEventListener("seeked", majLeFil);
+    majLeFil();
+
     wrap.appendChild(box);
     playerEl = el; applyShape();
 
@@ -6270,7 +6321,7 @@
       // laissait flotter par-dessus sa carte une fois revenu au grand écran
       // (propriétaire, 2026-08-07).
       var vD = sec.querySelector("video");
-      if (vD){ vD.style.cssText = ""; vD.controls = true; }
+      if (vD){ vD.style.cssText = ""; }   // plus jamais de contrôles natifs
       if (mvD){
         mvD.classList.remove("atlas-vignette");
         try { mvD.setAttribute("camera-controls", ""); } catch (e) {}
@@ -6535,7 +6586,6 @@
       } catch (e) {}
       var v = sec.querySelector("video");
       if (v){
-        v.controls = true;
         // On NE force plus la lecture ici : agrandir et lire sont devenus
         // deux gestes distincts, le ⇄ et le corps de la vignette. Une vidéo
         // qui démarre parce qu'on a changé de cadrage est une surprise.
@@ -6563,7 +6613,6 @@
       rendLePlanGrand();
       var v2 = sec.querySelector("video");
       if (v2){
-        v2.controls = false;
         v2.style.cssText = "";      // la vignette est habillée par la feuille
       }
     }
