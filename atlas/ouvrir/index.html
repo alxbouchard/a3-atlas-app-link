@@ -3282,19 +3282,49 @@
   ///
   /// Le modèle n'a aucune texture — 203 matériaux en couleurs à plat — donc la
   /// teinte et la rugosité d'origine suffisent à distinguer les trois familles.
+  /// **LE MODÈLE DIT CE QU'IL EST — QUAND IL SAIT LE DIRE.**
+  ///
+  /// L'export aplatit la scène dans un nœud unique, alors la fiche n'avait que
+  /// la couleur et la rugosité pour reconnaître un mur d'une fenêtre. Elle
+  /// devinait, et sa devinette — « rugosité inférieure à 0,5 = brillant » —
+  /// rangeait le téléviseur noir et le lavabo blanc dans la même famille, puis
+  /// les repeignait du même gris. Mesuré sur le chalet le 2026-08-10 : 78
+  /// matériaux écrasés en un seul ton.
+  ///
+  /// Depuis le build 171, chaque matériau porte son rôle dans son NOM. Quand il
+  /// est là, on le lit. Quand il n'est pas là — tout partage publié avant — on
+  /// garde la devinette : ces fiches-là ne doivent pas changer d'aspect parce
+  /// qu'on a corrigé l'app.
   function materialRoles(mv){
     var src = mv.getAttribute("src") || "";
     if (mv.__roles && mv.__rolesFor === src) return mv.__roles;
     var mats = (mv.model && mv.model.materials) ? mv.model.materials : [];
     if (!mats.length) return null;
+    var nommes = 0;
+    for (var k = 0; k < mats.length; k++){ if (mats[k].name) nommes++; }
     var roles = [];
-    for (var i = 0; i < mats.length; i++){
-      var pbr = mats[i].pbrMetallicRoughness;
-      var c = pbr.baseColorFactor || [0, 0, 0, 1];
-      var warm = c[0] - c[2];                       // rouge moins bleu
-      roles.push(pbr.roughnessFactor < 0.5 ? "shiny"
-               : (warm > 0.12 && c[0] > 0.4) ? "floor"
-               : (warm < 0.05 && c[0] > 0.75) ? "wall" : "other");
+    if (nommes === mats.length){
+      // LE MODÈLE PARLE. On ne repeint plus que les cadres d'ouvertures :
+      // c'est le seul repeint que le propriétaire a voulu garder — « ça
+      // découpe bien » (2026-08-10). Tout le reste garde EXACTEMENT ce que le
+      // styliste de l'app a peint, ce qui est la seule façon que la fiche
+      // ressemble à l'app.
+      for (var i = 0; i < mats.length; i++){
+        var n = mats[i].name;
+        roles.push((n === "window" || n === "door" || n === "opening")
+                   ? "frame" : "keep");
+      }
+      mv.__nomme = true;
+    } else {
+      for (var j = 0; j < mats.length; j++){
+        var pbr = mats[j].pbrMetallicRoughness;
+        var c = pbr.baseColorFactor || [0, 0, 0, 1];
+        var warm = c[0] - c[2];                       // rouge moins bleu
+        roles.push(pbr.roughnessFactor < 0.5 ? "shiny"
+                 : (warm > 0.12 && c[0] > 0.4) ? "floor"
+                 : (warm < 0.05 && c[0] > 0.75) ? "wall" : "other");
+      }
+      mv.__nomme = false;
     }
     mv.__roles = roles; mv.__rolesFor = src;
     return roles;
@@ -3488,7 +3518,15 @@
       var mats = mv.model.materials;
       for (var i = 0; i < roles.length; i++){
         var pbr = mats[i].pbrMetallicRoughness;
-        if (roles[i] === "shiny"){
+        if (roles[i] === "keep"){
+          // Le modèle porte déjà la peinture de l'app : on n'y touche pas.
+          continue;
+        } else if (roles[i] === "frame"){
+          // Le seul repeint conservé : détacher les cadres du mur.
+          pbr.setBaseColorFactor([0.68, 0.70, 0.74, 1]);
+          pbr.setMetallicFactor(0);
+          pbr.setRoughnessFactor(0.55);
+        } else if (roles[i] === "shiny"){
           // Un gris clair suffit à détacher les ouvertures du mur : le
           // charbon (0,20) puis le gris moyen (0,52) écrasaient encore les
           // cadres et les électroménagers (owner 2026-08-03, deux fois).
