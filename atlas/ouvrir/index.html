@@ -216,6 +216,10 @@
   .media-group:last-child{margin-bottom:0}
   .media-group-h{font-size:14px; font-weight:700; color:var(--ink); margin:0 0 9px}
   .gallery-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px}
+  /* Les photos prises pendant le relevé sont un BONUS : visibles, jamais en
+     avant. Plus petites, et sous un intertitre discret. */
+  .gallery-grid--auto{grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:8px}
+  .media-sub{font-size:.78rem; color:var(--muted); margin:14px 0 6px; letter-spacing:.02em}
   .media-fig{margin:0; min-width:0}
   .media-fig img{width:100%; aspect-ratio:4/3; object-fit:cover; border-radius:12px;
     border:1px solid var(--line); background:var(--chip); display:block}
@@ -733,7 +737,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-10T03:49Z";
+  var ATLAS_BUILD = "2026-08-10T15:38Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -800,6 +804,7 @@
       floor_word:"Étage", dim_label:"Dimensions", dims_not_measured:"Non mesurées",
       spaces_h:"Espaces / pièces",
       gallery_h:"Photos du site", media_other_room:"Autres photos",
+      media_auto_h:"Prises pendant le relevé",
       ba_h:"Avant / Après", before_label:"Avant", after_label:"Après",
       video_h:"Vidéo du scan", video_none_floor:"Aucune vidéo pour cet étage.",
       surfaces_h:"Surfaces & matériaux",
@@ -898,6 +903,7 @@
       floor_word:"Floor", dim_label:"Dimensions", dims_not_measured:"Not measured",
       spaces_h:"Spaces / rooms",
       gallery_h:"Site photos", media_other_room:"Other photos",
+      media_auto_h:"Captured during the scan",
       ba_h:"Before / After", before_label:"Before", after_label:"After",
       video_h:"Scan video", video_none_floor:"No video for this floor.",
       surfaces_h:"Surfaces & materials",
@@ -4408,19 +4414,49 @@
         h.textContent = g.label || t.media_other_room;
         wrap.appendChild(h);
       }
-      var grid = document.createElement("div");
-      grid.className = "gallery-grid";
-      g.items.forEach(function(p){
-        var fig = document.createElement("figure");
-        fig.className = "media-fig";
-        var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; });
-        bindLightbox(im, p.driveId, p.captionFR);
-        fig.appendChild(im);
-        var cap = makeCaption(p.captionFR);
-        if (cap) fig.appendChild(cap);
-        grid.appendChild(fig);
-      });
-      wrap.appendChild(grid);
+      // LE BONUS NE PASSE PAS DEVANT LE PROPOS.
+      //
+      // Owner, 2026-08-10 : « les photos automatiques, c'est un bonus
+      // gratuit ; si le user veut de la qualité il prend de belles photos
+      // ensuite ». Elles étaient rendues à égalité avec les siennes — même
+      // taille, même rang — donc quatre photos choisies se noyaient parmi
+      // dix-neuf prises toutes seules. Un bonus n'est gratuit que s'il ne
+      // dilue pas le travail délibéré.
+      //
+      // La donnée le disait déjà : une photo choisie porte un `context`
+      // (`site_visit`, `after`…), une automatique n'en a pas.
+      function estAutomatique(p){
+        return !p.context;
+      }
+      var choisies = g.items.filter(function(p){ return !estAutomatique(p); });
+      var bonus = g.items.filter(estAutomatique);
+      // Rien à hiérarchiser quand il n'y a qu'une sorte de photos : on
+      // n'annonce pas une distinction qui n'existe pas.
+      if (!choisies.length || !bonus.length){ choisies = g.items; bonus = []; }
+
+      function grille(items, petite){
+        var grid = document.createElement("div");
+        grid.className = petite ? "gallery-grid gallery-grid--auto" : "gallery-grid";
+        items.forEach(function(p){
+          var fig = document.createElement("figure");
+          fig.className = "media-fig";
+          var im = makeMediaImg(p.driveId, function(){ fig.style.display = "none"; });
+          bindLightbox(im, p.driveId, p.captionFR);
+          fig.appendChild(im);
+          var cap = makeCaption(p.captionFR);
+          if (cap) fig.appendChild(cap);
+          grid.appendChild(fig);
+        });
+        return grid;
+      }
+      wrap.appendChild(grille(choisies, false));
+      if (bonus.length){
+        var sous = document.createElement("div");
+        sous.className = "media-sub";
+        sous.textContent = t.media_auto_h;
+        wrap.appendChild(sous);
+        wrap.appendChild(grille(bonus, true));
+      }
       root.appendChild(wrap);
     });
     document.getElementById("gallerySection").hidden = false;
