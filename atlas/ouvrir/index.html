@@ -733,7 +733,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-10T03:47Z";
+  var ATLAS_BUILD = "2026-08-10T03:49Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -4517,6 +4517,16 @@
     var list = Array.isArray(videos)
       ? videos.filter(function(v){ return v && typeof v === "object" && validId(v.driveId); })
       : [];
+    // UNE SEULE VIDÉO S'ENREGISTRE AUSSI.
+    //
+    // Tout le chargement de la trace de caméra passe par le registre des
+    // étages — `chargeTrace` est appelée depuis le crochet de changement
+    // d'étage, sur la vidéo que l'étage courant y a déposée. Ce registre
+    // n'était alimenté qu'à partir de DEUX vidéos : une propriété d'un seul
+    // étage n'y déposait rien, donc `chargeTrace` n'était jamais appelée et le
+    // point du téléphone ne bougeait pas. Le cas courant était le seul non
+    // couvert (owner, condo Magellan 2026-08-09).
+    if (list.length === 1) registerFloor(list[0].label, { video: list[0] });
     if (list.length > 1){
       list.forEach(function(v){ registerFloor(v.label, { video: v }); });
       var host = document.getElementById("videoWrap");
