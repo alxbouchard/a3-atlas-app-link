@@ -737,7 +737,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-10T15:38Z";
+  var ATLAS_BUILD = "2026-08-10T16:12Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -804,7 +804,7 @@
       floor_word:"Étage", dim_label:"Dimensions", dims_not_measured:"Non mesurées",
       spaces_h:"Espaces / pièces",
       gallery_h:"Photos du site", media_other_room:"Autres photos",
-      media_auto_h:"Prises pendant le relevé",
+      media_auto_h:"Prises pendant le relevé", voir_la_visite:"Voir la visite", fermer_visite:"Fermer la visite",
       ba_h:"Avant / Après", before_label:"Avant", after_label:"Après",
       video_h:"Vidéo du scan", video_none_floor:"Aucune vidéo pour cet étage.",
       surfaces_h:"Surfaces & matériaux",
@@ -903,7 +903,7 @@
       floor_word:"Floor", dim_label:"Dimensions", dims_not_measured:"Not measured",
       spaces_h:"Spaces / rooms",
       gallery_h:"Site photos", media_other_room:"Other photos",
-      media_auto_h:"Captured during the scan",
+      media_auto_h:"Captured during the scan", voir_la_visite:"Watch the walkthrough", fermer_visite:"Close the walkthrough",
       ba_h:"Before / After", before_label:"Before", after_label:"After",
       video_h:"Scan video", video_none_floor:"No video for this floor.",
       surfaces_h:"Surfaces & materials",
@@ -4042,7 +4042,11 @@
       // (owner 2026-08-07). Mais une fiche SANS modèle 3D laisse la vidéo
       // dans le flux, plus bas : là, la pastille sert. D'où le test sur sa
       // place réelle plutôt qu'une exclusion sèche.
-      if (id === "videoSection" && laVideoEstEnHaut()) return;
+      // Visite fermée sur téléphone : la vidéo n'est nulle part dans la page,
+      // donc la pastille est le SEUL chemin vers elle. Elle l'ouvre au lieu de
+      // faire défiler vers un vide.
+      var visiteFermee = document.body.classList.contains("atlas-visite-fermee");
+      if (id === "videoSection" && laVideoEstEnHaut() && !visiteFermee) return;
       var sec = document.getElementById(id);
       if (!sec || sec.hidden) return;
       var own = sec.querySelector(":scope > details.fold > summary > span");
@@ -4051,6 +4055,14 @@
       var b = document.createElement("button");
       b.type = "button"; b.className = "navchip"; b.textContent = label;
       b.onclick = function(){
+        if (id === "videoSection"
+            && document.body.classList.contains("atlas-visite-fermee")){
+          VISITE.ouverte = true;
+          minicarte();
+          var v = document.querySelector("#videoWrap video");
+          if (v) { try { v.play(); } catch (e) {} }
+          return;
+        }
         var d = sec.querySelector("details"); if (d) d.open = true;
         sec.scrollIntoView({ behavior: "smooth", block: "start" });
       };
@@ -5358,7 +5370,17 @@
    * survol — n'a de sens que si elle est visible. Replié, le panneau laissait
    * un point orange flotter dans le modèle sans que rien n'en explique la
    * provenance (propriétaire, 2026-08-07). */
+  /// « La vidéo est-elle ouverte ? » — la question doit porter sur ce qu'on
+  /// VOIT, pas sur un attribut.
+  ///
+  /// Elle interrogeait `sec.hidden` et le dépliement de la carte. Visite
+  /// fermée, la carte vidéo n'est ni `hidden` ni repliée : elle est rangée
+  /// dans la page et masquée par la feuille de style. La fonction répondait
+  /// donc « ouverte », et le cône de caméra — de la géométrie 3D dans la
+  /// scène, qu'aucune règle CSS ne peut atteindre — restait planté sur le
+  /// plan sans vidéo (owner, 2026-08-10 : « on voit toujours le cône »).
   function videoOuverte(){
+    if (document.body.classList.contains("atlas-visite-fermee")) return false;
     var sec = document.getElementById("videoSection");
     if (!sec || sec.hidden) return false;
     var fold = sec.querySelector("details.fold");
@@ -5831,6 +5853,37 @@
       "width:min(100%,calc(var(--h-video) * var(--rapport-video,.75)));" +
       "max-height:var(--h-video);margin-inline:auto}" +
       /* La vignette, quelle qu'elle soit. */
+      // L'APPEL DE LA VISITE : lisible, posé bas à droite, là où la vignette
+      // apparaîtra — le bouton annonce sa propre place.
+      // Hors du flux : sinon elle reprend en défilant la place qu'on vient de
+      // rendre au modèle.
+      "body.atlas-minicarte.atlas-visite-fermee #videoSection{display:none}" +
+      "body.atlas-visite-fermee #videoSection{display:none}" +
+      ".appel-visite{position:absolute;right:10px;bottom:64px;z-index:7;" +
+      "border:1px solid rgba(128,128,128,.45);border-radius:999px;" +
+      "background:rgba(20,20,20,.72);color:#fff;font:inherit;font-size:.86rem;" +
+      "padding:9px 16px;cursor:pointer}" +
+      // LA CROIX SE POSE À GAUCHE, PARCE QUE LE COIN DROIT EST DÉJÀ PRIS.
+      //
+      // Je l'avais mise en haut à droite de la vignette — exactement où le
+      // bouton d'échange (⇄) est placé, et une couche EN DESSOUS (z-index 8
+      // contre 9). Elle existait, elle réagissait au clavier, et personne ne
+      // pouvait la voir ni la toucher : « je ne peux pas arrêter la visite »
+      // (owner, 2026-08-10). Deux commandes ne partagent pas un coin.
+      ".ferme-visite{position:absolute;top:4px;left:4px;z-index:10;" +
+      "width:26px;height:26px;line-height:24px;padding:0;border-radius:50%;" +
+      "border:1px solid rgba(128,128,128,.45);background:rgba(20,20,20,.72);" +
+      "color:#fff;font-size:17px;cursor:pointer}" +
+      "body.atlas-minicarte .ferme-visite{position:absolute;top:4px;left:4px;z-index:10;" +
+      "width:26px;height:26px;line-height:24px;padding:0;border-radius:50%;" +
+      "border:1px solid rgba(128,128,128,.45);background:rgba(20,20,20,.72);" +
+      "color:#fff;font-size:17px;cursor:pointer;-webkit-backdrop-filter:blur(6px);" +
+      "backdrop-filter:blur(6px)}" +
+      "body.atlas-minicarte .appel-visite{position:absolute;right:10px;bottom:64px;" +
+      "z-index:7;border:1px solid rgba(128,128,128,.45);border-radius:999px;" +
+      "background:rgba(20,20,20,.72);color:#fff;font:inherit;font-size:.86rem;" +
+      "padding:9px 16px;cursor:pointer;-webkit-backdrop-filter:blur(6px);" +
+      "backdrop-filter:blur(6px)}" +
       "body.atlas-minicarte .atlas-vignette{position:absolute;right:10px;bottom:10px;" +
       "width:38%;max-width:200px;margin:0;z-index:6;border-radius:14px;overflow:hidden;" +
       // PAS D'OMBRE PORTÉE (owner 2026-08-08 : « ça fait pas 2026 »).
@@ -5871,7 +5924,13 @@
       "padding:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
       // Une vignette est une VIGNETTE : on borne sa hauteur et on recadre
       // l'image, sinon une vidéo en portrait occupe les deux tiers du plan.
-      "body.atlas-minicarte .atlas-vignette{height:34%;max-height:190px}" +
+      // LE CADRE PREND LA FORME DE L'IMAGE — c'était déjà la promesse écrite
+      // plus bas (« aucune bande vide à craindre », owner 2026-08-07), et
+      // cette ligne la contredisait : `height:34%` fixait la carte à 190 px
+      // pendant que la vidéo, montrée en entier, n'en faisait que 150. Les
+      // 40 px restants formaient une bande morte sous l'image — mesurée à
+      // l'écran, 182 × 190 contre 182 × 150. On ne borne plus que le maximum.
+      "body.atlas-minicarte .atlas-vignette{height:auto;max-height:190px}" +
       "body.atlas-minicarte .atlas-repliee{display:none}" +
       // Le plan en vignette : même coin, même taille que la vidéo. La règle
       // de la fiche le colle en `inset:0`, il faut donc être plus fort.
@@ -5919,16 +5978,27 @@
       // gauche — « 2× » coupé net au bord de l'image (owner 2026-08-07).
       // Elles reprennent le coin que les pastilles d'étage occupaient avant
       // de monter dans l'en-tête.
+      // LA CROIX A LE COIN, LES VITESSES COMMENCENT APRÈS ELLE.
+      //
+      // Les deux revendiquaient le même angle : la croix par-dessus « 1× »
+      // (owner 2026-08-10, capture). Déplacer la croix aurait été plus simple
+      // à écrire et plus dur à utiliser — elle est au même endroit dans les
+      // deux modes, c'est ce qui la rend trouvable. 40 px = ses 4 px de marge,
+      // ses 26 px, et 10 px de respiration.
       "body.atlas-minicarte #videoSection:not(.atlas-vignette) .video-speeds{" +
-      "position:absolute;left:10px;top:10px;z-index:8;margin:0}" +
+      "position:absolute;left:40px;top:10px;z-index:8;margin:0}" +
       "body.atlas-minicarte .atlas-vignette .video-box{height:100%}" +
       // `contain`, pas `cover` : on veut la vidéo EN ENTIER (owner 2026-08-07).
       // Le cadre prend la forme de l'image juste en dessous, donc il n'y a
       // aucune bande vide à craindre — et tant que les dimensions de la vidéo
       // sont inconnues, mieux vaut une image complète qu'une image rognée.
-      "body.atlas-minicarte .atlas-vignette video{width:100%!important;height:100%!important;" +
+      // `height:auto` et non `100%` : la carte n'a plus de hauteur imposée,
+      // donc c'est l'image qui la donne. Un `100%` calculé sur une hauteur
+      // automatique ne s'appuie sur rien et retombait sur la taille naturelle
+      // — d'où deux dimensions qui ne se rejoignaient jamais.
+      "body.atlas-minicarte .atlas-vignette video{width:100%!important;height:auto!important;" +
       "object-fit:contain;display:block;pointer-events:none;max-width:none!important;" +
-      "max-height:none!important;aspect-ratio:auto!important}" +
+      "max-height:190px!important;aspect-ratio:auto!important}" +
       // Les contrôles natifs sont inutilisables à cette taille — on les
       // cache plutôt que de basculer `controls`, que la fiche remet à chaque
       // changement d'étage.
@@ -5953,6 +6023,10 @@
       // symbole ne faisait rien quand on visait juste, et un appui sur la
       // vidéo échangeait au lieu de la jouer (owner 2026-08-07).
       "body.atlas-minicarte .atlas-bascule{display:flex}" +
+      // ET L'ÉCHANGE DISPARAÎT AVEC CE QU'IL ÉCHANGE. Visite fermée, il ne
+      // reste que le plan : un ⇄ flottant au milieu du vide (même capture)
+      // promet une bascule qui n'a plus de second terme.
+      "body.atlas-visite-fermee .atlas-bascule{display:none!important}" +
       /* La barre se réduit : une minicarte est toujours en vue de dessus
          orientée, il n\u2019y a plus de vue à choisir. */
       // `!important` parce que ces éléments portent un style EN LIGNE posé par
@@ -5964,18 +6038,162 @@
       // vignette et le bouton d'unités devenait intouchable — vérifié, c'est
       // la vidéo qu'on atteint à cet endroit.
       "body.atlas-minicarte .hero-controls{justify-content:flex-start}" +
+      // DEUX NATURES DE COMMANDES, DEUX PLACES.
+      //
+      // En bas, ce qu'on touche souvent : la vue qu'on regarde, et le pouce
+      // y arrive sans déplacer la main. En haut, ce qu'on règle une fois :
+      // les mesures, l'arrêt sur image, l'opacité. Empilées, elles faisaient
+      // deux rangées qui mangeaient le plan et criaient aussi fort l'une que
+      // l'autre — deux grosses pastilles allumées à côté du geste principal.
+      //
+      // L'ancrage se fait sur le PANNEAU, et c'est pour ça que la rangée
+      // change aussi de parent (voir `hisseLesOutils`) : posée dans la barre
+      // du bas, qui est elle-même positionnée, un `top:10px` la ramenait
+      // par-dessus les vues — constaté en capture, les deux rangées
+      // superposées.
+      "body.atlas-minicarte .hero-visual > .atlas-outils{position:absolute;" +
+      "top:10px;left:10px;z-index:7;margin:0}" +
       // Les vues ne disparaissent QUE lorsque le plan est en vignette.
       //
       // Je les cachais dans tout le mode minicarte, avec pour raison qu'une
       // vignette est toujours vue de dessus. Vrai pour la vignette — faux
       // pour le plan en grand, où il ne restait alors que le bouton d'unités
       // et aucun moyen de changer de vue (owner 2026-08-07).
-      "body.atlas-minicarte.atlas-video-grande .hero-controls .view-btns," +
-      "body.atlas-minicarte .hero-controls .atlas-mesures," +
-      "body.atlas-minicarte .hero-controls .atlas-opacite," +
-      "body.atlas-minicarte .hero-controls .atlas-arret{display:none!important}" +
+      // VISITE FERMÉE = PLAN EN GRAND, DONC LES VUES RESTENT.
+      //
+      // La condition ne tenait qu'à `atlas-video-grande`. Cette classe survit
+      // à certains chemins de fermeture, et les vues disparaissaient alors
+      // d'un écran où il n'y a plus de vidéo du tout — plan en grand, aucun
+      // moyen de changer d'angle (owner 2026-08-10, capture à l'appui). On
+      // ajoute la seule chose dont on soit sûr : visite fermée, plan en grand.
+      // MÊME RÈGLE POUR LES OUTILS QUE POUR LES VUES (owner, 2026-08-10 :
+      // « j'aimerais que ces boutons apparaissent sur mobile aussi »).
+      //
+      // « Mesures » et « Arrêt sur image » étaient masqués dans TOUT le mode
+      // téléphone. Ils commandent le plan, exactement comme les vues : ils
+      // n'ont donc à disparaître que là où le plan est réduit en vignette,
+      // pas parce que l'écran est petit.
+      // ON VISE LE PANNEAU, PAS LA BARRE DU BAS.
+      //
+      // Ces sélecteurs passaient par `.hero-controls`. La rangée d'outils a
+      // déménagé au-dessus du plan : elle a donc échappé à la règle et est
+      // restée affichée par-dessus la vidéo en grand, où elle recouvrait la
+      // croix et les vitesses (owner, 2026-08-10). Deux fois le même piège
+      // dans la même heure — un sélecteur qui décrit un CHEMIN casse dès que
+      // l'élément change de place ; il faut décrire l'ÉLÉMENT.
+      "body.atlas-minicarte.atlas-video-grande:not(.atlas-visite-fermee) .hero-visual .view-btns," +
+      "body.atlas-minicarte.atlas-video-grande:not(.atlas-visite-fermee) .hero-visual .atlas-outils," +
+      "body.atlas-minicarte.atlas-video-grande:not(.atlas-visite-fermee) .hero-visual .atlas-mesures," +
+      "body.atlas-minicarte.atlas-video-grande:not(.atlas-visite-fermee) .hero-visual .atlas-opacite," +
+      "body.atlas-minicarte.atlas-video-grande:not(.atlas-visite-fermee) .hero-visual .atlas-arret" +
+      "{display:none!important}" +
       "}";
     document.head.appendChild(st);
+  }
+
+  // **SUR TÉLÉPHONE, LE MODÈLE D'ABORD.**
+  //
+  // Décision du propriétaire, 2026-08-10 : par défaut la fiche ne montre que
+  // le modèle 3D ; la visite s'appelle par un bouton et revient en vignette
+  // par-dessus. Deux cartes se partageaient un écran de 390 px — c'était le
+  // vrai plafond de la taille du plan, plus encore que le cadrage.
+  //
+  // Ce que ça ne doit PAS coûter : le point orange qui suit le téléphone
+  // n'existe que pendant la lecture, et c'est le moment où la vidéo et le
+  // modèle se révèlent être le même relevé. Le bouton dit donc ce qu'il
+  // déclenche — « Voir la visite » — au lieu d'un symbole muet.
+  var VISITE = { ouverte: false, parent: null, apres: null };
+
+  /// Remet la carte vidéo là où la page l'avait mise.
+  function rangeLaVisite(sec){
+    var x = sec.querySelector(".ferme-visite");
+    if (x) x.remove();
+    if (!VISITE.parent) return;
+    sec.classList.remove("atlas-vignette", "atlas-repliee");
+    sec.style.cssText = "";
+    if (VISITE.apres && VISITE.apres.parentElement === VISITE.parent) {
+      VISITE.parent.insertBefore(sec, VISITE.apres);
+    } else {
+      VISITE.parent.appendChild(sec);
+    }
+  }
+
+  /// **ON ENTRE ET ON SORT.**
+  ///
+  /// J'ai livré l'appel de la visite sans sa fermeture : une fois la vignette
+  /// posée, rien ne ramenait au modèle seul (owner, 2026-08-10 : « je fais
+  /// quoi pour arrêter la visite ? »). Une porte qui ne s'ouvre que dans un
+  /// sens n'est pas une porte.
+  function fermeLaVisite(sec){
+    if (sec.querySelector(".ferme-visite")) return;
+    var x = document.createElement("button");
+    x.type = "button";
+    x.className = "ferme-visite";
+    x.setAttribute("aria-label", t.fermer_visite || "Fermer la visite");
+    x.textContent = "\u00D7";
+    x.addEventListener("click", function(e){
+      // Sur la vignette, un clic AGRANDIT la vidéo : celui-ci ne doit pas
+      // faire les deux.
+      e.stopPropagation();
+      e.preventDefault();
+      var v = document.querySelector("#videoWrap video");
+      if (v) { try { v.pause(); } catch (err) {} }
+      VISITE.ouverte = false;
+      document.body.classList.add("atlas-visite-fermee");
+      if (MINI.matches) { minicarte(); }
+      else {
+        // En grand, la carte reprend sa place dans la colonne ; le bouton la
+        // rappelle depuis le modèle.
+        sec.classList.remove("atlas-vignette", "atlas-repliee");
+        sec.style.cssText = "";
+        var vis2 = document.querySelector(".hero-visual");
+        if (vis2) boutonVisite(vis2);
+        var x2 = sec.querySelector(".ferme-visite");
+        if (x2) x2.remove();
+        // Grand écran : la carte vidéo est rangée, le plan reste seul — le
+        // repère de caméra n'a pas plus de sens ici que sur téléphone.
+        eteintLeRepereCamera();
+      }
+      if (typeof poseLesPastilles === "function") poseLesPastilles();
+    });
+    sec.appendChild(x);
+  }
+
+  /// Les réglages du plan montent au-dessus de lui sur téléphone, et
+  /// redescendent dans la barre commune sur grand écran.
+  ///
+  /// Le déplacement est dans le DOM, pas seulement en CSS : `position:absolute`
+  /// se règle sur le premier ancêtre positionné, et la barre du bas en est un.
+  /// Tant que la rangée y reste, aucune coordonnée ne la fait remonter.
+  function hisseLesOutils(){
+    var vis = document.querySelector(".hero-visual");
+    if (!vis) return;
+    var outils = vis.querySelector(".atlas-outils");
+    if (!outils) return;
+    if (MINI.matches){
+      if (outils.parentElement !== vis) vis.appendChild(outils);
+    } else {
+      var barre = vis.querySelector(".hero-controls");
+      if (barre && outils.parentElement !== barre) barre.appendChild(outils);
+    }
+  }
+
+  /// Le bouton qui appelle la visite, posé sur le modèle.
+  function boutonVisite(vis){
+    if (!vis || vis.querySelector(".appel-visite")) return;
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "appel-visite";
+    b.textContent = t.voir_la_visite || "Voir la visite";
+    b.addEventListener("click", function(){
+      VISITE.ouverte = true;
+      document.body.classList.remove("atlas-visite-fermee");
+      b.remove();
+      if (MINI.matches) minicarte(); else accoleLaVideo();
+      var v = document.querySelector("#videoWrap video");
+      if (v) { try { v.play(); } catch (e) {} }
+    });
+    vis.appendChild(b);
   }
 
   function minicarte(){
@@ -5984,6 +6202,7 @@
     var main = document.getElementById("fiche");
     if (!vis || !sec || !main) return;
     styleMinicarte();
+    hisseLesOutils();
 
     if (!MINI.matches){
       // Retour au grand écran : on rend la carte à sa colonne, ET ON EFFACE
@@ -6023,6 +6242,36 @@
     document.body.classList.add("atlas-minicarte");
     setTimeout(ajusteLePoint, 60);
     brancheBalayage();
+    // On retient d'où vient la carte AVANT de la déplacer : c'est le seul
+    // moyen de la rendre à la page quand on referme la visite.
+    if (!VISITE.parent && sec.parentElement !== vis){
+      VISITE.parent = sec.parentElement;
+      VISITE.apres = sec.nextElementSibling;
+    }
+    if (!VISITE.ouverte){
+      // LE MODÈLE SEUL, ET LA VISITE DISPONIBLE DANS LES PASTILLES.
+      //
+      // Owner, 2026-08-10 : « la vidéo doit être cachée et disponible ici »,
+      // en désignant la rangée de pastilles. Elle sort donc du flux — une
+      // carte vidéo qu'on croise en défilant reprend la place qu'on venait de
+      // rendre au modèle — et c'est « Vidéo du scan » qui la rappelle, au même
+      // endroit que « Plans » ou « Photos du site ».
+      if (sec.parentElement === vis) rangeLaVisite(sec);
+      document.body.classList.add("atlas-visite-fermee");
+      document.body.classList.remove("atlas-video-grande");
+      // Le plan est désormais SEUL : il reprend toute la place, même si on
+      // vient de l'état où c'était lui la vignette, et il se débarrasse de ce
+      // que la vidéo posait dessus.
+      rendLePlanGrand();
+      eteintLeRepereCamera();
+      boutonVisite(vis);
+      if (typeof poseLesPastilles === "function") poseLesPastilles();
+      return;
+    }
+    document.body.classList.remove("atlas-visite-fermee");
+    var appel = vis.querySelector(".appel-visite");
+    if (appel) appel.remove();
+    fermeLaVisite(sec);
     if (sec.parentElement !== vis){
       vis.appendChild(sec);
       sec.classList.add("atlas-vignette");
@@ -6043,6 +6292,16 @@
       sec.addEventListener("click", function(e){
         if (!MINI.matches) return;
         if (!sec.classList.contains("atlas-vignette")) return;
+        // LES COMMANDES POSÉES SUR LA VIGNETTE GARDENT LEURS CLICS.
+        //
+        // Cet écouteur est en phase de CAPTURE : il s'exécute AVANT l'élément
+        // visé, et son `stopPropagation` tuait l'événement en route. Un clic
+        // sur la croix n'atteignait donc jamais la croix — il tombait ici et
+        // mettait la vidéo en pause. C'est exactement ce que le propriétaire
+        // décrivait : « quand je clique sur le X, c'est la vidéo qui se met
+        // sur pause » (2026-08-10). Le corps de la vignette joue et met en
+        // pause ; ses boutons, eux, font leur propre travail.
+        if (e.target.closest && e.target.closest(".ferme-visite, .atlas-bascule")) return;
         e.preventDefault(); e.stopPropagation();
         // LE CORPS DE LA VIGNETTE JOUE ET MET EN PAUSE. L'échange appartient
         // au bouton ⇄ : sur une vidéo, appuyer veut dire lire.
@@ -6144,6 +6403,51 @@
     setTimeout(function(){ if (i.parentElement) i.parentElement.removeChild(i); }, 600);
   }
 
+  /** Le plan reprend toute la place, avec les commandes du grand format.
+   *
+   * SORTI DE L'ÉCHANGE, PARCE QUE L'ÉCHANGE N'EST PAS LE SEUL À LE DEVOIR.
+   * Fermer la visite alors que le plan était en vignette laissait la page
+   * dans un état impossible : plus de vidéo, et le plan toujours réduit dans
+   * son coin — un grand panneau vide, « Voir la visite » par-dessus une
+   * miniature (owner, 2026-08-10, capture à l'appui). Le retour au grand
+   * format appartient à l'ÉTAT « plan seul », pas au geste qui y mène.
+   *
+   * ON RÉÉCRIT LES DÉFAUTS, ON NE RETIRE PAS LES ATTRIBUTS.
+   * `removeAttribute("orbit-sensitivity")` ne rend pas la valeur par défaut :
+   * il met la propriété à `null`, la rotation est multipliée par rien, et le
+   * grand modèle ne tournait plus DU TOUT après un échange (mesuré le
+   * 2026-08-07 — 0° pour 160 px de glissement).
+   */
+  /// Éteint tout ce que la vidéo pose SUR le plan : le cône de caméra et
+  /// l'arrêt sur image.
+  ///
+  /// Le cône est de la géométrie 3D — la feuille de style ne l'atteint pas.
+  /// Une ronde d'entretien le range déjà toutes les 200 ms, mais elle vit
+  /// dans la boucle d'animation, qui s'arrête au repos : fermer la visite
+  /// met justement la vidéo en pause, donc la boucle pouvait s'endormir avec
+  /// le cône encore allumé. On l'éteint ici, tout de suite.
+  function eteintLeRepereCamera(){
+    if (CAM.frustum && CAM.frustum.visible){
+      CAM.frustum.visible = false;
+      if (CAM.scene && CAM.scene.queueRender) CAM.scene.queueRender();
+    }
+    var vue = document.getElementById("atlas-projection");
+    if (vue) vue.style.opacity = "0";
+  }
+
+  function rendLePlanGrand(){
+    var mv = document.querySelector("model-viewer.model3d");
+    if (!mv) return;
+    mv.classList.remove("atlas-vignette");
+    try {
+      mv.setAttribute("camera-controls", "");
+      mv.setAttribute("touch-action", "none");
+      mv.setAttribute("orbit-sensitivity", "1");
+      mv.removeAttribute("disable-zoom");   // booléens : l'absence EST le défaut
+      mv.removeAttribute("disable-pan");
+    } catch (e) {}
+  }
+
   /** L'échange : ce qui était grand devient vignette, et l'inverse. */
   function echangeMinicarte(){
     var vis = document.querySelector(".hero-visual");
@@ -6208,24 +6512,7 @@
     } else {
       sec.classList.add("atlas-vignette");
       sec.style.cssText = "";
-      mv.classList.remove("atlas-vignette");
-      // En grand, il reprend TOUTES ses commandes.
-      //
-      // ON RÉÉCRIT LES DÉFAUTS, ON NE RETIRE PAS LES ATTRIBUTS.
-      //
-      // `removeAttribute("orbit-sensitivity")` ne rend pas la valeur par
-      // défaut : il met la propriété à `null`, la rotation est multipliée par
-      // rien, et le grand modèle ne tournait plus DU TOUT après un échange
-      // (mesuré le 2026-08-07 — 0° pour 160 px de glissement). Les défauts
-      // sont lus sur un exemplaire neuf du composant : sensibilité 1,
-      // `touch-action` à « none ».
-      try {
-        mv.setAttribute("camera-controls", "");
-        mv.setAttribute("touch-action", "none");
-        mv.setAttribute("orbit-sensitivity", "1");
-        mv.removeAttribute("disable-zoom");   // booléens : l'absence EST le défaut
-        mv.removeAttribute("disable-pan");
-      } catch (e) {}
+      rendLePlanGrand();
       var v2 = sec.querySelector("video");
       if (v2){
         v2.controls = false;
@@ -6522,6 +6809,10 @@
   function accoleLaVideo(){
     var section = document.getElementById("videoSection");
     if (!section || section.hidden) return;
+    // Fermer le PIP et arrêter la vidéo doit marcher PARTOUT, pas seulement
+    // sur téléphone (owner, 2026-08-10). En grand aussi, une vidéo posée sur
+    // le modèle cache une partie de ce qu'on regarde.
+    if (VISITE.ouverte) fermeLaVisite(section);
     // EN CSS, PAS EN DÉPLAÇANT DES NŒUDS.
     //
     // Deux tentatives ont échoué en remontant la vidéo par le DOM : la fiche a
@@ -6536,7 +6827,12 @@
     // panneaux désalignés se lisent comme deux médias sans rapport.
     var visuel = document.querySelector(".hero-visual");
     var barre = visuel && visuel.querySelector(".hero-controls");
-    if (barre && !barre.querySelector(".atlas-unit")){
+    // LE VERROU SE POSE SUR CE QU'ON CONSTRUIT ENCORE.
+    //
+    // Il interrogeait `.atlas-unit`, le bouton des unités — que ce bloc ne
+    // fabrique plus. Sans ce changement, la condition serait devenue toujours
+    // vraie et la rangée d'outils se serait dupliquée à chaque appel.
+    if (barre && !barre.querySelector(".atlas-outils")){
       var bm = document.createElement("button");
       // `view-btn` est la classe RÉELLE des boutons de la fiche ; `hero-btn`
       // n'existe nulle part, et mes deux boutons s'affichaient donc en
@@ -6633,20 +6929,20 @@
         boite.style.display = ouvert ? "none" : "inline-flex";
         chevron.classList.toggle("on", !ouvert);
       });
-      // Le réglage mètres/pieds pilote celui de TOUTE la fiche : une seule
-      // préférence, retenue d'une visite à l'autre.
-      var b = document.createElement("button");
-      b.type = "button"; b.className = "view-btn atlas-unit";
-      function ecrit(){ b.textContent = (UNIT.code === "si") ? t.unit_ft : t.unit_m; }
-      ecrit();
-      b.addEventListener("click", function(e){
-        e.stopPropagation();
-        setUnit(UNIT.code === "si" ? "imp" : "si");
-        ecrit();
-      });
-      UNIT.hooks.push(ecrit);
-      outils.appendChild(b);
+      // LE CHOIX MÈTRE / PIED N'EST PAS UNE VUE.
+      //
+      // Il vivait ici, en troisième pastille de la rangée des vues, sous la
+      // forme d'une lettre seule — « m » à côté de « Vue d'ensemble » et
+      // « Vue de dessus ». Un réglage d'unités posé au milieu des angles de
+      // caméra, et le même réglage existe déjà dans la carte des chiffres,
+      // écrit en toutes lettres (pi² / m²). Owner, 2026-08-10 : « enlève le
+      // M ». On le retire d'ici ; `UNIT` et `setUnit` ne bougent pas, et la
+      // carte des chiffres reste le seul endroit où l'on change d'unité.
 
+      // La rangée vient d'exister : on la met tout de suite à sa place selon
+      // la largeur. `minicarte()` s'en charge ensuite à chaque bascule, mais
+      // il a déjà tourné avant que ces boutons ne soient construits.
+      hisseLesOutils();
     }
     var fold = section.querySelector("details.fold");
     if (fold && !fold.open) fold.open = true;   // déplié : on ne cache pas ce qu'on aligne
@@ -6704,8 +7000,38 @@
          rien ne disait que c'en était une. On reprend la convention des
          pastilles d'étage, que le visiteur a déjà sous les yeux. */
       ".hero-visual .hero-controls{z-index:4}" +
-      ".hero-controls .view-btn.on{background:var(--accent);" +
+      /* L'ÉTAT ALLUMÉ SUIT LE BOUTON, PAS SON CONTENANT. La règle était
+         accrochée à `.hero-controls` ; en montant la rangée d'outils au-dessus
+         du plan sur téléphone, « Mesures » et « Arrêt sur image » ont perdu
+         leur orange et ne disaient plus s'ils étaient actifs (owner,
+         2026-08-10). Un état visuel qui dépend de l'endroit où l'on range le
+         bouton n'est pas un état visuel. */
+      ".hero-controls .view-btn.on," +
+      ".hero-visual .view-btn.on{background:var(--accent);" +
       "color:var(--accent-ink);border-color:transparent}" +
+      /* LE REPÈRE DE CAMÉRA N'EXISTE QUE PENDANT LA VISITE.
+         Le point orange et le cône disent « la caméra est ici, à cet instant
+         de la vidéo ». Visite fermée, il n'y a plus d'instant : c'est un
+         « vous êtes ici » sans le « ici ». Le premier visiteur, lui, voyait
+         une pastille orange posée sur le plan sans que rien ne l'explique.
+         L'arrêt sur image tombe avec eux — une image de la vidéo projetée
+         sur le plan alors qu'il n'y a plus de vidéo est encore plus muette.
+         Leurs réglages ne changent pas : ils réapparaissent tels quels. */
+      "body.atlas-visite-fermee model-viewer [slot=\"hotspot-cam\"]," +
+      "body.atlas-visite-fermee #atlas-projection{display:none!important}" +
+      /* LE GROS TRIANGLE DE SAFARI EST UN DOUBLON — ET IL ASSOMBRIT LA PIÈCE.
+         Sur iOS, une vidéo en pause reçoit un calque : triangle central,
+         deux boutons ±10 s, et un voile gris sur toute l'image. Or la fiche
+         donne déjà l'appui pour lire et mettre en pause, et le glissement
+         pour parcourir : ce calque ne fait que répéter des gestes existants
+         en cachant ce qu'on est venu regarder (owner, 2026-08-10, iPhone).
+         On ne retire QUE le calque : la barre du bas — position, durée,
+         AirPlay — reste, car elle, elle dit quelque chose qu'aucun geste ne
+         dit. Ces pseudo-éléments sont propres à WebKit et non normalisés :
+         s'ils disparaissent un jour, la vidéo reste jouable au doigt. */
+      "#videoSection video::-webkit-media-controls-overlay-play-button," +
+      "#videoSection video::-webkit-media-controls-start-playback-button{" +
+      "display:none!important;-webkit-appearance:none;opacity:0}" +
       // ON NE TOUCHE PLUS À LA TAILLE DE LA VIDÉO.
       //
       // Deux règles à moi la cassaient. `display:flex` sans direction mettait
