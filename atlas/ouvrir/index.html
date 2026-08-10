@@ -310,10 +310,16 @@
 
   /* ---- Scan video: the file's own shape, not a forced 16:9 ---- */
   .video-box{display:flex; justify-content:center; align-items:center; width:100%;
-    background:#000; border-radius:14px; overflow:hidden; position:relative}
+    background:#000; border-radius:14px; overflow:hidden}
   .video-box video{display:block; max-width:100%; max-height:min(70vh,620px)}
   /* Le fil de progression : un repère, jamais une commande. `pointer-events`
-     à `none` pour que l'appui traverse et joue la vidéo, même posé dessus. */
+     à `none` pour que l'appui traverse et joue la vidéo, même posé dessus.
+     IL S'ANCRE SUR LA CARTE, PAS SUR LA BOÎTE. La boîte ne contient qu'un
+     élément positionné en grand cadre : elle mesure 0 px de haut, et la
+     vidéo qui s'y calait s'est pliée à zéro — elle avait disparu de
+     l'écran (owner, 2026-08-10). La carte, elle, fait la hauteur du
+     panneau dans les deux modes. */
+  #videoSection{position:relative}
   .video-fil{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:3;
     background:rgba(255,255,255,.22); pointer-events:none; transition:opacity .3s}
   .video-fil i{display:block; height:100%; width:0; background:var(--accent);
@@ -4791,7 +4797,7 @@
     fil.className = "video-fil";
     var filPlein = document.createElement("i");
     fil.appendChild(filPlein);
-    box.appendChild(fil);
+    (document.getElementById("videoSection") || box).appendChild(fil);
     function majLeFil(){
       var d = el.duration;
       if (!isFinite(d) || d <= 0){ fil.style.opacity = "0"; return; }
@@ -5911,8 +5917,18 @@
       // Il plafonnait à 62 vh quand la vidéo monte à 78 : le panneau du plan
       // était le plus serré des deux, alors que c'est lui qu'on lit le plus
       // longtemps (owner 2026-08-07).
-      "body.atlas-minicarte .hero-visual{aspect-ratio:auto;height:min(78vh,760px);" +
-      "max-height:none;overflow:hidden}" +
+      // UNE SEULE HAUTEUR, QUEL QUE SOIT CE QUI EST EN GRAND.
+      //
+      // Le panneau du plan tenait 78 vh ; celui de la vidéo prend la forme
+      // de l'image. Les deux ne tombaient donc pas à la même hauteur, et
+      // basculer de l'un à l'autre faisait sauter toute la page — « quand
+      // on switch entre PIP vidéo et PIP modèle, ce n'est pas esthétique »
+      // (owner, 2026-08-10). C'est la forme de l'image qui règle les deux
+      // désormais : ce qui est en grand change, le cadre ne bouge plus.
+      "body.atlas-minicarte .hero-visual{--h-video:min(78vh,760px);" +
+      "height:auto;aspect-ratio:var(--rapport-video,.75);" +
+      "width:min(100%,calc(var(--h-video) * var(--rapport-video,.75)));" +
+      "max-height:var(--h-video);margin-inline:auto;overflow:hidden}" +
       // ET LA VIGNETTE VIDÉO LIBÈRE LA BARRE.
       //
       // Posée à 10 px du bas, elle recouvrait la moitié droite du segment des
@@ -6076,6 +6092,18 @@
       // ses 26 px, et 10 px de respiration.
       "body.atlas-minicarte #videoSection:not(.atlas-vignette) .video-speeds{" +
       "position:absolute;left:40px;top:10px;z-index:8;margin:0}" +
+      // UN `transform` FAIT UN CADRE DE RÉFÉRENCE, MÊME DE 4 PIXELS.
+      //
+      // `.fold-body` porte un `translateY(-4px)` — l'animation de
+      // dépliement de la carte. Une transformation, si petite soit-elle,
+      // fait de l'élément le cadre de référence de tout ce qui est
+      // positionné dessous. Or cette boîte ne contient qu'un élément en
+      // position absolue : elle mesure 0 px de haut. La vidéo en grand,
+      // calée en `inset:0`, se pliait donc à zéro et disparaissait
+      // (owner, 2026-08-10 ; mesuré : vidéo 466 × 0 dans une carte de
+      // 466 × 622). On retire la transformation dans ce seul mode : la
+      // vidéo se cale alors sur la carte, qui a une vraie hauteur.
+      "body.atlas-minicarte #videoSection:not(.atlas-vignette) .fold-body{transform:none}" +
       "body.atlas-minicarte .atlas-vignette .video-box{height:100%}" +
       // `contain`, pas `cover` : on veut la vidéo EN ENTIER (owner 2026-08-07).
       // Le cadre prend la forme de l'image juste en dessous, donc il n'y a
@@ -7685,15 +7713,20 @@
                x1:MES.pan.x1, z1:MES.pan.z1, h:MES.pan.h,
                L:Math.hypot(MES.pan.x1-MES.pan.x0, MES.pan.z1-MES.pan.z0) };
     }
-    // ~250 ms de fondu : assez pour ne pas clignoter, assez court pour que la
-    // cote soit là quand on regarde encore le mur.
-    var PAS = 0.12;
+    // ~250 ms pour apparaître : assez pour ne pas clignoter, assez court pour
+    // que la cote soit là quand on regarde encore le mur. Elle s'efface DEUX
+    // FOIS PLUS LENTEMENT qu'elle n'apparaît (owner, 2026-08-10 : « les
+    // dimensions doivent rester deux fois plus longtemps avant de
+    // disparaître ») : le regard quitte un mur bien plus souvent qu'il n'y
+    // revient, et une cote qui s'évapore au premier frémissement du poignet
+    // oblige à viser de nouveau pour lire ce qu'on lisait déjà.
+    var PAS = 0.12, PAS_SORTIE = 0.06;
     if (MES.opac == null) MES.opac = 0;
     if (!MES.fige){
       if (vise < 0) return "";
       MES.fige = fige(); MES.opac = 0;
     } else if (MES.fige.mur !== vise){
-      MES.opac -= PAS;
+      MES.opac -= PAS_SORTIE;
       if (MES.opac <= 0){
         MES.opac = 0;
         MES.fige = (vise >= 0) ? fige() : null;
