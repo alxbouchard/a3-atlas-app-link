@@ -6091,6 +6091,16 @@
       // superposées.
       "body.atlas-minicarte .hero-visual > .atlas-outils{position:absolute;" +
       "top:10px;left:10px;z-index:7;margin:0}" +
+      // ET LE RÉGLAGE S'OUVRE VERS LE BAS, PUISQUE LA RANGÉE EST EN HAUT.
+      //
+      // Le curseur de transparence est posé AU-DESSUS de son bouton — normal
+      // quand la rangée vit en bas du panneau. Montée en haut, il s'ouvrait
+      // au-dessus du bord, et le panneau coupe ce qui dépasse : le chevron
+      // répondait dans le vide (owner, 2026-08-10, iPhone). Une commande qui
+      // change de place doit emporter la direction dans laquelle elle
+      // s'ouvre.
+      "body.atlas-minicarte .hero-visual > .atlas-outils .atlas-opacite{" +
+      "top:calc(100% + 8px);bottom:auto}" +
       // Les vues ne disparaissent QUE lorsque le plan est en vignette.
       //
       // Je les cachais dans tout le mode minicarte, avec pour raison qu'une
@@ -6941,11 +6951,18 @@
         "padding:4px 10px;box-shadow:0 1px 3px rgba(0,0,0,.18)";
       var curseur = document.createElement("input");
       curseur.type = "range"; curseur.min = "0"; curseur.max = "100"; curseur.step = "1";
-      curseur.value = "60"; curseur.style.cssText = "width:96px;accent-color:var(--accent)";
+      // MOITIÉ TRANSPARENTE D'ENTRÉE (owner, 2026-08-10).
+      //
+      // La règle automatique — dense de loin, translucide à l'objectif — est
+      // subtile et se juge mal ; à 50 % on voit l'image ET le modèle à
+      // travers, ce qui est tout l'objet de l'arrêt sur image. Le double-clic
+      // rend la main à la règle automatique pour qui la préfère.
+      curseur.value = "50"; curseur.style.cssText = "width:96px;accent-color:var(--accent)";
       curseur.setAttribute("aria-label", (lang === "fr") ? "Transparence de l'image"
                                                          : "Image opacity");
+      CAM.opaciteManuelle = 0.5;
       var valeur = document.createElement("span");
-      valeur.textContent = "auto";
+      valeur.textContent = "50 %";
       valeur.style.cssText = "min-width:32px;text-align:right";
       curseur.addEventListener("input", function(e){
         e.stopPropagation();
