@@ -319,7 +319,12 @@
      vidéo qui s'y calait s'est pliée à zéro — elle avait disparu de
      l'écran (owner, 2026-08-10). La carte, elle, fait la hauteur du
      panneau dans les deux modes. */
-  #videoSection{position:relative}
+  /* PAS SUR L'IDENTIFIANT NU : un `#` l'emporte sur toutes les classes, et
+     cette ligne écrasait le `position:absolute` de la vignette — la carte
+     vidéo repartait se ranger en haut à gauche du panneau (owner,
+     2026-08-10). On ne l'applique donc QUE hors vignette ; en grand cadre
+     c'est le style en ligne qui commande, et il gagne de toute façon. */
+  #videoSection:not(.atlas-vignette){position:relative}
   .video-fil{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:3;
     background:rgba(255,255,255,.22); pointer-events:none; transition:opacity .3s}
   .video-fil i{display:block; height:100%; width:0; background:var(--accent);
