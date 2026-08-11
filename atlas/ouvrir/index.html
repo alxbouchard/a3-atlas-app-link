@@ -4788,6 +4788,31 @@
     }
     el.addEventListener("error", function(){ if (!played) tryNextSource(); });
     tryNextSource();
+
+    // L'APPUI SUR LA CARTE LIT ET MET EN PAUSE — partout, puisqu'il n'y a
+    // plus de contrôles natifs nulle part.
+    //
+    // SUR LA CARTE, PAS SUR L'IMAGE : en vignette, la vidéo porte
+    // `pointer-events:none` — un écouteur posé sur elle n'y recevrait jamais
+    // rien, et le téléphone, qui marche aujourd'hui, cesserait de marcher.
+    //
+    // Les commandes gardent leurs clics : boutons, titre repliable, liens,
+    // champs. C'est leur NATURE qu'on épargne, pas la liste de celles qui
+    // existaient le jour où on l'a écrite.
+    //
+    // Et un glissement qui vient de parcourir la vidéo n'est pas un appui :
+    // le navigateur synthétise un clic en fin de geste.
+    var carte = document.getElementById("videoSection") || box;
+    carte.addEventListener("click", function(e){
+      if (BALAYAGE.vientDeParcourir) return;
+      if (e.target.closest
+          && e.target.closest("button, a, summary, input, .video-speeds,"
+                              + " .ferme-visite, .atlas-bascule")) return;
+      e.preventDefault();
+      if (el.paused){
+        var pr = el.play(); if (pr && pr.catch) pr.catch(function(){});
+      } else el.pause();
+    });
     box.appendChild(el);
 
     // LE SEUL RESTE DE LA BARRE DE LECTURE : UN FIL.
@@ -6421,54 +6446,14 @@
           if (mv2) mv2.classList.remove("atlas-vignette");
         }
       });
-      sec.addEventListener("click", function(e){
-        // SUR ORDINATEUR AUSSI, DEPUIS QUE LES CONTRÔLES SONT PARTIS.
-        //
-        // Cette porte ne laissait entrer que le téléphone, parce que sur
-        // grand écran c'était le lecteur de Safari qui répondait au clic. En
-        // le retirant partout, j'ai laissé le bureau sans rien : « sur
-        // desktop même si je clique cela ne fait pas jouer la vidéo » (owner,
-        // 2026-08-10). Deuxième fois aujourd'hui qu'une commande retirée
-        // n'est remplacée que là où je regardais.
-        // DANS LES DEUX CADRES, PAS SEULEMENT DANS LA VIGNETTE.
-        //
-        // Cette condition datait du temps où la vidéo en grand avait les
-        // contrôles de Safari : l'appui y était le sien, pas le nôtre. Les
-        // contrôles retirés, plus rien ne jouait ni ne mettait en pause en
-        // grand cadre — « ça marche dans le PIP mais pas quand je switch »
-        // (owner, 2026-08-10). Une commande retirée doit être remplacée
-        // partout où elle servait, pas seulement là où on regardait.
-        if (BALAYAGE.vientDeParcourir) return;   // un glissement n'est pas un appui
-        // LES COMMANDES POSÉES SUR LA VIGNETTE GARDENT LEURS CLICS.
-        //
-        // Cet écouteur est en phase de CAPTURE : il s'exécute AVANT l'élément
-        // visé, et son `stopPropagation` tuait l'événement en route. Un clic
-        // sur la croix n'atteignait donc jamais la croix — il tombait ici et
-        // mettait la vidéo en pause. C'est exactement ce que le propriétaire
-        // décrivait : « quand je clique sur le X, c'est la vidéo qui se met
-        // sur pause » (2026-08-10). Le corps de la vignette joue et met en
-        // pause ; ses boutons, eux, font leur propre travail.
-        // Tout ce qui est un bouton garde son clic. La liste nommait deux
-        // commandes ; en grand cadre il y en a d'autres — les vitesses —
-        // et cet écouteur en capture les aurait avalées en devenant
-        // universel. On décrit la NATURE de ce qu'on épargne, pas la liste
-        // de ce qui existait le jour où on l'a écrit.
-        // `summary` et les liens en font partie : sur grand écran, le titre
-        // de la carte se replie d'un clic, et cet écouteur en capture
-        // l'aurait avalé en devenant universel.
-        if (e.target.closest
-            && e.target.closest("button, a, summary, input, .video-speeds,"
-                                + " .ferme-visite, .atlas-bascule")) return;
-        e.preventDefault(); e.stopPropagation();
-        // LE CORPS DE LA VIGNETTE JOUE ET MET EN PAUSE. L'échange appartient
-        // au bouton ⇄ : sur une vidéo, appuyer veut dire lire.
-        var vv = sec.querySelector("video");
-        if (!vv) return;
-        if (vv.paused){
-          try { var pr = vv.play(); if (pr && pr.catch) pr.catch(function(){}); }
-          catch (err) {}
-        } else vv.pause();
-      }, true);
+      // L'APPUI QUI LIT ET MET EN PAUSE A DÉMÉNAGÉ.
+      //
+      // Il vivait ici, dans la fonction du format téléphone — donc il
+      // n'existait pas sur ordinateur, où le lecteur natif s'en chargeait.
+      // Les contrôles retirés, le bureau se retrouvait sans rien : « sur
+      // desktop même si je clique cela ne fait pas jouer la vidéo » (owner,
+      // 2026-08-10, sur la fiche déployée). Ce geste appartient à la VIDÉO,
+      // pas à une mise en page : il est branché là où elle est construite.
     }
     // PLUS AUCUN ÉCHANGE DEPUIS LE CORPS DU PLAN.
     //
