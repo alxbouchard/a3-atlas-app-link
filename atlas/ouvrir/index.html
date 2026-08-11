@@ -2240,6 +2240,35 @@
   // surface au sol, dite estimée parce qu'elle l'est — et on tire les
   // comptes des espaces scannés, avec repli sur l'URL si la donnée manque.
   var FIGDATA = { spaces: null, floorAreaM2: null };
+  /** Rend un élément cliquable vers une section : on ouvre son volet replié
+   *  AVANT de défiler, sinon on atterrit sur un titre fermé et le contenu
+   *  annoncé reste invisible. Même geste que les pastilles de navigation.
+   *
+   *  Accessible au clavier : un chiffre qui agit est un bouton, même s'il n'en
+   *  a pas l'air.
+   */
+  function meneVers(el, idSection){
+    el.style.cursor = "pointer";
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+    function va(e){
+      // Le sélecteur pi²/m² vit dans une tuile : son clic lui appartient.
+      if (e && e.target && e.target.closest && e.target.closest("button")) return;
+      var sec = document.getElementById(idSection);
+      if (!sec || sec.hidden) return;
+      var d = sec.querySelector("details");
+      if (d && !d.open){
+        d.open = true;
+        if (window.__atlasLoadDeferred) window.__atlasLoadDeferred(sec);
+      }
+      sec.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    el.addEventListener("click", va);
+    el.addEventListener("keydown", function(e){
+      if (e.key === "Enter" || e.key === " "){ e.preventDefault(); va(e); }
+    });
+  }
+
   function updateHeroFigures(){
     var figs = document.getElementById("heroFigs");
     if (!figs) return;
@@ -2258,17 +2287,21 @@
     if (area) items.push({ big: area, small: manyFloors ? t.fig_area : t.fig_area_1,
                            est: t.fig_area_est, unit: true });
     var spaces = FIGDATA.spaces;
-    if (spaces && spaces.length) items.push({ big: String(spaces.length), small: t.fig_spaces });
-    else if (q.get("z")) items.push({ big: q.get("z"), small: t.fig_rooms });
+    if (spaces && spaces.length) items.push({ big: String(spaces.length), small: t.fig_spaces,
+                                              vers: "spacesSection" });
+    else if (q.get("z")) items.push({ big: q.get("z"), small: t.fig_rooms,
+                                      vers: "spacesSection" });
     if (spaces && spaces.length){
       var floors = {};
       spaces.forEach(function(sp){
         if (sp && typeof sp.buildingFloor === "number") floors[sp.buildingFloor] = true;
       });
       var n = Object.keys(floors).length;
-      if (n) items.push({ big: String(n), small: t.fig_floors_n(n) });
-    } else if (q.get("floor")) items.push({ big: q.get("floor"), small: t.fig_floor });
-    if (q.get("p")) items.push({ big: q.get("p"), small: t.fig_photos });
+      if (n) items.push({ big: String(n), small: t.fig_floors_n(n), vers: "plansSection" });
+    } else if (q.get("floor")) items.push({ big: q.get("floor"), small: t.fig_floor,
+                                           vers: "plansSection" });
+    if (q.get("p")) items.push({ big: q.get("p"), small: t.fig_photos,
+                                 vers: "gallerySection" });
 
     items.forEach(function(it){
       var f = document.createElement("div"); f.className = "hero-fig";
@@ -2280,6 +2313,14 @@
       var sp = document.createElement("span");
       sp.textContent = it.small + (it.est ? " · " + it.est : "");
       f.appendChild(sp);
+      // UNE TUILE ANNONCE UN CONTENU QUI EXISTE PLUS BAS : QU'ELLE Y MÈNE.
+      //
+      // « 2 espaces », « 2 étages », « 20 photos » nommaient des sections que
+      // le visiteur devait ensuite aller chercher au défilement (owner,
+      // 2026-08-10). La surface, elle, ne mène nulle part : elle n'a pas de
+      // section à elle, et elle porte déjà le choix pi²/m² — un clic dessus
+      // serait une promesse vide.
+      if (it.vers && document.getElementById(it.vers)) meneVers(f, it.vers);
       figs.appendChild(f);
     });
   }
