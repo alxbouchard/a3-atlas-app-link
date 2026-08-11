@@ -365,10 +365,26 @@
   .plan-fig{margin:0; min-width:0}
   .plan-fig img{width:100%; object-fit:contain; border-radius:12px; border:1px solid var(--line);
     background:var(--chip); display:block; cursor:zoom-in}
-  .plan-toggle{display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap}
+  /* La rangée porte DEUX contrôles de nature différente : le choix du plan
+     (des pastilles dont une seule est allumée) et l'interrupteur « Meubles »
+     (un état, allumé ou éteint). D'où deux groupes et deux écarts : à écart
+     égal, une troisième pastille se lirait comme un troisième choix. */
+  .plan-toggle{display:flex; gap:12px; margin-bottom:8px; flex-wrap:wrap; align-items:center}
+  .plan-kinds{display:flex; gap:6px; flex-wrap:wrap}
   .plan-toggle-btn{font:inherit; font-size:13px; font-weight:600; padding:6px 14px; border-radius:999px;
     border:1px solid var(--line); background:var(--chip); color:var(--chip-ink); cursor:pointer}
   .plan-toggle-btn.on{background:var(--accent); color:var(--accent-ink); border-color:transparent}
+  /* Le carré qui se remplit est le même signe que la pastille « Meubles » de
+     l'app (écran « Valider l'espace ») : il dit l'état, pas la sélection.
+     Tout est en variables — la fiche a un mode sombre, et une couleur écrite
+     en dur y serait illisible. */
+  .plan-furn-btn{display:inline-flex; align-items:center; gap:7px; font:inherit; font-size:13px;
+    font-weight:600; padding:6px 13px; border-radius:999px; border:1px solid var(--line);
+    background:transparent; color:var(--muted); cursor:pointer}
+  .plan-furn-box{width:10px; height:10px; border-radius:3px; flex:none;
+    border:1px solid var(--muted); background:transparent}
+  .plan-furn-btn.on{color:var(--ink); border-color:var(--accent)}
+  .plan-furn-btn.on .plan-furn-box{background:var(--accent); border-color:var(--accent)}
   model-viewer.model3d{width:100%; height:min(62vh,440px); border-radius:12px;
     border:1px solid var(--line); background:var(--chip); display:block; --poster-color:transparent}
   .model-hint{font-size:12px; color:var(--muted); margin-top:8px}
@@ -869,6 +885,11 @@
       model_walls:function(cm){return "Épaisseur des murs : représentation ("+cm+" cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.";},
       model_download:"Télécharger le modèle 3D (.glb)",
       plan_annotated:"Plan annoté (POI/capteurs)", plan_clean:"Plan (dimensions)",
+      // « Meubles » est le mot de l'app, à la lettre près : le même
+      // interrupteur y commande le plan, le PDF et la vue 3D
+      // (`FurnitureDisplay.labelFR`). Deux mots pour la même chose auraient
+      // fait croire à deux réglages.
+      plan_furniture:"Meubles", plan_no_furniture:"Plan sans meubles",
       history_h:"Historique",
       lb_close:"Fermer", lb_prev:"Précédent", lb_next:"Suivant",
       share_h:"Partager", share_copy_link:"Copier le lien", share_link_copied:"Lien copié.",
@@ -968,6 +989,7 @@
       model_walls:function(cm){return "Wall thickness: a representation ("+cm+" cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.";},
       model_download:"Download the 3D model (.glb)",
       plan_annotated:"Annotated plan (POI/sensors)", plan_clean:"Plan (dimensions)",
+      plan_furniture:"Furniture", plan_no_furniture:"Plan without furniture",
       history_h:"History",
       lb_close:"Close", lb_prev:"Previous", lb_next:"Next",
       share_h:"Share", share_copy_link:"Copy link", share_link_copied:"Link copied.",
@@ -2157,14 +2179,40 @@
 
   // FLOOR PLANS — 2D exports (annotated w/ POI+sensors, or clean dimensions).
   // lh3 <img> (no CORS, no key); onerror hides that figure; click → lightbox.
+
+  /** Le plan sans mobilier. `no_furniture` est un identifiant MACHINE, écrit
+   *  par l'app (`MediaShareUploader.PlanItem.noFurnitureKind`) : il ne se
+   *  traduit pas et ne change jamais. Seul son libellé a une langue. */
+  var PLAN_SANS_MEUBLES = "no_furniture";
+  /** Le plan DONT il est la version vidée. L'export le dérive du plan coté,
+   *  pas de l'annoté : un logement vidé de ses meubles mais couvert de
+   *  pastilles de capteurs ne sert personne. Les deux contrôles de la rangée
+   *  doivent donc s'accorder là-dessus — voir `renderPlans`. */
+  var PLAN_JUMEAU_MEUBLE = "clean";
+
+  /** L'interrupteur « Meubles » : UN pour toute la section, comme dans l'app
+   *  (`FurnitureDisplay`, une seule clé pour quatre écrans). Celui qui a
+   *  demandé « sans meubles » au rez-de-chaussée ne le redemande pas à
+   *  l'étage. Avec les meubles au départ : personne ne doit tomber sur un
+   *  logement vidé sans l'avoir demandé. */
+  var plansAvecMeubles = true;
+  var _figuresDePlan = [];
+  function majLesMeubles(){ _figuresDePlan.forEach(function(f){ f(); }); }
+
   function planKindLabel(k){
-    return k === "annotated" ? t.plan_annotated : k === "clean" ? t.plan_clean : (k || "");
+    return k === "annotated" ? t.plan_annotated
+         : k === "clean" ? t.plan_clean
+         : k === PLAN_SANS_MEUBLES ? t.plan_no_furniture : (k || "");
   }
   function renderPlans(plans){
     var valid = plans.filter(function(p){ return p && typeof p === "object" && validId(p.driveId); });
     if (!valid.length) return;
     var root = document.getElementById("plans");
     root.innerHTML = "";
+    // Le média peut arriver deux fois (l'agrégat, puis media.json) : les
+    // figures de la passe précédente sont détachées, leurs fonctions de
+    // rafraîchissement n'ont plus rien à commander.
+    _figuresDePlan = [];
     // Group the two versions (annotated / clean) of a room into ONE figure
     // with a Technique / Mesures toggle — the same options as the app's plan.
     var groups = [], byLabel = {};
@@ -2185,33 +2233,111 @@
       g.variants.sort(function(a,b){ return (order[a.kind]!=null?order[a.kind]:9) - (order[b.kind]!=null?order[b.kind]:9); });
       var fig = document.createElement("figure");
       fig.className = "plan-fig";
-      var imgs = [];
-      if (g.variants.length > 1){
+      // Les meubles ne sont PAS un troisième plan à choisir : ils sont un
+      // état du plan coté. On sépare donc les variantes en deux — celles
+      // qu'on choisit, et celle que l'interrupteur commande.
+      var choix = [], sansMeubles = null;
+      g.variants.forEach(function(p){
+        if (p.kind === PLAN_SANS_MEUBLES){ if (!sansMeubles) sansMeubles = p; }
+        else choix.push(p);
+      });
+      // Un partage qui n'aurait QUE la version vidée : elle redevient un plan
+      // comme un autre, sans interrupteur. Un interrupteur à un seul état ne
+      // commande rien.
+      if (!choix.length && sansMeubles){ choix = [sansMeubles]; sansMeubles = null; }
+      // Le rang du plan que la version vidée remplace. Repli sur le premier :
+      // si un partage n'avait pas de plan coté, l'interrupteur commande quand
+      // même quelque chose de réel.
+      var iJumeau = 0;
+      for (var bi = 0; bi < choix.length; bi++){
+        if (choix[bi].kind === PLAN_JUMEAU_MEUBLE){ iJumeau = bi; break; }
+      }
+      var iChoisi = 0, boutons = [], imgs = [], puce = null;
+      var rang = document.createElement("div");
+      rang.className = "plan-toggle";
+      if (choix.length > 1){
         var seg = document.createElement("div");
-        seg.className = "plan-toggle";
-        g.variants.forEach(function(p, i){
+        seg.className = "plan-kinds";
+        choix.forEach(function(p, i){
           var btn = document.createElement("button");
           btn.type = "button";
-          btn.className = "plan-toggle-btn" + (i === 0 ? " on" : "");
+          btn.className = "plan-toggle-btn";
           btn.textContent = planKindLabel(p.kind);
           btn.onclick = function(){
-            for (var k = 0; k < imgs.length; k++){ imgs[k].style.display = (k === i ? "" : "none"); }
-            for (var j = 0; j < seg.children.length; j++){ seg.children[j].classList.remove("on"); }
-            btn.classList.add("on");
+            iChoisi = i;
+            // Seul le plan coté a une version vidée. Demander l'annoté, c'est
+            // donc redemander les meubles — sinon ce bouton-là ne mènerait à
+            // aucune image, et l'app promet le contraire.
+            if (sansMeubles && i !== iJumeau) plansAvecMeubles = true;
+            majLesMeubles();
           };
           seg.appendChild(btn);
+          boutons.push(btn);
         });
-        fig.appendChild(seg);
+        rang.appendChild(seg);
       }
+      // REPLI : un partage publié avant le 2026-08-10 n'a pas d'image sans
+      // meubles. Aucun interrupteur ne s'affiche alors — jamais un bouton qui
+      // ne mène à rien. La fiche d'hier s'affiche donc exactement comme hier.
+      if (sansMeubles){
+        puce = document.createElement("button");
+        puce.type = "button";
+        puce.className = "plan-furn-btn";
+        var carre = document.createElement("span");
+        carre.className = "plan-furn-box";
+        var mot = document.createElement("span");
+        mot.textContent = t.plan_furniture;
+        puce.appendChild(carre); puce.appendChild(mot);
+        puce.onclick = function(){ plansAvecMeubles = !plansAvecMeubles; majLesMeubles(); };
+        rang.appendChild(puce);
+      }
+      if (rang.firstChild) fig.appendChild(rang);
       // Plans carry fine dimension text — request a larger render than photos.
-      g.variants.forEach(function(p, i){
+      choix.forEach(function(p){
         var im = makeMediaImg(p.driveId, function(){}, 1600);
-        im.style.display = (i === 0 ? "" : "none");
         bindLightbox(im, p.driveId, g.label || planKindLabel(p.kind));
-        imgs.push(im);
+        imgs.push({ el: im, p: p });
         fig.appendChild(im);
       });
-      var cap = makeCaption(g.label || planKindLabel(g.variants[0].kind));
+      var imgSans = null, sansMeublesDemandee = false;
+      if (sansMeubles){
+        // Chargée SEULEMENT quand on la demande. Les deux autres partent tout
+        // de suite parce qu'elles sont à l'écran d'emblée (owner 2026-08-03) ;
+        // celle-ci est derrière un interrupteur, et une image de 1600 px que
+        // personne ne regarde est une requête Drive de plus à chaque
+        // ouverture de la fiche — Drive limite les rafales.
+        imgSans = document.createElement("img");
+        imgSans.alt = "";
+        bindLightbox(imgSans, sansMeubles.driveId,
+                     g.label || planKindLabel(sansMeubles.kind));
+        imgs.push({ el: imgSans, p: sansMeubles });
+        fig.appendChild(imgSans);
+      }
+      /** L'état des deux contrôles et de l'image, en un seul endroit : deux
+       *  contrôles qui se répondent ne peuvent pas se contredire s'ils sont
+       *  redessinés ensemble. */
+      function appliqueLetat(){
+        var vide = (sansMeubles && !plansAvecMeubles);
+        // Éteindre les meubles ramène au plan dont la version vidée est tirée,
+        // et le dit : la pastille allumée doit toujours nommer ce qu'on voit.
+        if (vide) iChoisi = iJumeau;
+        var actif = vide ? sansMeubles : choix[iChoisi];
+        if (vide && imgSans && !sansMeublesDemandee){
+          sansMeublesDemandee = true;
+          loadDriveImage(imgSans, sansMeubles.driveId, 1600, function(){});
+        }
+        imgs.forEach(function(e){ e.el.style.display = (e.p === actif) ? "" : "none"; });
+        boutons.forEach(function(b, i){
+          if (i === iChoisi) b.classList.add("on"); else b.classList.remove("on");
+        });
+        if (puce){
+          if (plansAvecMeubles) puce.classList.add("on"); else puce.classList.remove("on");
+          puce.setAttribute("aria-pressed", plansAvecMeubles ? "true" : "false");
+        }
+      }
+      appliqueLetat();
+      _figuresDePlan.push(appliqueLetat);
+      var cap = makeCaption(g.label || planKindLabel(choix[0].kind));
       if (cap) fig.appendChild(cap);
       figByFloor[(g.label != null ? String(g.label).trim() : "") || "—"] = fig;
       root.appendChild(fig);
