@@ -6422,7 +6422,14 @@
         }
       });
       sec.addEventListener("click", function(e){
-        if (!MINI.matches) return;
+        // SUR ORDINATEUR AUSSI, DEPUIS QUE LES CONTRÔLES SONT PARTIS.
+        //
+        // Cette porte ne laissait entrer que le téléphone, parce que sur
+        // grand écran c'était le lecteur de Safari qui répondait au clic. En
+        // le retirant partout, j'ai laissé le bureau sans rien : « sur
+        // desktop même si je clique cela ne fait pas jouer la vidéo » (owner,
+        // 2026-08-10). Deuxième fois aujourd'hui qu'une commande retirée
+        // n'est remplacée que là où je regardais.
         // DANS LES DEUX CADRES, PAS SEULEMENT DANS LA VIGNETTE.
         //
         // Cette condition datait du temps où la vidéo en grand avait les
@@ -6446,8 +6453,12 @@
         // et cet écouteur en capture les aurait avalées en devenant
         // universel. On décrit la NATURE de ce qu'on épargne, pas la liste
         // de ce qui existait le jour où on l'a écrit.
+        // `summary` et les liens en font partie : sur grand écran, le titre
+        // de la carte se replie d'un clic, et cet écouteur en capture
+        // l'aurait avalé en devenant universel.
         if (e.target.closest
-            && e.target.closest("button, .video-speeds, .ferme-visite, .atlas-bascule")) return;
+            && e.target.closest("button, a, summary, input, .video-speeds,"
+                                + " .ferme-visite, .atlas-bascule")) return;
         e.preventDefault(); e.stopPropagation();
         // LE CORPS DE LA VIGNETTE JOUE ET MET EN PAUSE. L'échange appartient
         // au bouton ⇄ : sur une vidéo, appuyer veut dire lire.
@@ -6525,6 +6536,40 @@
 
     // Un balayage se termine par un `click` que le navigateur synthétise :
     // sans ce drapeau, parcourir la vidéo la mettait en pause en arrivant.
+    // LA SOURIS PARCOURT COMME LE DOIGT.
+    //
+    // Sans contrôles natifs, le bureau n'avait plus AUCUN moyen d'avancer
+    // dans la visite — pas de barre à tirer, et le balayage était écrit pour
+    // le tactile seul. Même geste, même règle : on glisse horizontalement sur
+    // l'image, la vidéo suit.
+    var souris = null;
+    v.addEventListener("mousedown", function(e){
+      if (e.button !== 0) return;
+      souris = { x: e.clientX, t: v.currentTime, large: v.getBoundingClientRect().width || 1,
+                 bouge: false };
+    });
+    window.addEventListener("mousemove", function(e){
+      if (!souris) return;
+      var dx = e.clientX - souris.x;
+      if (!souris.bouge && Math.abs(dx) < 6) return;
+      souris.bouge = true;
+      var duree = v.duration || 0;
+      if (!duree) return;
+      if (!v.paused) v.pause();          // l'arrêt sur image apparaît
+      v.currentTime = Math.max(0, Math.min(duree - 0.05,
+                                           souris.t + (dx / souris.large) * LARGEUR_VAUT));
+    });
+    window.addEventListener("mouseup", function(){
+      if (!souris) return;
+      // Un glissement n'est pas un clic : sans ce drapeau, parcourir la vidéo
+      // la remettrait en lecture en relâchant.
+      if (souris.bouge){
+        BALAYAGE.vientDeParcourir = true;
+        setTimeout(function(){ BALAYAGE.vientDeParcourir = false; }, 350);
+      }
+      souris = null;
+    });
+
     var fin = function(){
       BALAYAGE.vientDeParcourir = (etat === "balaye");
       if (BALAYAGE.vientDeParcourir){
