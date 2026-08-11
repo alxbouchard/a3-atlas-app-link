@@ -312,6 +312,19 @@
   .video-box{display:flex; justify-content:center; align-items:center; width:100%;
     background:#000; border-radius:14px; overflow:hidden}
   .video-box video{display:block; max-width:100%; max-height:min(70vh,620px)}
+  /* LE TRIANGLE DIT QU'IL Y A UNE VIDÉO À LANCER — PARTOUT.
+     Il n'existait que sur la vignette du téléphone, parce que partout
+     ailleurs le lecteur natif affichait le sien. Les contrôles retirés, une
+     image fixe ne se distinguait plus d'une photo sur grand écran (owner,
+     2026-08-10). Il ne paraît QUE sur pause : posé sur une image qui bouge,
+     il masque la vidéo et annonce une action déjà faite. */
+  #videoSection:not(.atlas-joue)::before{content:""; position:absolute;
+    left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px;
+    border-radius:50%; background:rgba(7,27,40,.55); z-index:8;
+    pointer-events:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='white' d='M9 6.5v11l9-5.5z'/></svg>");
+    background-repeat:no-repeat; background-position:center; background-size:28px}
+
   /* Le fil de progression : un repère, jamais une commande. `pointer-events`
      à `none` pour que l'appui traverse et joue la vidéo, même posé dessus.
      IL S'ANCRE SUR LA CARTE, PAS SUR LA BOÎTE. La boîte ne contient qu'un
