@@ -7328,7 +7328,10 @@
     }
     // v0..v3 : les quatre coins du plan de base du cône — le CADRE de l'image
     // à cet instant. C'est sur eux que la vidéo vient se poser.
-    ["m0","m1","m2","m3","mc","r0","r1","v0","v1","v2","v3"].forEach(function(n){
+    // QUATRE PAIRES `r`, PAS UNE : chaque cote affichée en même temps a
+    // besoin de ses deux ancrages pour se projeter à l'écran.
+    ["m0","m1","m2","m3","mc","r0","r1","r2","r3","r4","r5","r6","r7",
+     "v0","v1","v2","v3"].forEach(function(n){
       if (mv.querySelector('[slot="hotspot-' + n + '"]')) return;
       var d = document.createElement("div");
       d.setAttribute("slot", "hotspot-" + n);
@@ -7358,7 +7361,10 @@
     if (!hote) return false;
     MES.murs = []; MES.emprise = null; MES.grille = null; MES.troncons = {};
     MES.murCourant = -1; MES.candidat = -1; MES.pan = null;
-    MES.fige = null; MES.opac = 0;
+    // La liste des cotes affichées appartient au MODÈLE : changer d'étage
+    // doit les emporter, sinon des longueurs de l'étage d'en dessous
+    // s'estomperaient par-dessus celui qu'on vient d'ouvrir.
+    MES.fige = null; MES.opac = 0; MES.cotes = [];
     // Pas de `catch` muet : une exception avalée m'a caché pendant plusieurs
     // passes que les points d'ancrage n'étaient jamais créés.
     try { extraitMurs(mv, hote); }
@@ -7740,6 +7746,21 @@
     svg.innerHTML = d;
   }
 
+  // LES COTES S'ACCUMULENT ET S'ÉTEIGNENT DOUCEMENT.
+  //
+  // Une seule cote vivait à la fois : viser un autre mur effaçait la
+  // précédente. Owner, 2026-08-10 : « elles peuvent rester même si le
+  // téléphone bouge, pour voir plusieurs mesures, et disparaître doucement ».
+  // On balaie donc une pièce et on lit trois murs ensemble, le plus ancien
+  // pâlissant pendant qu'un nouveau apparaît.
+  //
+  // ~250 ms pour apparaître — assez pour ne pas clignoter. Vingt fois plus
+  // lentement pour s'éteindre : à 60 images par seconde, une cote délaissée
+  // met environ trois secondes à disparaître, et reste lisible la moitié de
+  // ce temps. QUATRE au plus : quatre se lisent, six se chevauchent et ne
+  // disent plus rien.
+  var PAS = 0.12, PAS_SORTIE = 0.006, SIMULTANEES = 4;
+
   /** La cote du mur regardé : POSÉE SUR LE MUR, et seule l'opacité bouge.
    *
    * Elle glissait auparavant — extrémités et chiffre filtrés vers leur cible à
@@ -7761,43 +7782,54 @@
                x1:MES.pan.x1, z1:MES.pan.z1, h:MES.pan.h,
                L:Math.hypot(MES.pan.x1-MES.pan.x0, MES.pan.z1-MES.pan.z0) };
     }
-    // ~250 ms pour apparaître : assez pour ne pas clignoter, assez court pour
-    // que la cote soit là quand on regarde encore le mur. Elle s'efface DEUX
-    // FOIS PLUS LENTEMENT qu'elle n'apparaît (owner, 2026-08-10 : « les
-    // dimensions doivent rester deux fois plus longtemps avant de
-    // disparaître ») : le regard quitte un mur bien plus souvent qu'il n'y
-    // revient, et une cote qui s'évapore au premier frémissement du poignet
-    // oblige à viser de nouveau pour lire ce qu'on lisait déjà.
-    var PAS = 0.12, PAS_SORTIE = 0.06;
-    if (MES.opac == null) MES.opac = 0;
-    if (!MES.fige){
-      if (vise < 0) return "";
-      MES.fige = fige(); MES.opac = 0;
-    } else if (MES.fige.mur !== vise){
-      MES.opac -= PAS_SORTIE;
-      if (MES.opac <= 0){
-        MES.opac = 0;
-        MES.fige = (vise >= 0) ? fige() : null;
-      }
-    } else {
-      MES.opac = Math.min(1, MES.opac + PAS);
-    }
-    if (!MES.fige || MES.opac <= 0.02) return "";
+    if (!MES.cotes) MES.cotes = [];
 
-    var f = MES.fige;
-    mv.updateHotspot({ name:"hotspot-r0", position:f.x0+" "+(f.h/2)+" "+f.z0 });
-    mv.updateHotspot({ name:"hotspot-r1", position:f.x1+" "+(f.h/2)+" "+f.z1 });
-    var A=ecranHS(mv,"hotspot-r0"), B=ecranHS(mv,"hotspot-r1");
-    if (!A||!B) return "";
-    var ang=Math.atan2(B.y-A.y,B.x-A.x)*180/Math.PI;
-    ang=((ang+90)%180+180)%180-90;
-    var mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
-    return '<g opacity="'+MES.opac.toFixed(2)+'">'
-         + '<line class="mur" x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'"/>'
-         + '<circle class="mur" cx="'+A.x+'" cy="'+A.y+'" r="3"/>'
-         + '<circle class="mur" cx="'+B.x+'" cy="'+B.y+'" r="3"/>'
-         + '<text class="mur" x="'+mx+'" y="'+my+'" transform="rotate('+ang.toFixed(1)+' '+mx+' '+my+')" dy="-8">'
-         + (lenTxt(f.L)||"") + '</text></g>';
+    // Celle qu'on vise monte vite ; toutes les autres RESTENT et s'effacent
+    // lentement. On peut donc balayer une pièce et lire trois murs à la fois,
+    // le plus ancien pâlissant pendant qu'un nouveau apparaît.
+    if (vise >= 0){
+      var deja = null;
+      for (var i = 0; i < MES.cotes.length; i++)
+        if (MES.cotes[i].mur === vise) deja = MES.cotes[i];
+      if (!deja){
+        // Le plus pâle cède sa place quand les quatre sont prises : quatre
+        // cotes se lisent, six se chevauchent et ne disent plus rien.
+        if (MES.cotes.length >= SIMULTANEES){
+          var pire = 0;
+          for (var j = 1; j < MES.cotes.length; j++)
+            if (MES.cotes[j].opac < MES.cotes[pire].opac) pire = j;
+          MES.cotes.splice(pire, 1);
+        }
+        deja = fige(); deja.opac = 0; MES.cotes.push(deja);
+      }
+      deja.opac = Math.min(1, deja.opac + PAS);
+    }
+    for (var k = MES.cotes.length - 1; k >= 0; k--){
+      if (MES.cotes[k].mur === vise) continue;
+      MES.cotes[k].opac -= PAS_SORTIE;
+      if (MES.cotes[k].opac <= 0.02) MES.cotes.splice(k, 1);
+    }
+    if (!MES.cotes.length) return "";
+
+    var sortie = "";
+    for (var n = 0; n < MES.cotes.length; n++){
+      var f = MES.cotes[n];
+      var n0 = "hotspot-r" + (2 * n), n1 = "hotspot-r" + (2 * n + 1);
+      mv.updateHotspot({ name:n0, position:f.x0+" "+(f.h/2)+" "+f.z0 });
+      mv.updateHotspot({ name:n1, position:f.x1+" "+(f.h/2)+" "+f.z1 });
+      var A=ecranHS(mv,n0), B=ecranHS(mv,n1);
+      if (!A||!B) continue;
+      var ang=Math.atan2(B.y-A.y,B.x-A.x)*180/Math.PI;
+      ang=((ang+90)%180+180)%180-90;
+      var mx=(A.x+B.x)/2, my=(A.y+B.y)/2;
+      sortie += '<g opacity="'+f.opac.toFixed(2)+'">'
+             + '<line class="mur" x1="'+A.x+'" y1="'+A.y+'" x2="'+B.x+'" y2="'+B.y+'"/>'
+             + '<circle class="mur" cx="'+A.x+'" cy="'+A.y+'" r="3"/>'
+             + '<circle class="mur" cx="'+B.x+'" cy="'+B.y+'" r="3"/>'
+             + '<text class="mur" x="'+mx+'" y="'+my+'" transform="rotate('+ang.toFixed(1)+' '+mx+' '+my+')" dy="-8">'
+             + (lenTxt(f.L)||"") + '</text></g>';
+    }
+    return sortie;
   }
 
   FLOORS.hooks.push(function(){ majCamera(); });
