@@ -2245,7 +2245,15 @@
     if (!figs) return;
     figs.innerHTML = "";
     var items = [];
-    var area = areaTxt(FIGDATA.floorAreaM2);
+    // La surface vient du compagnon quand il répond, du LIEN sinon : c'est
+    // elle qui porte le choix pi²/m², et le visiteur le perdait entièrement
+    // dès que Drive bronchait.
+    var aire = FIGDATA.floorAreaM2;
+    if (typeof aire !== "number" || !isFinite(aire) || aire <= 0){
+      var duLien = parseFloat(q.get("sf") || "");
+      if (isFinite(duLien) && duLien > 0) aire = duLien;
+    }
+    var area = areaTxt(aire);
     var manyFloors = !!(FIGDATA.spaces && FIGDATA.spaces.length > 1);
     if (area) items.push({ big: area, small: manyFloors ? t.fig_area : t.fig_area_1,
                            est: t.fig_area_est, unit: true });
@@ -2435,6 +2443,17 @@
 
   function showLocation(agg){
     var loc = readLocation(agg);
+    // L'ADRESSE DU LIEN EN SECOURS.
+    //
+    // Elle ne vivait que dans le compagnon, sur Drive : le jour où Drive
+    // limite l'accès, la fiche perdait l'adresse et ses boutons Maps alors
+    // qu'elle affichait toujours les pièces et les portes. Depuis l'app 173,
+    // le lien la porte — quand le partage la contient. Sans coordonnées, on
+    // ne montre que le texte : Maps sait chercher une adresse.
+    if (!loc){
+      var duLien = q.get("adr");
+      if (duLien) loc = { address: duLien, lat: undefined, lng: undefined, source: null };
+    }
     if (!loc) return;                       // partage sans adresse : rien du tout
     var hero = document.querySelector(".hero");
     var host = document.getElementById("addressBlock");
@@ -4006,6 +4025,11 @@
     // (constaté sur la fiche Emi et Paul, 2026-08-10, bannière de panne à
     // l'écran).
     updateHeroFigures();
+    // ET L'ADRESSE, POUR LA MÊME RAISON : `showLocation` n'est appelée que
+    // par le chemin d'enrichissement, donc jamais quand Drive limite
+    // l'accès. Elle se rappellera avec les vraies coordonnées quand le
+    // compagnon arrivera — elle reconstruit son bloc à chaque fois.
+    try { showLocation(null); } catch (e) { /* pas d'adresse plutôt qu'une fausse */ }
     first.querySelector("#title") && (first.querySelector("#title").hidden = true);
   }
 
