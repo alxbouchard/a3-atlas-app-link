@@ -3994,8 +3994,18 @@
     figs.className = "hero-figs";
     figs.id = "heroFigs";
     hero.appendChild(figs);
-    updateHeroFigures();
     main.insertBefore(hero, first);
+    // APRÈS L'INSERTION, PAS AVANT.
+    //
+    // `updateHeroFigures` cherche sa rangée par `getElementById` : tant que le
+    // héros n'est pas dans le document, elle ne trouve rien et sort. Les
+    // chiffres n'apparaissaient donc QUE grâce aux appels suivants, ceux du
+    // chemin d'enrichissement — et le jour où Drive limite l'accès, ce chemin
+    // ne s'exécute pas. La fiche perdait alors même « 2 espaces · 20 photos »,
+    // que le LIEN porte pourtant et qui ne demandent aucune requête
+    // (constaté sur la fiche Emi et Paul, 2026-08-10, bannière de panne à
+    // l'écran).
+    updateHeroFigures();
     first.querySelector("#title") && (first.querySelector("#title").hidden = true);
   }
 
@@ -5947,14 +5957,32 @@
   // inutilisables, et un doigt qui traîne sur un mini-plan ferait tourner la
   // caméra au lieu de faire défiler la page — le piège classique des modèles
   // 3D sur mobile.
-  var MINI = window.matchMedia("(max-width: 860px)");
+  // **UNE SEULE DÉFINITION DU « FORMAT TÉLÉPHONE », LUE PAR LES DEUX.**
+  //
+  // Le CSS et le JavaScript décidaient chacun de leur côté, sur la même
+  // largeur écrite deux fois. Tant qu'elles concordaient ça tenait — mais
+  // c'est précisément le genre de désaccord qui produit une mise en page dont
+  // la moitié croit être sur un téléphone et l'autre non. Une seule chaîne,
+  // deux lecteurs.
+  //
+  // ET LA FORME COMPTE AUTANT QUE LA LARGEUR. Un iPhone couché fait ~850 px
+  // de large pour 400 de haut : large et court, exactement la forme qui
+  // appelle deux colonnes — le plan à gauche, la vidéo à droite, comme sur un
+  // ordinateur (owner, 2026-08-10, capture en paysage). La disposition
+  // téléphone ne s'applique donc qu'à un écran étroit ET plus haut que large.
+  //
+  // Effet de bord assumé : une petite fenêtre de bureau posée en paysage
+  // (700 × 400) prendra elle aussi les deux colonnes. C'est la bonne réponse
+  // pour cette forme-là.
+  var REQUETE_TELEPHONE = "(max-width:860px) and (max-aspect-ratio:1/1)";
+  var MINI = window.matchMedia(REQUETE_TELEPHONE);
 
   function styleMinicarte(){
     if (document.getElementById("atlas-mini-css")) return;
     var st = document.createElement("style");
     st.id = "atlas-mini-css";
     st.textContent =
-      "@media (max-width:860px){" +
+      "@media " + REQUETE_TELEPHONE + "{" +
       // LE PLAN A DROIT À LA MÊME HAUTEUR QUE LA VIDÉO.
       //
       // Il plafonnait à 62 vh quand la vidéo monte à 78 : le panneau du plan
@@ -7029,7 +7057,16 @@
     // Il interrogeait `.atlas-unit`, le bouton des unités — que ce bloc ne
     // fabrique plus. Sans ce changement, la condition serait devenue toujours
     // vraie et la rangée d'outils se serait dupliquée à chaque appel.
-    if (barre && !barre.querySelector(".atlas-outils")){
+    // ON CHERCHE LA RANGÉE DANS TOUT LE PANNEAU, PAS DANS LA BARRE.
+    //
+    // Le verrou regardait la barre du bas. Or `hisseLesOutils` déménage
+    // cette rangée AU-DESSUS du plan sur téléphone : elle n'est alors plus
+    // dans la barre, le verrou la croit absente, et il en fabrique une
+    // deuxième. Puis une troisième au basculement suivant — trois
+    // « Mesures » côte à côte sur la capture d'Alex en paysage
+    // (2026-08-10). Un verrou doit chercher là où la chose peut être,
+    // pas là où on l'a posée la première fois.
+    if (barre && !visuel.querySelector(".atlas-outils")){
       var bm = document.createElement("button");
       // `view-btn` est la classe RÉELLE des boutons de la fiche ; `hero-btn`
       // n'existe nulle part, et mes deux boutons s'affichaient donc en
