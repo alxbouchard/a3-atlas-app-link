@@ -2247,15 +2247,25 @@
    *  Accessible au clavier : un chiffre qui agit est un bouton, même s'il n'en
    *  a pas l'air.
    */
-  function meneVers(el, idSection){
+  /** La première des sections proposées qui existe ET n'est pas masquée.
+   *  Une tuile ne doit jamais avoir l'air cliquable pour ne mener à rien. */
+  function premiereSectionVisible(ids){
+    for (var i = 0; i < ids.length; i++){
+      var sec = document.getElementById(ids[i]);
+      if (sec && !sec.hidden) return sec;
+    }
+    return null;
+  }
+
+  function meneVers(el, ids){
     el.style.cursor = "pointer";
     el.setAttribute("role", "button");
     el.setAttribute("tabindex", "0");
     function va(e){
       // Le sélecteur pi²/m² vit dans une tuile : son clic lui appartient.
       if (e && e.target && e.target.closest && e.target.closest("button")) return;
-      var sec = document.getElementById(idSection);
-      if (!sec || sec.hidden) return;
+      var sec = premiereSectionVisible(ids);
+      if (!sec) return;
       var d = sec.querySelector("details");
       if (d && !d.open){
         d.open = true;
@@ -2287,21 +2297,26 @@
     if (area) items.push({ big: area, small: manyFloors ? t.fig_area : t.fig_area_1,
                            est: t.fig_area_est, unit: true });
     var spaces = FIGDATA.spaces;
+    // « Espaces » MÈNE AUX PLANS (owner, 2026-08-10). Je l'avais envoyée vers
+    // la section « Espaces / pièces » — le mot appelait le mot. Mais ce qu'on
+    // veut voir quand on lit « 2 espaces », ce sont les DEUX PLANS, pas une
+    // liste qui les nomme. La section des espaces reste le repli quand la
+    // fiche n'a pas de plans.
     if (spaces && spaces.length) items.push({ big: String(spaces.length), small: t.fig_spaces,
-                                              vers: "spacesSection" });
+                                              vers: ["plansSection", "spacesSection"] });
     else if (q.get("z")) items.push({ big: q.get("z"), small: t.fig_rooms,
-                                      vers: "spacesSection" });
+                                      vers: ["plansSection", "spacesSection"] });
     if (spaces && spaces.length){
       var floors = {};
       spaces.forEach(function(sp){
         if (sp && typeof sp.buildingFloor === "number") floors[sp.buildingFloor] = true;
       });
       var n = Object.keys(floors).length;
-      if (n) items.push({ big: String(n), small: t.fig_floors_n(n), vers: "plansSection" });
+      if (n) items.push({ big: String(n), small: t.fig_floors_n(n), vers: ["plansSection"] });
     } else if (q.get("floor")) items.push({ big: q.get("floor"), small: t.fig_floor,
-                                           vers: "plansSection" });
+                                           vers: ["plansSection"] });
     if (q.get("p")) items.push({ big: q.get("p"), small: t.fig_photos,
-                                 vers: "gallerySection" });
+                                 vers: ["gallerySection"] });
 
     items.forEach(function(it){
       var f = document.createElement("div"); f.className = "hero-fig";
@@ -2320,7 +2335,7 @@
       // 2026-08-10). La surface, elle, ne mène nulle part : elle n'a pas de
       // section à elle, et elle porte déjà le choix pi²/m² — un clic dessus
       // serait une promesse vide.
-      if (it.vers && document.getElementById(it.vers)) meneVers(f, it.vers);
+      if (it.vers && premiereSectionVisible(it.vers)) meneVers(f, it.vers);
       figs.appendChild(f);
     });
   }
