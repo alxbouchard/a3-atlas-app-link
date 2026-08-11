@@ -2322,8 +2322,27 @@
         // et le dit : la pastille allumée doit toujours nommer ce qu'on voit.
         if (vide) iChoisi = iJumeau;
         var actif = vide ? sansMeubles : choix[iChoisi];
-        if (vide && imgSans && !sansMeublesDemandee){
+        // L'ÉTAT EST COMMUN AUX ÉTAGES, LE CHARGEMENT NE DOIT PAS L'ÊTRE.
+        //
+        // Un seul clic sur « Meubles » rejoue cette fonction pour CHAQUE
+        // figure — c'est voulu, l'interrupteur est unique. Mais les pastilles
+        // d'étage masquent toutes les figures sauf une, et un <img> sous un
+        // ancêtre `display:none` est téléchargé quand même : le premier clic
+        // demandait une image de 1600 px par étage, exactement la rafale que
+        // le chargement paresseux devait éviter. On attend donc que la figure
+        // soit à l'écran ; le crochet d'étage rappelle cette fonction quand
+        // elle y arrive.
+        if (vide && imgSans && !sansMeublesDemandee && fig.style.display !== "none"){
           sansMeublesDemandee = true;
+          // La figure ne doit pas s'effondrer le temps du chargement : on lui
+          // réserve la hauteur QU'ELLE A, mesurée sur l'image qu'on remplace,
+          // plutôt qu'une proportion supposée.
+          var jumeau = imgs[iJumeau] && imgs[iJumeau].el;
+          if (jumeau && jumeau.clientHeight){
+            imgSans.style.minHeight = jumeau.clientHeight + "px";
+            imgSans.addEventListener("load", function(){ imgSans.style.minHeight = ""; },
+                                     { once: true });
+          }
           loadDriveImage(imgSans, sansMeubles.driveId, 1600, function(){});
         }
         imgs.forEach(function(e){ e.el.style.display = (e.p === actif) ? "" : "none"; });
@@ -2339,6 +2358,7 @@
       _figuresDePlan.push(appliqueLetat);
       var cap = makeCaption(g.label || planKindLabel(choix[0].kind));
       if (cap) fig.appendChild(cap);
+      fig._appliqueLetat = appliqueLetat;
       figByFloor[(g.label != null ? String(g.label).trim() : "") || "—"] = fig;
       root.appendChild(fig);
     });
@@ -2352,7 +2372,12 @@
         var cur = FLOORS.list[i];
         FLOORS.list.forEach(function(f){
           var fig = figByFloor[f.key];
-          if (fig) fig.style.display = (f === cur) ? "" : "none";
+          if (!fig) return;
+          fig.style.display = (f === cur) ? "" : "none";
+          // Arrivée à l'écran : c'est ICI que son image sans meubles se
+          // charge, si l'interrupteur était déjà éteint pendant qu'elle
+          // était masquée.
+          if (f === cur && fig._appliqueLetat) fig._appliqueLetat();
         });
       });
       setFloor(FLOORS.current);   // état initial cohérent des deux côtés
