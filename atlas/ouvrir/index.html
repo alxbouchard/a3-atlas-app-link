@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T19:45Z";
+  var ATLAS_BUILD = "2026-08-30T20:40Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1732,6 +1732,72 @@
       return r.text();
     }).finally(function(){ if (timer) clearTimeout(timer); });
   }
+
+  // LE COFFRE DRIVE (owner 2026-08-30) : Google bride par IP quand une
+  // machine demande beaucoup — les rafraîchissements de test suffisent à
+  // déclencher sa page « Sorry », et la fiche entière tombait en panne.
+  // Chaque octet déjà vu est donc rangé dans Cache API et resservi :
+  // frais (< 30 min), pas UN SEUL appel réseau ; périmé, on revalide,
+  // mais un échec (bridage, Wi-Fi coupé) ressert la copie rangée au lieu
+  // de casser la page. ?fraiche=… force la revalidation sans perdre ce
+  // secours. Les partages se mettent à jour SOUS LES MÊMES identifiants
+  // (PATCH incrémental) : la fraîcheur est bornée, jamais infinie.
+  var COFFRE = "atlas-drive-v1";
+  var COFFRE_FRAIS_MS = /[?&]fraiche=/.test(location.search) ? 0 : 30 * 60 * 1000;
+  function coffreOuvre(){
+    return (window.caches && caches.open)
+      ? caches.open(COFFRE) : Promise.reject(new Error("pas de Cache API"));
+  }
+  function coffreCle(cle){ return location.origin + "/__coffre/" + encodeURIComponent(cle); }
+  function coffreOublie(cle){
+    return coffreOuvre().then(function(c){ return c.delete(coffreCle(cle)); }).catch(function(){});
+  }
+  function chargeOctets(cle, urls, timeoutMs){
+    var k = coffreCle(cle);
+    function range(blob){
+      coffreOuvre().then(function(c){
+        return c.put(k, new Response(blob, { headers: {
+          "x-atlas-date": String(Date.now()),
+          "content-type": blob.type || "application/octet-stream" } }));
+      }).catch(function(){ /* navigation privée ou coffre plein : tant pis */ });
+      return blob;
+    }
+    function ressort(){
+      return coffreOuvre().then(function(c){ return c.match(k); }).then(function(r){
+        if (!r) return null;
+        var date = +(r.headers.get("x-atlas-date") || 0);
+        return r.blob().then(function(b){ return { blob: b, date: date }; });
+      }).catch(function(){ return null; });
+    }
+    function enLigne(i){
+      if (i >= urls.length) return Promise.reject(new Error("toutes les sources ont échoué"));
+      var ctrl = ("AbortController" in window) ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function(){ try{ ctrl.abort(); }catch(e){} }, timeoutMs || 30000) : null;
+      var opts = { mode: "cors", credentials: "omit" };
+      if (ctrl) opts.signal = ctrl.signal;
+      return fetch(urls[i], opts).then(function(r){
+        if (!r.ok) throw new Error("http " + r.status);
+        return r.blob();
+      }).then(function(b){
+        // L'hôte sans clé répond parfois 200 avec sa page de confirmation
+        // antivirus — du HTML, jamais le fichier. Ça ne se range pas.
+        if ((b.type || "").indexOf("text/html") !== -1) throw new Error("page html, pas le fichier");
+        return b;
+      }).finally(function(){ if (timer) clearTimeout(timer); })
+        .then(range, function(){ return enLigne(i + 1); });
+    }
+    return ressort().then(function(vu){
+      if (vu && (Date.now() - vu.date) < COFFRE_FRAIS_MS) return vu.blob;
+      return enLigne(0).catch(function(e){
+        if (vu) return vu.blob;   // périmé vaut mieux que rien : Google bride
+        throw e;
+      });
+    });
+  }
+  function chargeTexte(cle, urls, timeoutMs){
+    return chargeOctets(cle, urls, timeoutMs).then(function(b){ return b.text(); });
+  }
+
   // Un rechargement ne doit pas coûter un nouvel appel à Drive. Google
   // challenge un navigateur qui demande beaucoup — mesuré sur le Mac de
   // l'owner : la requête passe en no-cors mais échoue en cors, donc Google
@@ -1765,14 +1831,9 @@
     // L'accès direct reste en secours : il couvre le cas où la clé échoue —
     // quota dépassé, restriction de référent — alors que le fichier est
     // toujours public.
-    var premier = DRIVE_API_KEY ? mediaUrl(id) : driveRaw(id);
-    var secours = DRIVE_API_KEY ? driveRaw(id) : null;
-    return fetchOnce(premier, FETCH_TIMEOUT_MS)
-      .catch(function(e){
-        if (!secours) throw e;
-        return fetchOnce(secours, FETCH_TIMEOUT_MS);
-      })
-      .then(function(txt){ rememberJson(id, txt); return JSON.parse(txt); })
+    var sources = DRIVE_API_KEY ? [mediaUrl(id), driveRaw(id)] : [driveRaw(id)];
+    return chargeTexte("json-" + id, sources, FETCH_TIMEOUT_MS)
+      .then(function(txt){ var o = JSON.parse(txt); rememberJson(id, txt); return o; })
       .catch(function(e){
         // Un seul point de signalement pour tous les compagnons : la double
         // tentative (accès direct puis clé d'API) ne compte que pour UN échec.
@@ -2724,9 +2785,9 @@
     var url = location.href, text = shareText();
     try {
       if (navigator.share && navigator.canShare){
-        var response = await fetch(driveThumb(item.driveId, 2048), { mode: "cors" });
-        if (response.ok){
-          var blob = await response.blob();
+        var blob = await chargeOctets("photo2048-" + item.driveId,
+                                       [driveThumb(item.driveId, 2048)]).catch(function(){ return null; });
+        if (blob){
           var name = ((item.caption || "photo").replace(/[^\w\-]+/g, "-").slice(0, 40) || "photo") + ".jpg";
           var file = new File([blob], name, { type: blob.type || "image/jpeg" });
           if (navigator.canShare({ files: [file] })){
@@ -3022,6 +3083,23 @@
   // Deuxième chance : l'hôte sans clé. Sans référent autorisé (fiche ouverte
   // hors ligne, clé absente), c'est lui qui devient le seul chemin.
   function driveModelFallbackUrl(id){ return driveRaw(id); }
+  // Le GLB — l'octet le plus lourd de la fiche — passe par le coffre : un
+  // rechargement ne le redemande plus à Google, et un bridage ressert la
+  // copie déjà vue (URL d'objet locale, aucune requête).
+  function poseModele(mv, id){
+    var sources = DRIVE_API_KEY ? [driveModelApiUrl(id), driveRaw(id)] : [driveRaw(id)];
+    chargeOctets("modele-" + id, sources, 60000)
+      .then(function(b){
+        var u = URL.createObjectURL(b);
+        if (mv.__urlObjet){ try{ URL.revokeObjectURL(mv.__urlObjet); }catch(e){} }
+        mv.__urlObjet = u;
+        mv.setAttribute("src", u);
+      })
+      .catch(function(){
+        // Dernier recours : laisser la visionneuse essayer elle-même.
+        mv.setAttribute("src", driveModelUrl(id));
+      });
+  }
   var _mvState = 0, _mvCbs = [];   // 0 idle · 1 loading · 2 ready · 3 failed
   function loadModelViewer(cb){
     if (_mvState === 2) return cb(true);
@@ -4010,7 +4088,7 @@
         if (ok){
           var mv = document.createElement("model-viewer");
           mv.className = "model3d";
-          mv.setAttribute("src", driveModelUrl(m.driveId));
+          poseModele(mv, m.driveId);
           mv.setAttribute("camera-controls", "");
           mv.setAttribute("auto-rotate", "");
           mv.setAttribute("auto-rotate-delay", "1200");
@@ -4068,7 +4146,9 @@
               return;
             }
             mv.__triedFallbackFor = id;
-            mv.setAttribute("src", driveModelFallbackUrl(id));
+            // Des octets rangés qui ne se lisent pas ne doivent pas revenir.
+            coffreOublie("modele-" + id);
+            poseModele(mv, id);
           });
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
@@ -4164,7 +4244,7 @@
             mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
             mv.__fit = null; mv.__triedFallbackFor = null;
             VOILE.objets = null;   // un autre étage, d'autres murs
-            mv.setAttribute("src", driveModelUrl(f.model.driveId));
+            poseModele(mv, f.model.driveId);
             keepModelLook(mv);
           });
           mv.__floor = 0;
@@ -5697,8 +5777,8 @@
     var id = video && video.cameraTrackDriveId;
     if (!validId(id) || !DRIVE_API_KEY) return Promise.resolve(null);
     if (TRACES[id]) return TRACES[id];
-    TRACES[id] = fetch(mediaUrl(id), { mode:"cors", credentials:"omit" })
-      .then(function(r){ return r.ok ? r.json() : null; })
+    TRACES[id] = chargeTexte("json-" + id, [mediaUrl(id), driveRaw(id)])
+      .then(function(txt){ return JSON.parse(txt); })
       .then(function(t){
         if (!t || t.schema !== "a3.camera-track.v1" || !t.t || !t.p || !t.q) return null;
         return t;
