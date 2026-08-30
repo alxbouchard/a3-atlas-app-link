@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T18:35Z";
+  var ATLAS_BUILD = "2026-08-30T18:55Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3078,12 +3078,20 @@
   function transitionDouce(mv){
     try { mv.setAttribute("interpolation-decay", "700"); } catch (e) {}
     clearTimeout(CAM.tempoTransition);
-    CAM.tempoTransition = setTimeout(function(){
+    function rend(){
+      clearTimeout(CAM.tempoTransition);
+      mv.removeEventListener("pointerdown", rend);
       try {
         if (CAM.drone && CAM.drone.actif) mv.setAttribute("interpolation-decay", "450");
         else mv.removeAttribute("interpolation-decay");
       } catch (e) {}
-    }, 1300);
+    }
+    // À constante 700 ms, la convergence prend ~3 s : rendre la main à
+    // 1300 ms coupait le glissement net — le « jump cut » de fin (owner
+    // 2026-08-30). On attend la convergence… sauf si la personne touche :
+    // son geste reprend la main tout de suite, sans mollesse.
+    mv.addEventListener("pointerdown", rend);
+    CAM.tempoTransition = setTimeout(rend, 3200);
   }
 
   function arreteLaRotation(mv){
