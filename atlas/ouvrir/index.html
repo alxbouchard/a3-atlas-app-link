@@ -816,13 +816,15 @@
   var FETCH_TIMEOUT_MS = 8000;
 
   var q = new URLSearchParams(location.search);
-  // Language: the READER's browser wins (this page is for the receiver),
-  // then the sender's ?lang= as a fallback, French by default.
+  // Language: an EXPLICIT ?lang= wins (owner 2026-08-30 — the web
+  // convention: a stated choice beats the heuristic, and it's the only
+  // way to force a language without changing the browser), then the
+  // reader's browser (this page is for the receiver), French by default.
   function pickLang(l){ l=(l||"").toLowerCase(); return l.indexOf("en")===0?"en":(l.indexOf("fr")===0?"fr":null); }
   var prefs = (navigator.languages && navigator.languages.length) ? navigator.languages : [navigator.language||""];
-  var lang = null;
+  var lang = pickLang(q.get("lang"));
   for (var li=0; li<prefs.length && !lang; li++){ lang = pickLang(prefs[li]); }
-  lang = lang || pickLang(q.get("lang")) || "fr";
+  lang = lang || "fr";
   document.documentElement.lang = lang;
 
   // Verbatim manufacturer disclaimers (mirror AtlasContextBuilder.criticalLimitations).
