@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T20:40Z";
+  var ATLAS_BUILD = "2026-08-30T21:20Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -6744,7 +6744,11 @@
       // sa propre ombre — `0 22px 70px`. Retirer celle de la vignette ne
       // suffisait donc pas, il en restait une plus large en dessous.
       "body.atlas-minicarte #videoSection.atlas-vignette{background:transparent;" +
-      "padding:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}" +
+      "padding:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none;" +
+      // Le pip se PREND : sans ça, le doigt qui veut le déplacer fait
+      // défiler la page. Il est petit — perdre le défilement sur sa
+      // surface ne coûte rien.
+      "touch-action:none}" +
       // Une vignette est une VIGNETTE : on borne sa hauteur et on recadre
       // l'image, sinon une vidéo en portrait occupe les deux tiers du plan.
       // LE CADRE PREND LA FORME DE L'IMAGE — c'était déjà la promesse écrite
@@ -7309,6 +7313,109 @@
     if (vue) vue.style.opacity = "0";
   }
 
+  // LE PIP SE DÉPLACE AU DOIGT (owner 2026-08-30) — comme dans l'app : on
+  // le glisse, il s'aimante au coin le plus proche du lâcher. Seul le pip
+  // VIDÉO se saisit — le corps de la vignette du PLAN tourne la caméra
+  // (owner 2026-08-07) et le garde ; le plan HÉRITE simplement du coin
+  // choisi. L'appui court reste la lecture : la prise ne commence qu'après
+  // 8 px, et un glissement n'est jamais un appui.
+  var COIN_PIP = { h: "droite", v: "bas" };
+  function insetDuCoin(el){
+    // Le plan en vignette garde ses 58 px du bas (il dégageait les
+    // commandes du lecteur — l'écart est resté la signature de ce coin).
+    var basPx = (el.tagName === "MODEL-VIEWER") ? "58px" : "10px";
+    return (COIN_PIP.v === "haut" ? "10px" : "auto") + " " +
+           (COIN_PIP.h === "droite" ? "10px" : "auto") + " " +
+           (COIN_PIP.v === "bas" ? basPx : "auto") + " " +
+           (COIN_PIP.h === "gauche" ? "10px" : "auto");
+  }
+  function poseLeCoinPip(){
+    var mini = document.body.classList.contains("atlas-minicarte");
+    var sec = document.getElementById("videoSection");
+    var mv = document.querySelector("model-viewer.model3d");
+    [sec, mv].forEach(function(el){
+      if (!el) return;
+      if (mini && el.classList.contains("atlas-vignette")){
+        var veut = insetDuCoin(el);
+        // `important`, parce que la feuille du plan en vignette pose son
+        // `inset` en `important` aussi — seul un style en ligne du même
+        // poids la dépasse.
+        if (el.__coinPip !== veut){
+          el.__coinPip = veut;
+          el.style.setProperty("inset", veut, "important");
+        }
+      } else if (el.__coinPip){
+        el.__coinPip = null;
+        // La vidéo GRAND CADRE vient de recevoir son style par cssText
+        // (echangeMinicarte), qui a déjà balayé notre coin — ne pas lui
+        // retirer son inset:0. Tous les autres retours enlèvent le nôtre.
+        var grandeVideo = (el === sec) && mini && !el.classList.contains("atlas-vignette");
+        if (!grandeVideo) el.style.removeProperty("inset");
+      }
+    });
+  }
+  function branchePipGlisse(){
+    var sec = document.getElementById("videoSection");
+    if (!sec || sec.__pipGlisse) return;
+    sec.__pipGlisse = true;
+    var dep = null;
+    sec.addEventListener("pointerdown", function(e){
+      if (!document.body.classList.contains("atlas-minicarte")) return;
+      if (!sec.classList.contains("atlas-vignette")) return;
+      // Le fil garde son parcours, les commandes gardent leurs clics.
+      if (e.target.closest && e.target.closest(".video-fil, button, a, summary")) return;
+      dep = { x: e.clientX, y: e.clientY, id: e.pointerId, prise: false };
+    });
+    sec.addEventListener("pointermove", function(e){
+      if (!dep || e.pointerId !== dep.id) return;
+      var dx = e.clientX - dep.x, dy = e.clientY - dep.y;
+      if (!dep.prise){
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        dep.prise = true;
+        try{ sec.setPointerCapture(e.pointerId); }catch(err){}
+        sec.style.transition = "none";
+      }
+      e.preventDefault();
+      sec.style.transform = "translate(" + dx + "px," + dy + "px)";
+    });
+    sec.addEventListener("pointerup", function(e){
+      if (!dep || e.pointerId !== dep.id) return;
+      var prise = dep.prise; dep = null;
+      if (!prise) return;
+      // Un glissement n'est pas un appui : le clic que le navigateur
+      // synthétise en fin de geste ne doit pas jouer la vidéo.
+      BALAYAGE.vientDeParcourir = true;
+      setTimeout(function(){ BALAYAGE.vientDeParcourir = false; }, 350);
+      var vis = document.querySelector(".hero-visual");
+      var hr = vis ? vis.getBoundingClientRect() : null;
+      var vr = sec.getBoundingClientRect();
+      if (hr){
+        COIN_PIP.h = ((vr.left + vr.right) / 2 < hr.left + hr.width / 2) ? "gauche" : "droite";
+        COIN_PIP.v = ((vr.top + vr.bottom) / 2 < hr.top + hr.height / 2) ? "haut" : "bas";
+      }
+      // L'aimantation : on vise le coin depuis la position lâchée, en
+      // transform animé ; à l'arrivée le coin devient la vraie ancre et le
+      // transform disparaît — les deux décrivent le même point, aucun saut.
+      var cibleG = hr ? (COIN_PIP.h === "gauche" ? hr.left + 10 : hr.right - 10 - vr.width) : vr.left;
+      var cibleH = hr ? (COIN_PIP.v === "haut" ? hr.top + 10 : hr.bottom - 10 - vr.height) : vr.top;
+      var m = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(sec.style.transform || "");
+      var tx = m ? +m[1] : 0, ty = m ? +m[2] : 0;
+      sec.style.transition = "transform .18s ease";
+      sec.style.transform = "translate(" + (tx + cibleG - vr.left) + "px," + (ty + cibleH - vr.top) + "px)";
+      setTimeout(function(){
+        sec.style.transition = "";
+        sec.style.transform = "";
+        sec.__coinPip = null;      // force la repose immédiate au bon coin
+        poseLeCoinPip();
+      }, 200);
+    });
+    sec.addEventListener("pointercancel", function(e){
+      if (dep && e.pointerId === dep.id){
+        dep = null; sec.style.transform = ""; sec.style.transition = "";
+      }
+    });
+  }
+
   function rendLePlanGrand(){
     var mv = document.querySelector("model-viewer.model3d");
     if (!mv) return;
@@ -7606,6 +7713,8 @@
       synchroniseLeSegment();
       ajusteLaVignette();
       poseLeBoutonDechange();
+      poseLeCoinPip();
+      branchePipGlisse();
       // Le survol s'arme dès que TOUT est là — piste, boutons, ronde.
       //
       // Il était armé dans `suitLaCamera`, qui peut tourner avant que les
