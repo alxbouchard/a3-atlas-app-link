@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T06:05Z";
+  var ATLAS_BUILD = "2026-08-30T06:35Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -4104,21 +4104,26 @@
                 return (et && nordParEtiquette[et] !== undefined)
                   ? nordParEtiquette[et] : premier;
               }
+              var roseSvg = rose.querySelector("svg");
+              var roseDemande = false;
               function tourneLaRose(){
-                // La visionneuse déménage dans le héros : la rose la SUIT
-                // (même leçon que applyModelLook — le déménagement ne
-                // s'annonce pas).
+                roseDemande = false;
+                // La visionneuse déménage dans le héros : la rose la SUIT.
                 if (mv.parentElement && rose.parentElement !== mv.parentElement){
                   mv.parentElement.appendChild(rose);
                 }
-                if (!mv.getCameraOrbit) return;
-                var orb = mv.getCameraOrbit();
-                var theta = orb.theta * 180 / Math.PI;
-                var svg = rose.querySelector("svg");
-                if (svg) svg.style.transform =
+                if (!mv.getCameraOrbit || !roseSvg) return;
+                var theta = mv.getCameraOrbit().theta * 180 / Math.PI;
+                roseSvg.style.transform =
                   "rotate(" + (nordCourant() + theta) + "deg)";
               }
-              mv.addEventListener("camera-change", tourneLaRose);
+              // Une image sur son rythme (rAF) : écouter CHAQUE
+              // camera-change pendant le vol du drone travaillait pour rien.
+              mv.addEventListener("camera-change", function(){
+                if (roseDemande) return;
+                roseDemande = true;
+                requestAnimationFrame(tourneLaRose);
+              });
               tourneLaRose();
             }).catch(function(){});
           }
@@ -5639,7 +5644,7 @@
               // Initialisé EXPLICITEMENT : laissé à `undefined`, `!undefined`
               // vaut `true`, donc le premier clic allumait ce qui l'était
               // déjà et paraissait sans effet (mesuré le 2026-08-06).
-              arretVisible: false, pose: null,
+              arretVisible: true, pose: null,
               // Le drone : cible et cap LISSÉS, hauteur et distance figées.
               // Le PLAN par défaut : c'est la vue qui montre le logement en
               // entier, et une fiche s'ouvre sur ce qu'on est venu voir.
