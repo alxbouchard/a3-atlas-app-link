@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T07:00Z";
+  var ATLAS_BUILD = "2026-08-30T18:35Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -6295,6 +6295,42 @@
    * question. Une image fixe reste lisible petite et de biais ; une vidéo,
    * non (idée du propriétaire, 2026-08-06).
    */
+  /** LE CADRAGE DE PAUSE (owner 2026-08-30) : « la caméra vient se
+   *  placer doucement vers la projection, presque plein écran mais avec
+   *  un recul ». La caméra se pose derrière l'œil du scan, dans son axe :
+   *  la photo remplit ~75 % de la hauteur, le modèle respire autour.
+   *  Vue d'ensemble seulement — la vue de dessus garde sa rotation. */
+  function cadreLArret(mv, s){
+    var q = s.q;
+    // v' = q * (0,0,-1) * q⁻¹ — rotation quaternion développée.
+    function tourne(v){
+      var x=q[0], y=q[1], z=q[2], w=q[3];
+      var ix =  w*v[0] + y*v[2] - z*v[1];
+      var iy =  w*v[1] + z*v[0] - x*v[2];
+      var iz =  w*v[2] + x*v[1] - y*v[0];
+      var iw = -x*v[0] - y*v[1] - z*v[2];
+      return [ix*w + iw*-x + iy*-z - iz*-y,
+              iy*w + iw*-y + iz*-x - ix*-z,
+              iz*w + iw*-z + ix*-y - iy*-x];
+    }
+    var f = tourne([0,0,-1]);
+    var L = (CAM.cadre && CAM.cadre.L) || 1.35;
+    var h = (CAM.cadre && CAM.cadre.h) || 0.7;
+    var cible = [s.p[0]+f[0]*L, s.p[1]+f[1]*L, s.p[2]+f[2]*L];
+    // ~75 % de la hauteur du cadre avec le champ vertical de 32°.
+    var d = Math.min(6, Math.max(2.5, h / (0.75 * Math.tan(16*Math.PI/180))));
+    var v = [-f[0], -f[1], -f[2]];
+    var plat = Math.hypot(v[0], v[2]);
+    var theta = Math.atan2(v[0], v[2]) * 180/Math.PI;
+    var phi = Math.atan2(plat, v[1]) * 180/Math.PI;
+    phi = Math.min(85, Math.max(12, phi));
+    transitionDouce(mv);
+    mv.setAttribute("camera-target",
+      cible[0].toFixed(3)+"m "+cible[1].toFixed(3)+"m "+cible[2].toFixed(3)+"m");
+    mv.setAttribute("camera-orbit",
+      theta.toFixed(1)+"deg "+phi.toFixed(1)+"deg "+d.toFixed(2)+"m");
+  }
+
   function plaqueArret(mv, s){
     var v = document.querySelector("#videoWrap video");
     var hote = document.getElementById("atlas-projection");
@@ -7501,6 +7537,21 @@
         if (MES.emprise) { try { dessineMesures(mv); } catch (e) {} }
         try { ajusteLeCone(CAM.pose); } catch (e) {}
         try { plaqueArret(mv, CAM.pose); } catch (e) {}
+        // LA PAUSE SE CADRE (owner 2026-08-30) : une fois par pause, en
+        // Vue d'ensemble — le drone cède pendant l'arrêt, reprend au play.
+        try {
+          var vp = CAM.video;
+          var enPause = !!(vp && vp.paused === true && vp.currentTime > 0.05);
+          if (enPause && !CAM.pauseCadree && CAM.pose
+              && CAM.pose.fiable !== false && CAM.mode === "ensemble"){
+            CAM.pauseCadree = true;
+            if (CAM.drone) CAM.drone.actif = false;
+            cadreLArret(mv, CAM.pose);
+          } else if (!enPause && CAM.pauseCadree){
+            CAM.pauseCadree = false;
+            if (CAM.drone) CAM.drone.actif = true;
+          }
+        } catch (e) {}
       }
     })();
   }
