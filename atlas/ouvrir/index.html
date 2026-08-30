@@ -137,6 +137,18 @@
   .entete .share-top span{position:absolute; width:1px; height:1px; overflow:hidden;
     clip:rect(0 0 0 0); white-space:nowrap}
   .entete .share-top{padding:9px 11px; gap:0}
+  .entete .actions-entete{justify-self:end; display:flex; align-items:center; gap:8px}
+  .entete .actions-entete .share-top{margin:0}
+  /* Le partage cache son libellé (icône seule) ; la pastille app, NON —
+     son texte court est le message. */
+  .entete .app-top span{position:static; width:auto; height:auto;
+    overflow:visible; clip:auto}
+  .entete .app-top{margin:0; padding:8px 13px; gap:6px;
+    color:var(--accent); text-decoration:none; font-weight:600; font-size:13px;
+    white-space:nowrap}
+  .entete .app-top .apple{width:1em; height:1.15em}
+  @media (max-width:560px){ .entete .app-top span{display:none}
+    .entete .app-top{padding:9px 11px} }
   .hero-visual .floor-pills, #plansSection .floor-pills,
   #videoSection .floor-pills{display:none !important}
   .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
@@ -351,7 +363,9 @@
      2026-08-10). On ne l'applique donc QUE hors vignette ; en grand cadre
      c'est le style en ligne qui commande, et il gagne de toute façon. */
   #videoSection:not(.atlas-vignette){position:relative}
-  .video-fil{position:absolute; left:0; right:0; bottom:0; height:3px; z-index:3;
+  .video-fil{position:absolute; left:0; right:0; bottom:0; height:22px;
+    padding-top:19px; box-sizing:border-box; cursor:pointer;
+    touch-action:none; z-index:3;
     background:rgba(255,255,255,.22); pointer-events:none; transition:opacity .3s}
   .video-fil i{display:block; height:100%; width:0; background:var(--accent);
     transition:width .25s linear}
@@ -806,7 +820,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T04:55Z";
+  var ATLAS_BUILD = "2026-08-30T05:25Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -862,7 +876,7 @@
       brand:"A3 ATLAS SCANNER",
       empty_title:"Lien incomplet",
       empty_body:"Ce lien Atlas ne contient pas de propriété à afficher. Demandez à l'expéditeur de regénérer le lien de partage.",
-      get_app:"Obtenir A3 Atlas Scanner — gratuitement", get_app_short:"Obtenir l'app gratuitement",
+      get_app:"Obtenir A3 Atlas Scanner — gratuitement", get_app_short:"Obtenir l'app gratuitement", get_app_top:"Obtenir l'app",
       equip:"Équipements & points d'intérêt", areas:"Zones fonctionnelles",
       areas_note:"Déduites des objets détectés par RoomPlan — jamais confirmées sur place.",
       download:"Télécharger l'export", read_context:"Lire le contexte",
@@ -943,7 +957,7 @@
       in_room:function(r){return "dans "+r;},
       evidence_count:function(n){return n+" photo"+(n>1?"s":"")+" (contexte)";},
       evidence_caveat:"Photo liée à cet équipement — visibilité non évaluée par Atlas (un agent IA peut l'analyser).",
-      generated_label:"Généré le",
+      generated_label:"Généré le", scanned_label:"Scanné le", scanned_last_label:"Dernier scan le", generated_short:"fiche générée le",
       fallback_hint:"Détails complets (espaces mesurés, statut, limites) dans le contexte — utilisez les boutons ci-dessous.",
       legend_obs_t:"Observation", legend_obs_d:"détecté automatiquement, non confirmé par un humain.",
       legend_fact_t:"Fait confirmé", legend_fact_d:"validé sur place par le visiteur.",
@@ -966,7 +980,7 @@
       brand:"A3 ATLAS SCANNER",
       empty_title:"Incomplete link",
       empty_body:"This Atlas link carries no property to show. Ask the sender to regenerate the share link.",
-      get_app:"Get A3 Atlas Scanner — free", get_app_short:"Get the app — free",
+      get_app:"Get A3 Atlas Scanner — free", get_app_short:"Get the app — free", get_app_top:"Get the app",
       equip:"Equipment & points of interest", areas:"Functional areas",
       areas_note:"Inferred from objects RoomPlan detected — never confirmed on site.",
       download:"Download export", read_context:"Read the context",
@@ -1043,7 +1057,7 @@
       in_room:function(r){return "in "+r;},
       evidence_count:function(n){return n+" evidence photo"+(n>1?"s":"");},
       evidence_caveat:"Photo linked to this equipment — visibility not assessed by Atlas (an AI agent can analyze it).",
-      generated_label:"Generated",
+      generated_label:"Generated", scanned_label:"Scanned", scanned_last_label:"Last scan", generated_short:"sheet generated",
       fallback_hint:"Full details (measured spaces, status, limitations) are in the context — use the buttons below.",
       legend_obs_t:"Observation", legend_obs_d:"auto-detected, not human-confirmed.",
       legend_fact_t:"Confirmed fact", legend_fact_d:"validated on site by the visitor.",
@@ -1946,6 +1960,19 @@
     var gEl = document.getElementById("generated");
     var gd = fmtDate(doc.capturedAt);
     if (gd){ gEl.textContent = t.generated_label + " " + gd; gEl.hidden = false; }
+    if (window.__scansEnAttente){
+      var attente = window.__scansEnAttente; window.__scansEnAttente = null;
+      setTimeout(function(){ window.__majDateScan && window.__majDateScan(attente); }, 0);
+    }
+    window.__majDateScan = function(scans){
+      // scans : dates ISO des événements room_scanned (historique).
+      if (!scans || !scans.length || !gd) return;
+      var plusRecent = scans.slice().sort().pop();
+      var sd = fmtDate(plusRecent);
+      if (!sd) return;
+      var etiquette = scans.length > 1 ? t.scanned_last_label : t.scanned_label;
+      gEl.textContent = etiquette + " " + sd + " \u00b7 " + t.generated_short + " " + gd;
+    };
 
     // Honest LiDAR aggregate — trust the per-space flags, not the URL `lidar`.
     if (spaces.length){
@@ -4607,10 +4634,26 @@
 
     // « Partager » monte dans la barre, réduit à son icône.
     var part = document.getElementById("shareTop");
-    if (part && part.parentElement !== tete){
+    var actions = tete.querySelector(".actions-entete");
+    if (!actions){
+      actions = document.createElement("div");
+      actions.className = "actions-entete";
+      tete.appendChild(actions);
+    }
+    if (part && part.parentElement !== actions){
       part.title = t.share_h;
       part.setAttribute("aria-label", t.share_h);
-      tete.appendChild(part);
+      actions.appendChild(part);
+    }
+    // …et la pastille « Obtenir l'app » l'accompagne, courte (owner
+    // 2026-08-30) : le haut porte l'ACTION, le pied de page garde la
+    // phrase du passeport.
+    if (!tete.querySelector(".app-top")){
+      var lienApp = document.createElement("a");
+      lienApp.className = "share-top app-top";
+      lienApp.href = "https://apps.apple.com/app/id6787545744";
+      lienApp.innerHTML = '<svg class="apple" viewBox="0 0 17 21" aria-hidden="true" focusable="false"><path fill="currentColor" d="M14.06 11.14c-.02-2.2 1.8-3.26 1.88-3.31-1.02-1.5-2.62-1.7-3.19-1.72-1.36-.14-2.65.8-3.34.8-.69 0-1.75-.78-2.87-.76-1.48.02-2.84.86-3.6 2.18-1.53 2.66-.39 6.6 1.1 8.76.73 1.06 1.6 2.25 2.74 2.2 1.1-.04 1.51-.71 2.84-.71 1.32 0 1.7.71 2.86.69 1.18-.02 1.93-1.08 2.65-2.14.84-1.23 1.18-2.42 1.2-2.48-.03-.01-2.29-.88-2.31-3.5zM11.87 4.6c.6-.74 1.01-1.76.9-2.78-.87.04-1.93.58-2.56 1.31-.56.65-1.06 1.69-.93 2.69.97.07 1.97-.49 2.59-1.22z"/></svg><span>' + t.get_app_top + '</span>';
+      actions.appendChild(lienApp);
     }
 
     // La phrase d'accroche descend en pied de page : c'est un message
@@ -5189,6 +5232,30 @@
     el.addEventListener("loadedmetadata", majLeFil);
     el.addEventListener("seeked", majLeFil);
     majLeFil();
+    // LE FIL SE PARCOURT (owner 2026-08-30) : le glissement sur la vidéo
+    // reste, mais un repère qu'on peut saisir ne demande aucune découverte.
+    // Zone de prise 22 px ; le visuel garde ses 3 px.
+    function chercheDepuis(e){
+      var d = el.duration;
+      if (!isFinite(d) || d <= 0) return;
+      var r = fil.getBoundingClientRect();
+      var frac = (e.clientX - r.left) / Math.max(1, r.width);
+      el.currentTime = Math.max(0, Math.min(1, frac)) * d;
+      majLeFil();
+    }
+    var filActif = false;
+    fil.addEventListener("pointerdown", function(e){
+      filActif = true;
+      try{ fil.setPointerCapture(e.pointerId); }catch(err){}
+      e.preventDefault(); e.stopPropagation();
+      chercheDepuis(e);
+    });
+    fil.addEventListener("pointermove", function(e){
+      if (filActif) chercheDepuis(e);
+    });
+    fil.addEventListener("pointerup", function(e){ filActif = false; e.stopPropagation(); });
+    fil.addEventListener("pointercancel", function(){ filActif = false; });
+    fil.addEventListener("click", function(e){ e.stopPropagation(); });
 
     wrap.appendChild(box);
     playerEl = el; applyShape();
@@ -5209,6 +5276,27 @@
       speeds.appendChild(b);
       return b;
     });
+    var plein = document.createElement("button");
+    plein.type = "button";
+    plein.className = "video-speed video-plein";
+    plein.textContent = "\u26f6";
+    plein.title = (lang === "fr" ? "Plein écran" : "Fullscreen");
+    plein.setAttribute("aria-label", plein.title);
+    plein.addEventListener("click", function(e){
+      e.stopPropagation();
+      try {
+        if (el.webkitEnterFullscreen && /iPhone|iPad/.test(navigator.userAgent)) {
+          el.webkitEnterFullscreen();
+        } else if (el.requestFullscreen) {
+          el.requestFullscreen();
+        } else if (el.webkitRequestFullscreen) {
+          el.webkitRequestFullscreen();
+        } else if (el.webkitEnterFullscreen) {
+          el.webkitEnterFullscreen();
+        }
+      } catch(err){}
+    });
+    speeds.appendChild(plein);
     wrap.appendChild(speeds);
     addLabel();
     document.getElementById("videoSection").hidden = false;
@@ -5392,6 +5480,10 @@
       parsed.push({ d:d, type:ev.type, label:ev.label, photoDriveId:pid });
     });
     if (!parsed.length) return;
+    var scans = [];
+    parsed.forEach(function(ev){ if (ev.type === "room_scanned") scans.push(ev.d.toISOString()); });
+    if (scans.length && window.__majDateScan) window.__majDateScan(scans);
+    else if (scans.length) window.__scansEnAttente = scans;
     parsed.sort(function(a,b){ return b.d - a.d; });   // newest first
 
     var groups = [], idx = {};
