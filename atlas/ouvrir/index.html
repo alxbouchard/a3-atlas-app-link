@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T06:35Z";
+  var ATLAS_BUILD = "2026-08-30T07:00Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -917,7 +917,7 @@
       video_h:"Vidéo du scan", video_none_floor:"Aucune vidéo pour cet étage.",
       surfaces_h:"Surfaces & matériaux",
       surf_walls:"Murs (net, ouvertures déduites)", surf_ceiling:"Plafond (rectangle hors tout)",
-      surf_floor:"Emprise au sol (rectangle hors tout)", surf_walllen:"Longueur de murs",
+      surf_floor:"Emprise au sol (rectangle hors tout)", surf_floor_poly:"Surface au sol (contour des murs mesurés)", surf_walllen:"Longueur de murs",
       surf_floor_total:"Planchers — total (rectangle hors tout)",
       surf_ceiling_total:"Plafonds — total (rectangle hors tout)",
       mat_h:"Matériaux (estimés, calculés)",
@@ -1021,7 +1021,7 @@
       video_h:"Scan video", video_none_floor:"No video for this floor.",
       surfaces_h:"Surfaces & materials",
       surf_walls:"Walls (net)", surf_ceiling:"Ceiling (bounding rectangle)",
-      surf_floor:"Footprint (bounding rectangle)", surf_walllen:"Wall length",
+      surf_floor:"Footprint (bounding rectangle)", surf_floor_poly:"Floor area (measured wall outline)", surf_walllen:"Wall length",
       surf_floor_total:"Floors — total (bounding rectangle)",
       surf_ceiling_total:"Ceilings — total (bounding rectangle)",
       mat_h:"Materials (estimated)",
@@ -5435,9 +5435,12 @@
     var netWallM2 = (sums.net_wall_area !== undefined) ? sums.net_wall_area : null;
     var ceilM2    = (sums.bounding_rectangle_ceiling_area !== undefined) ? sums.bounding_rectangle_ceiling_area : null;
     var floorM2   = (sums.bounding_rectangle_area !== undefined) ? sums.bounding_rectangle_area : null;
+    var polyM2    = (sums.floor_polygon_area !== undefined) ? sums.floor_polygon_area : null;
     var wallLenM  = (sums.total_wall_segment_length !== undefined) ? sums.total_wall_segment_length : null;
-    // La surface au sol totale alimente aussi le chiffre du héros.
-    FIGDATA.floorAreaM2 = floorM2;
+    // La surface au sol totale alimente aussi le chiffre du héros — le
+    // VRAI contour quand l'export le porte (owner 2026-08-30 : le
+    // rectangle englobant surestimait un logement en L).
+    FIGDATA.floorAreaM2 = (polyM2 !== null) ? polyM2 : floorM2;
     updateHeroFigures();
 
     // Surface rows (converted + rounded for display).
@@ -5454,6 +5457,7 @@
     var multi = nSpaces > 1;
     if (netWallM2 !== null) rows.push({ k:t.surf_walls,   v:areaTxt(netWallM2) });
     if (ceilM2 !== null)    rows.push({ k:multi ? t.surf_ceiling_total : t.surf_ceiling, v:areaTxt(ceilM2) });
+    if (polyM2 !== null)    rows.push({ k:t.surf_floor_poly, v:areaTxt(polyM2) });
     if (floorM2 !== null)   rows.push({ k:multi ? t.surf_floor_total : t.surf_floor, v:areaTxt(floorM2) });
     // …et le détail, pour qu'on voie de quoi le total est fait.
     if (multi){
