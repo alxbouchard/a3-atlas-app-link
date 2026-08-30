@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T19:20Z";
+  var ATLAS_BUILD = "2026-08-30T19:45Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2490,7 +2490,7 @@
       var cap = makeCaption(g.label || planKindLabel(choix[0].kind));
       if (cap) fig.appendChild(cap);
       fig._appliqueLetat = appliqueLetat;
-      figByFloor[(g.label != null ? String(g.label).trim() : "") || "—"] = fig;
+      figByFloor[cleDeZone(g.label)] = fig;
       root.appendChild(fig);
     });
     // Plusieurs étages : les mêmes pastilles qu'au-dessus du 3D, et un seul
@@ -2947,11 +2947,22 @@
   // Désormais le libellé est la clé qui réunit le modèle et les plans d'un
   // même étage, et UN sélecteur commande les deux.
   var FLOORS = { list: [], current: 0, hooks: [] };
+  // « Pièce N » et « Room N » sont le MÊME étage : le nom PAR DÉFAUT de
+  // l'app, localisé différemment selon la source (export 2026-08-30 : la
+  // vidéo portait le nom brut, modèles/plans le nom affiché) — deux
+  // étages fantômes, vidéo orpheline, synchro morte. Clé neutre, partagée
+  // par TOUT ce qui s'indexe par étiquette de zone.
+  function cleDeZone(label){
+    var brut = (label != null ? String(label).trim() : "") || "\u2014";
+    var m = /^(?:Pi\u00e8ce|Room)\s+(\d+)$/i.exec(brut);
+    return m ? "zone-" + m[1] : brut;
+  }
   function registerFloor(label, patch){
-    var key = (label != null ? String(label).trim() : "") || "—";
+    var brut = (label != null ? String(label).trim() : "") || "\u2014";
+    var key = cleDeZone(brut);
     var f = null;
     for (var i = 0; i < FLOORS.list.length; i++){ if (FLOORS.list[i].key === key) f = FLOORS.list[i]; }
-    if (!f){ f = { key: key, label: key }; FLOORS.list.push(f); }
+    if (!f){ f = { key: key, label: brut }; FLOORS.list.push(f); }
     for (var k in patch){ if (Object.prototype.hasOwnProperty.call(patch, k)) f[k] = patch[k]; }
     return f;
   }
