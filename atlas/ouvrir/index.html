@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T18:55Z";
+  var ATLAS_BUILD = "2026-08-30T19:20Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -4758,7 +4758,11 @@
 
     if (tete.querySelector(".floor-pills")) return;
     var p = makeFloorPills();   // `null` s'il n'y a qu'un étage : rien à choisir
-    if (p) tete.insertBefore(p, part || null);
+    // Le partage vit maintenant DANS l'enveloppe .actions-entete : insérer
+    // « avant lui » lançait NotFoundError en boucle (il n'est plus enfant
+    // direct de la barre) — on insère avant l'enveloppe (2026-08-30).
+    if (p) tete.insertBefore(p,
+      tete.querySelector(".actions-entete") || null);
   }
 
   function dismantleSplit(){
