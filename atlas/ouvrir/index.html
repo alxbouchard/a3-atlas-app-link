@@ -842,7 +842,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T03:07Z";
+  var ATLAS_BUILD = "2026-09-13T03:09Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3743,9 +3743,9 @@
     sc.background = new THREE.Color(0x0f172a);
     var pm = new THREE.PMREMGenerator(r);
     sc.environment = pm.fromScene(new T.RoomEnvironment(), 0.04).texture;
-    sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 0.9));
-    sc.add(new THREE.AmbientLight(0xffffff, 0.35));
-    var soleil = new THREE.DirectionalLight(0xfff2e0, 1.2); soleil.position.set(3, 8, 2); sc.add(soleil);
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 1.1));
+    sc.add(new THREE.AmbientLight(0xffffff, 0.45));
+    var soleil = new THREE.DirectionalLight(0xfff2e0, 0.7); soleil.position.set(3, 8, 2); sc.add(soleil);
     var racine = gltf.scene; sc.add(racine);
     // Recensement : murs, portes, sols, décor ; bornes = murs + sols.
     var bornes = new THREE.Box3(), toutVide = true, solY = Infinity;
@@ -3772,6 +3772,14 @@
       if (o.material && o.material.metalness > 0.5){
         o.material.envMapIntensity = 2.4;
         o.material.roughness = Math.max(o.material.roughness, 0.3);
+        o.material.needsUpdate = true;
+      } else if (o.material){
+        // Le reste (planchers, bois vernis, cuir) reflétait trop (Alex
+        // 2026-09-12 : « le plancher reflète trop ») : moins d'environnement,
+        // vernis plafonné, rugosité minimale d'un plancher habité.
+        o.material.envMapIntensity = 0.55;
+        if (typeof o.material.clearcoat === "number" && o.material.clearcoat > 0.25) o.material.clearcoat = 0.25;
+        if (role === "sol") o.material.roughness = Math.max(o.material.roughness, 0.55);
         o.material.needsUpdate = true;
       }
     });
