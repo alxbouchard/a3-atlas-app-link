@@ -856,7 +856,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T19:09Z";
+  var ATLAS_BUILD = "2026-09-13T19:27Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3929,9 +3929,21 @@
     if (visite){
       BALADE.telephone = !BALADE.reprendreMarche; BALADE.reprendreMarche = false;
       BALADE.regardDX = 0; BALADE.regardDY = 0; BALADE.zoomCumul = 0;
-      BALADE.murs.concat(BALADE.portes).forEach(function(m){ baladeOpacite(m, 1); });
+      // Les murs voilés en orbite redeviennent pleins TOUT DE SUITE : en
+      // visite, personne ne les lisse image par image.
+      BALADE.murs.concat(BALADE.portes).forEach(function(m){
+        var mat = m.material; if (!mat) return;
+        mat.opacity = (m.userData.opacite0 == null) ? 1 : m.userData.opacite0;
+        mat.transparent = !!m.userData.transparent0; mat.depthWrite = true;
+      });
       var v = document.querySelector("#videoWrap video");
-      if (v && v.paused && BALADE.telephone){ try { v.play(); } catch (e) {} }
+      // LE VOL D'ENTRÉE (Alex 2026-09-13) : depuis l'orbite, la caméra se
+      // rend en 1,5 s, en douceur, dans l'œil du téléphone ; la vidéo ne
+      // part qu'à l'arrivée. Un geste interrompt le vol et lance la lecture.
+      if (avant !== "visite" && BALADE.telephone && CAM.piste && v){
+        if (!v.paused) v.pause();
+        BALADE.vol = { t0: performance.now(), duree: 1500, de: { p: BALADE.cam.position.clone(), q: BALADE.cam.quaternion.clone(), fov: BALADE.cam.fov } };
+      } else if (v && v.paused && BALADE.telephone){ try { v.play(); } catch (e) {} }
       CAM.mode = "visite";
       if (BALADE.hint){ BALADE.hint.textContent = t.visit_hint; BALADE.hint.classList.remove("efface");
         clearTimeout(BALADE.hintTimer); BALADE.hintTimer = setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000); }
@@ -4073,6 +4085,24 @@
         if (s){
           cam.position.set(s.p[0], s.p[1], s.p[2]);
           cam.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
+          if (BALADE.vol){
+            var uv = Math.min(1, (performance.now() - BALADE.vol.t0) / BALADE.vol.duree);
+            var kv = uv < 0.5 ? 4 * uv * uv * uv : 1 - Math.pow(-2 * uv + 2, 3) / 2;
+            var cibleQ = cam.quaternion.clone().multiply(BALADE.debout || (BALADE.debout = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)));
+            cam.position.lerpVectors(BALADE.vol.de.p, cam.position, kv);
+            // L'HORIZON RESTE DROIT pendant le vol : lacet et tangage
+            // interpolés séparément (le plus court chemin entre deux
+            // orientations faisait pencher l'image à mi-course).
+            var eDe = new THREE.Euler().setFromQuaternion(BALADE.vol.de.q, "YXZ");
+            var eA = new THREE.Euler().setFromQuaternion(cibleQ, "YXZ");
+            var dYaw = eA.y - eDe.y; while (dYaw > Math.PI) dYaw -= 2 * Math.PI; while (dYaw < -Math.PI) dYaw += 2 * Math.PI;
+            var dRoll = eA.z - eDe.z; while (dRoll > Math.PI) dRoll -= 2 * Math.PI; while (dRoll < -Math.PI) dRoll += 2 * Math.PI;
+            cam.quaternion.setFromEuler(new THREE.Euler(eDe.x + (eA.x - eDe.x) * kv, eDe.y + dYaw * kv, eDe.z + dRoll * kv, "YXZ"));
+            cam.fov = BALADE.vol.de.fov + ((CAM.piste.fovTallDeg || 71) - BALADE.vol.de.fov) * kv; cam.updateProjectionMatrix();
+            if (uv >= 1){ BALADE.vol = null; try { v.play(); } catch (e) {} }
+            BALADE.r.render(BALADE.sc, cam);
+            return;
+          }
           // Le repère de la caméra ARKit a son X le long du GRAND côté du
           // capteur ; la visite est filmée téléphone debout : on remet l'image
           // droite en tournant autour de l'axe optique.
@@ -4257,6 +4287,7 @@
       try { c.setPointerCapture && c.setPointerCapture(e.pointerId); } catch (err) {}
       pinces[e.pointerId] = { x: e.clientX, y: e.clientY };
       BALADE.dernierGeste = performance.now(); BALADE.ronde = false;
+      if (BALADE.vol){ BALADE.vol = null; var vv = BALADE_G.video; if (vv && vv.paused){ try { vv.play(); } catch (err) {} } }
       if (Object.keys(pinces).length === 2){ BALADE.pointeur = null; BALADE_G.pinceD = baladeEcartPince(pinces); return; }
       BALADE.pointeur = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() };
       BALADE.vYaw = 0; BALADE.vPitch = 0;
