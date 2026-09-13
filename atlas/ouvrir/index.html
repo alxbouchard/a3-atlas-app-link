@@ -856,7 +856,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T05:23Z";
+  var ATLAS_BUILD = "2026-09-13T18:28Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3712,7 +3712,7 @@
       var n = p.name || "";
       if (/^Backdrop/i.test(n)) return "decor";
       if (/^Mirror\d+_face/i.test(n)) return "miroir";
-      if (/^(Bed|Sofa|Chair|Table|Television)\d/i.test(n)) return "meuble";
+      if (/^(Bed|Sofa|Chair|Table|Television)\d/i.test(n) || /^(Movable|Deco)/i.test(n)) return "meuble";
       if (/^Door\d/i.test(n)) return (/glazing/i.test(o.name || "") ? "vitre" : "porte");
       if (/^Window\d/i.test(n)) return "fenetre";
       if (/^Wall\d/i.test(n)) return "mur";
