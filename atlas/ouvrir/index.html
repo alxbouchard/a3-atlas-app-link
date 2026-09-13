@@ -842,7 +842,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T03:22Z";
+  var ATLAS_BUILD = "2026-09-13T03:46Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3721,8 +3721,17 @@
     if (!item || !visual || !mv) return;
     if (mode === "visite" && !CAM.piste) mode = "orbite";
     if (BALADE.actif && BALADE.item === item){ baladeMode(mode); return; }
-    if (BALADE.actif) baladeQuitte(true);
-    BALADE.item = item; BALADE.mode = mode; BALADE.proprietaire = baladeProprietaire();
+    var remplace = BALADE.actif;
+    if (remplace){
+      // On garde l'image en place et on retient la caméra : le nouveau modèle
+      // prend le relais au même endroit, sans écran vide.
+      BALADE.reprise = { mode: BALADE.mode, orb: BALADE.orb && { theta: BALADE.orb.theta, phi: BALADE.orb.phi, radius: BALADE.orb.radius },
+                         telephone: BALADE.telephone, pos: BALADE.pos && BALADE.pos.clone(), yaw: BALADE.yaw, pitch: BALADE.pitch };
+      mode = BALADE.mode || mode;
+      if (BALADE.hint){ BALADE.hint.textContent = (lang === "fr") ? "Modèle 3D en chargement…" : "Loading 3D model…"; BALADE.hint.classList.remove("efface"); }
+    }
+    BALADE.proprietaire = baladeProprietaire();
+    var itemDemande = item; BALADE.itemDemande = item;
     var sources = DRIVE_API_KEY ? [driveModelApiUrl(item.driveId), driveRaw(item.driveId)] : [driveRaw(item.driveId)];
     Promise.all([baladeModules(), chargeOctets("modele-" + item.driveId, sources, 60000)])
       .then(function(r){
@@ -3730,7 +3739,12 @@
         var lit = (octets instanceof Blob) ? octets.arrayBuffer() : Promise.resolve(octets);
         return lit.then(function(ab){
           return new Promise(function(ok, ko){ new T.GLTFLoader().parse(ab, "", ok, ko); });
-        }).then(function(gltf){ if (BALADE.item === item) baladeMonte(T, gltf, visual, mv); });
+        }).then(function(gltf){
+          if (BALADE.itemDemande !== itemDemande) return;   // une autre demande a suivi
+          if (BALADE.actif) baladeQuitte(true);
+          BALADE.item = item; BALADE.mode = mode;
+          baladeMonte(T, gltf, visual, mv);
+        });
       })
       .catch(function(e){ console.warn("balade : chargement impossible", e); });
   }
@@ -3806,7 +3820,14 @@
     BALADE.rFit = (taille.length() / 2) / Math.sin(BALADE_FOV_ORBITE * Math.PI / 360) * 0.95;
     var o = mv.getCameraOrbit && mv.getCameraOrbit();
     BALADE.orb = { theta: (o && isFinite(o.theta)) ? o.theta : MODEL_THETA * Math.PI / 180,
-                   phi: MODEL_PHI * Math.PI / 180, radius: BALADE.rFit, cible: centre.clone() };
+                   phi: MODEL_PHI * Math.PI / 180, radius: BALADE.rFit * 0.72, cible: centre.clone() };
+    // Changement de modèle (Texturé ↔ Relevé, étage) : on reprend la caméra
+    // où elle était, dans le même mode.
+    if (BALADE.reprise){
+      var R = BALADE.reprise; BALADE.reprise = null;
+      if (R.orb){ BALADE.orb.theta = R.orb.theta; BALADE.orb.phi = R.orb.phi; BALADE.orb.radius = R.orb.radius; }
+      if (R.mode === "visite" && !R.telephone && R.pos){ BALADE.pos.copy(R.pos); BALADE.yaw = R.yaw; BALADE.pitch = R.pitch; BALADE.reprendreMarche = true; }
+    }
     // Départ de la visite : au milieu du plus grand plancher (le centre de
     // l'enveloppe d'un logement en L tombe dehors), à hauteur d'œil.
     var meilleur = null, aire = 0;
@@ -3887,10 +3908,11 @@
     BALADE.decor.forEach(function(d){ d.visible = visite; });
     baladeCacheLesMesures(true);
     if (visite){
-      BALADE.telephone = true; BALADE.regardDX = 0; BALADE.regardDY = 0; BALADE.zoomCumul = 0;
+      BALADE.telephone = !BALADE.reprendreMarche; BALADE.reprendreMarche = false;
+      BALADE.regardDX = 0; BALADE.regardDY = 0; BALADE.zoomCumul = 0;
       BALADE.murs.concat(BALADE.portes).forEach(function(m){ baladeOpacite(m, 1); });
       var v = document.querySelector("#videoWrap video");
-      if (v && v.paused){ try { v.play(); } catch (e) {} }
+      if (v && v.paused && BALADE.telephone){ try { v.play(); } catch (e) {} }
       CAM.mode = "visite";
       if (BALADE.hint){ BALADE.hint.textContent = t.visit_hint; BALADE.hint.classList.remove("efface");
         clearTimeout(BALADE.hintTimer); BALADE.hintTimer = setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000); }
@@ -3924,7 +3946,7 @@
       radius = Math.max(diag / (2 * Math.tan(fovV / 2)), diag / (2 * Math.tan(fovH / 2))) * 0.62 + taille.y;
     } else {
       phi = 60 * Math.PI / 180;
-      radius = Math.max(BALADE.rFit * 0.72, 6);
+      radius = Math.max(BALADE.rFit * 0.72, 6) / Math.min(1, BALADE.cam.aspect || 1);
     }
     CAM.mode = mode;
     BALADE.orbAnim = { de: { theta: BALADE.orb.theta, phi: BALADE.orb.phi, radius: BALADE.orb.radius, cible: BALADE.orb.cible.clone() },
@@ -5008,7 +5030,7 @@
           function rejoueLeModele(i){
             var m = modeleCourant(FLOORS.list[i]);
             if (!m) return;
-            if (BALADE.actif){ var modeAvant = BALADE.mode; baladeQuitte(true); setTimeout(function(){ baladeEntre(modeAvant || "orbite"); }, 0); }
+            if (BALADE.actif){ setTimeout(function(){ baladeEntre(BALADE.mode || "orbite"); }, 0); }
             mv.__floor = i;
             mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
             mv.__fit = null; mv.__triedFallbackFor = null;
