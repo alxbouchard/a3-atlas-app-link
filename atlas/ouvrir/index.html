@@ -842,7 +842,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T03:46Z";
+  var ATLAS_BUILD = "2026-09-13T04:40Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3697,6 +3697,7 @@
       var n = p.name || "";
       if (/^Backdrop/i.test(n)) return "decor";
       if (/^Mirror\d+_face/i.test(n)) return "miroir";
+      if (/^(Bed|Sofa|Chair|Table|Television)\d/i.test(n)) return "meuble";
       if (/^Door\d/i.test(n)) return (/glazing/i.test(o.name || "") ? "vitre" : "porte");
       if (/^Window\d/i.test(n)) return "fenetre";
       if (/^Wall\d/i.test(n)) return "mur";
@@ -3708,6 +3709,7 @@
     if (mn === "wall") return "mur";
     if (mn === "floor") return "sol";
     if (mn === "ceiling") return "plafond";
+    if (mn.indexOf("furniture:") === 0 && /^(bed|sofa|chair|table|television)$/.test(mn.slice(10))) return "meuble";
     return "autre";
   }
   /** La balade a-t-elle le héros pour ce partage ? Oui dès qu'une scène Atlas Pro existe. */
@@ -3770,7 +3772,7 @@
     var racine = gltf.scene; sc.add(racine);
     // Recensement : murs, portes, sols, plafonds, décor, miroirs ; bornes = murs + sols.
     var bornes = new THREE.Box3(), toutVide = true, solY = Infinity;
-    BALADE.murs = []; BALADE.portes = []; BALADE.sols = []; BALADE.plafonds = []; BALADE.decor = []; BALADE.miroirs = [];
+    BALADE.murs = []; BALADE.portes = []; BALADE.sols = []; BALADE.plafonds = []; BALADE.decor = []; BALADE.miroirs = []; BALADE.meubles = [];
     racine.updateMatrixWorld(true);
     racine.traverse(function(o){
       if (!o.isMesh) return;
@@ -3782,6 +3784,7 @@
       else if (role === "sol"){ BALADE.sols.push(o); }
       else if (role === "plafond"){ BALADE.plafonds.push(o); }
       else if (role === "miroir"){ BALADE.miroirs.push(o); }
+      else if (role === "meuble"){ BALADE.meubles.push(o); o.visible = BALADE.meublesVisibles !== false; }
       if (role === "mur" || role === "sol" || role === "fenetre" || role === "porte"){
         var b = new THREE.Box3().setFromObject(o); bornes.union(b); toutVide = false;
         if (role === "sol") solY = Math.min(solY, b.min.y);
@@ -3841,6 +3844,7 @@
     baladeBrancheLesGestes();
     baladeAjuste();
     baladeMiroirs();
+    baladeBrancheLesMesures(mv);
     BALADE.hint = document.createElement("div");
     BALADE.hint.className = "visite-hint"; visual.appendChild(BALADE.hint);
     baladeMode(BALADE.mode);
@@ -3956,21 +3960,51 @@
     document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
     return true;
   }
-  /** Les cotes de la fiche se projettent avec la caméra de model-viewer : sur
-   *  notre canvas elles tombent à côté (Alex 2026-09-12, Safari mobile). Tant
-   *  que la balade tient le héros, on les cache ; des mesures natives viendront. */
+  /** LES MESURES DE LA FICHE SUR NOTRE CANVAS. Les cotes se dessinent d'après
+   *  `mv.queryHotspot(nom)` (des ancrages posés dans le repère de model-viewer)
+   *  ; tant que la balade tient le héros, on y répond avec NOTRE caméra :
+   *  ancrage → repère du fichier (moins l'écart de recentrage) → projection.
+   *  Ainsi les cotes suivent l'orbite comme la visite, sur les deux modèles
+   *  (Alex 2026-09-13 : « je devrais pouvoir voir les dimensions aussi »). */
+  function baladeCalculeDelta(mv){
+    if (BALADE.mvDelta || !mv.loaded) return BALADE.mvDelta;
+    var c = mv.getBoundingBoxCenter && mv.getBoundingBoxCenter(); if (!c) return null;
+    var THREE = BALADE.T.THREE, ours = new THREE.Vector3();
+    var cadre = cadrageAtlasPro(mv.__modelItem);
+    if (cadre) ours.set(cadre.boxCenter[0], cadre.boxCenter[1], cadre.boxCenter[2]);
+    else new THREE.Box3().setFromObject(BALADE.sc).getCenter(ours);
+    BALADE.mvDelta = { x: c.x - ours.x, y: c.y - ours.y, z: c.z - ours.z };
+    try { mv.setAttribute("interpolation-decay", "1"); } catch (e) {}
+    return BALADE.mvDelta;
+  }
+  function baladeBrancheLesMesures(mv){
+    if (mv.__queryHotspotOrigine) return;
+    mv.__queryHotspotOrigine = mv.queryHotspot;
+    // `updateHotspot` ne réécrit pas l'attribut de l'ancrage : on retient
+    // nous-mêmes la dernière position posée pour chaque nom.
+    mv.__ancrages = {};
+    var updateOrigine = mv.updateHotspot;
+    mv.updateHotspot = function(cfg){
+      if (cfg && cfg.name && cfg.position) mv.__ancrages[cfg.name] = String(cfg.position);
+      return updateOrigine.call(mv, cfg);
+    };
+    mv.queryHotspot = function(nom){
+      if (!BALADE.actif || !BALADE.cam) return mv.__queryHotspotOrigine.call(mv, nom);
+      var hs = mv.querySelector('[slot="' + nom + '"]');
+      var pos = mv.__ancrages[nom] || (hs && hs.dataset.position);
+      if (!pos) return null;
+      var p = String(pos).replace(/m/g, "").trim().split(/\s+/).map(parseFloat); if (p.length < 3 || p.some(isNaN)) return null;
+      var d = baladeCalculeDelta(mv) || { x: 0, y: 0, z: 0 };
+      var THREE = BALADE.T.THREE;
+      var v = new THREE.Vector3(p[0] - d.x, p[1] - d.y, p[2] - d.z).project(BALADE.cam);
+      if (v.z > 1) return null;   // derrière la caméra
+      var r = BALADE.canvas.getBoundingClientRect();
+      return { canvasPosition: { x: (v.x + 1) / 2 * r.width, y: (1 - v.y) / 2 * r.height }, position: null, normal: null };
+    };
+  }
   function baladeCacheLesMesures(cache){
-    var cotes = document.querySelector(".atlas-cotes"), btnMes = document.querySelector(".atlas-mesures");
-    if (cotes) cotes.style.display = cache ? "none" : "";
-    if (btnMes) btnMes.style.display = cache ? "none" : "";
-    if (!BALADE.mesuresTimer && cache){
-      BALADE.mesuresTimer = setInterval(function(){
-        if (!BALADE.actif){ clearInterval(BALADE.mesuresTimer); BALADE.mesuresTimer = 0; baladeCacheLesMesures(false); return; }
-        var c2 = document.querySelector(".atlas-cotes"), b2 = document.querySelector(".atlas-mesures");
-        if (c2 && c2.style.display !== "none") c2.style.display = "none";
-        if (b2 && b2.style.display !== "none") b2.style.display = "none";
-      }, 500);
-    }
+    var cotes = document.querySelector(".atlas-cotes");
+    if (cotes && !cache) cotes.style.display = "";
   }
   function baladeQuitte(silencieux){
     if (!BALADE.actif) return;
@@ -4089,6 +4123,7 @@
       baladeMiroirMV();
     }
     BALADE.r.render(BALADE.sc, cam);
+    try { MES.sale = true; } catch (e) {}
   }
   /** Le voile : en orbite, les murs entre la caméra et la cible s'effacent (comme l'app). */
   function baladeVoile(){
@@ -4384,6 +4419,21 @@
     add(t.view_overview, 60, 1, function(fit){
       return Math.max(fit.radius * 0.5, 6);
     }, "ensemble");
+    add(t.view_top, MODEL_TOP_PHI, MODEL_TOP_RADIUS, function(fit){
+      return distanceVueDeDessus(mv, fit, azimutDuRegard());
+    }, "dessus", function(fit){ return fit.centreBrut; });
+    // « Meubles » : montrer / cacher ce que l'occupant emporte (lit, canapé,
+    // chaise, table, téléviseur — la règle de l'app), sur les deux modèles.
+    var btMeubles = document.createElement("button");
+    btMeubles.type = "button"; btMeubles.className = "view-btn on atlas-meubles";
+    btMeubles.textContent = (lang === "fr") ? "Meubles" : "Furniture";
+    btMeubles.addEventListener("click", function(e){
+      e.stopPropagation();
+      BALADE.meublesVisibles = (BALADE.meublesVisibles === false);
+      btMeubles.classList.toggle("on", BALADE.meublesVisibles);
+      if (BALADE.actif) BALADE.meubles.forEach(function(m){ m.visible = BALADE.meublesVisibles; });
+    });
+    row.appendChild(btMeubles);
     // « Visite » = la vue du téléphone, synchronisée à la vidéo (Alex
     // 2026-09-12) ; le bouton n'existe qu'avec une piste caméra.
     var btVisite = add(t.view_visit, 90, 1, null, "visite");
@@ -4402,9 +4452,6 @@
     // Centrée sur le bâtiment, le plan reste cadré quoi qu'il arrive, et le
     // supplément de distance que j'avais ajouté pour rattraper une personne
     // dans un coin devient inutile.
-    add(t.view_top, MODEL_TOP_PHI, MODEL_TOP_RADIUS, function(fit){
-      return distanceVueDeDessus(mv, fit, azimutDuRegard());
-    }, "dessus", function(fit){ return fit.centreBrut; });
 
     // LA VUE SUBJECTIVE A ÉTÉ RETIRÉE (2026-08-07).
     //
@@ -8534,7 +8581,8 @@
       // balayage depuis la boucle, avec un verrou sur l'élément lui-même.
       if (MINI.matches) { try { brancheBalayage(); } catch (e) {} }
       if (CAM.ronde && CAM.ronde.actif && !CAM.ronde.arme && CAM.piste){
-        var vues = document.querySelectorAll(".view-btns .view-btn");
+        var vues = [document.querySelector('.view-btns .view-btn[data-mode="ensemble"]'),
+                    document.querySelector('.view-btns .view-btn[data-mode="dessus"]')].filter(Boolean);
         if (vues.length >= 2){
           CAM.ronde.arme = true;
           CAM.ronde.demarre([vues[0], vues[1]]);
@@ -8997,8 +9045,22 @@
 
   function extraitMurs(mv, racine){
     var inv = racine.matrixWorld.clone().invert(), bruts = [], tri = [];
+    // Le plancher n'est pas forcément à y = 0 : la scène Atlas Pro garde le
+    // repère ARKit brut (sol vers −1,55 m). Un mur se reconnaît PAR RAPPORT au
+    // point le plus bas du modèle.
+    var yPlancher = Infinity;
     racine.traverse(function(o){
       if (!o.isMesh || !o.geometry.attributes.position) return;
+      if (/^Backdrop/i.test(o.name || "") || (o.parent && /^Backdrop/i.test(o.parent.name || ""))) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      var M0 = inv.clone().multiply(o.matrixWorld).elements, bb = o.geometry.boundingBox;
+      var ys = [bb.min, bb.max].map(function(q){ return M0[1]*q.x + M0[5]*q.y + M0[9]*q.z + M0[13]; });
+      yPlancher = Math.min(yPlancher, ys[0], ys[1]);
+    });
+    if (!isFinite(yPlancher)) yPlancher = 0;
+    racine.traverse(function(o){
+      if (!o.isMesh || !o.geometry.attributes.position) return;
+      if (/^Backdrop/i.test(o.name || "") || (o.parent && /^Backdrop/i.test(o.parent.name || ""))) return;
       var M = inv.clone().multiply(o.matrixWorld).elements, pos = o.geometry.attributes.position;
       var pts = [], y0 = 1e9, y1 = -1e9, i, a, b, c, Y;
       for (i = 0; i < pos.count; i++){
@@ -9007,7 +9069,7 @@
         Y = M[1]*a+M[5]*b+M[9]*c+M[13];
         if (Y < y0) y0 = Y; if (Y > y1) y1 = Y;
       }
-      if (!(y1 >= 1.6 && y0 <= 0.4) || pts.length < 3) return;
+      if (!(y1 - yPlancher >= 1.6 && y0 - yPlancher <= 0.4) || pts.length < 3) return;
       var idx = o.geometry.index, nn = idx ? idx.count : pos.count;
       for (i = 0; i < nn; i += 3){
         tri.push([pts[idx?idx.getX(i):i], pts[idx?idx.getX(i+1):i+1], pts[idx?idx.getX(i+2):i+2]]);
