@@ -842,7 +842,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T03:09Z";
+  var ATLAS_BUILD = "2026-09-13T03:22Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3071,11 +3071,9 @@
         MODEL_VARIANT = v[0];
         // Changer de modèle pendant la visite : on quitte la visite, on la
         // relance sur l'autre modèle (la piste et la vidéo sont les mêmes).
-        var enVisite = (typeof BALADE !== "undefined") && BALADE.actif;
-        if (enVisite) visiteQuitte();
+
         for (var i = 0; i < nav.children.length; i++) nav.children[i].classList.toggle("on", i === (v[0] === "pro" ? 0 : 1));
         rejoue();
-        if (enVisite) setTimeout(visiteEntre, 50);
       };
       nav.appendChild(b);
     });
@@ -3655,45 +3653,50 @@
 
 
   // ======================================================================
-  // LA BALADE — notre propre visionneuse three.js, à la première personne.
+  // LA BALADE — notre propre visionneuse three.js dans le héros.
   //
-  // Alex 2026-09-12 : « il n'y a pas moyen comme dans l'app d'avoir la vue du
-  // téléphone pour faire la visite… rendre l'expérience aussi cool que dans
-  // l'app ». model-viewer est une caméra orbitale : pour marcher dedans il
-  // faut une caméra libre, un plan proche de quelques centimètres et un champ
-  // stable. Pendant la visite, model-viewer est masqué (son contexte reste),
-  // notre canvas prend sa place dans le héros ; « Vue d'ensemble » et « Vue de
-  // dessus » ramènent à model-viewer.
-  //
-  // Les règles de marche sont celles de l'app (Atterrissage) : double-tap sur
-  // le sol → on y va à hauteur d'œil (1,55 m) ; sur un mur → on s'arrête
-  // devant (1,8 m) ; un mur ou une fenêtre sur le chemin arrête à 0,5 m, une
-  // porte laisse passer ; jamais hors d'un plancher ; pincer/molette vers
-  // l'arrière = sortir en vue d'ensemble. Le panoramique n'existe que dedans.
+  // Alex 2026-09-12 : « rendre l'expérience aussi cool que dans l'app », puis
+  // « go » pour que la visionneuse maison prenne tout. Deux modes :
+  //   • ORBITE : vue d'ensemble et vue de dessus, glissé pour tourner, molette
+  //     ou pincement pour s'approcher — s'approcher assez entre en visite ;
+  //     plafonds et panoramique cachés, murs proches voilés (comme l'app) ;
+  //   • VISITE : la vue du téléphone, synchronisée à la vidéo (lecture et
+  //     ligne de temps) ; en pause, glissé = regarder, double-tap = marcher
+  //     avec les règles de l'app (Atterrissage) ; pincer vers l'arrière =
+  //     retour en orbite.
+  // Quand le partage porte une scène Atlas Pro, la balade tient le héros dès
+  // le départ ; model-viewer reste monté mais invisible, sa caméra COPIE la
+  // nôtre : la rose des vents, les mesures et le cône de la vidéo continuent
+  // de fonctionner sans être réécrits. Sans scène Atlas Pro, model-viewer
+  // garde le héros et la balade ne sert qu'à la visite.
   // ======================================================================
-  var BALADE = { actif: false, T: null, r: null, sc: null, cam: null, canvas: null, raf: 0,
-                 murs: [], portes: [], sols: [], bornes: null, solY: 0,
-                 pos: null, yaw: 0, pitch: 0, vYaw: 0, vPitch: 0, glisse: null,
-                 telephone: false, item: null, pointeur: null, dernierTap: 0, dernierTapXY: null,
-                 zoomCumul: 0, hint: null };
+  var BALADE = { actif: false, mode: null, proprietaire: false, T: null, r: null, sc: null, cam: null,
+                 canvas: null, raf: 0, item: null, hint: null, ro: null,
+                 murs: [], portes: [], sols: [], plafonds: [], decor: [], miroirs: [], bornes: null, solY: 0,
+                 // visite
+                 pos: null, yaw: 0, pitch: 0, vYaw: 0, vPitch: 0, glisse: null, telephone: false,
+                 regardDX: 0, regardDY: 0, pointeur: null, dernierTap: 0, dernierTapXY: null, zoomCumul: 0,
+                 // orbite
+                 orb: null, orbAnim: null, rFit: 1, dernierGeste: 0, ronde: true,
+                 mvDelta: null };
   var BALADE_OEIL = 1.55, BALADE_RECUL = 1.8, BALADE_RECUL_MIN = 0.5, BALADE_MARGE = 0.35;
+  var BALADE_FOV_ORBITE = MODEL_FOV, BALADE_FOV_MARCHE = 60;
   try { window.__BALADE = BALADE; } catch (e) {}
+  document.addEventListener("pointerdown", function(){ BALADE.dernierGesteDoc = performance.now(); }, true);
+  document.addEventListener("keydown", function(){ BALADE.dernierGesteDoc = performance.now(); }, true);
 
-  function visiteModules(){
+  function baladeModules(){
     if (BALADE.T) return Promise.resolve(BALADE.T);
     return Promise.all([import("three"), import("three/addons/loaders/GLTFLoader.js"),
                         import("three/addons/environments/RoomEnvironment.js")])
       .then(function(m){ BALADE.T = { THREE: m[0], GLTFLoader: m[1].GLTFLoader, RoomEnvironment: m[2].RoomEnvironment }; return BALADE.T; });
   }
-  function visiteNomDe(o){
-    for (var p = o; p; p = p.parent){ if (p.name) return p.name; }
-    return "";
-  }
-  function visiteRole(o){
+  function baladeRole(o){
     var mn = (o.material && o.material.name) || "";
     for (var p = o; p; p = p.parent){
       var n = p.name || "";
       if (/^Backdrop/i.test(n)) return "decor";
+      if (/^Mirror\d+_face/i.test(n)) return "miroir";
       if (/^Door\d/i.test(n)) return (/glazing/i.test(o.name || "") ? "vitre" : "porte");
       if (/^Window\d/i.test(n)) return "fenetre";
       if (/^Wall\d/i.test(n)) return "mur";
@@ -3707,28 +3710,32 @@
     if (mn === "ceiling") return "plafond";
     return "autre";
   }
-  function visiteEntre(){
+  /** La balade a-t-elle le héros pour ce partage ? Oui dès qu'une scène Atlas Pro existe. */
+  function baladeProprietaire(){
+    return FLOORS.list.some(function(f){ return !!f.modelPro; });
+  }
+  /** Entrer (ou changer de mode). mode = "orbite" | "visite". */
+  function baladeEntre(mode){
     var f = FLOORS.list[FLOORS.current], item = modeleCourant(f);
     var visual = document.querySelector(".hero-visual"), mv = document.querySelector("model-viewer.model3d");
     if (!item || !visual || !mv) return;
-    if (BALADE.actif){ BALADE.telephone = true; visiteSynchroniseVideo(); return; }
-    BALADE.item = item; BALADE.telephone = true;
+    if (mode === "visite" && !CAM.piste) mode = "orbite";
+    if (BALADE.actif && BALADE.item === item){ baladeMode(mode); return; }
+    if (BALADE.actif) baladeQuitte(true);
+    BALADE.item = item; BALADE.mode = mode; BALADE.proprietaire = baladeProprietaire();
     var sources = DRIVE_API_KEY ? [driveModelApiUrl(item.driveId), driveRaw(item.driveId)] : [driveRaw(item.driveId)];
-    Promise.all([visiteModules(), chargeOctets("modele-" + item.driveId, sources, 60000)])
+    Promise.all([baladeModules(), chargeOctets("modele-" + item.driveId, sources, 60000)])
       .then(function(r){
         var T = r[0], octets = r[1];
-        return new Promise(function(ok, ko){
-          new T.GLTFLoader().parse(octets instanceof Blob ? null : octets, "", ok, ko);
-        }).catch(function(){
-          // Un Blob : on lit ses octets d'abord.
-          return octets.arrayBuffer().then(function(ab){
-            return new Promise(function(ok, ko){ new T.GLTFLoader().parse(ab, "", ok, ko); });
-          });
-        }).then(function(gltf){ visiteMonte(T, gltf, visual, mv); });
+        var lit = (octets instanceof Blob) ? octets.arrayBuffer() : Promise.resolve(octets);
+        return lit.then(function(ab){
+          return new Promise(function(ok, ko){ new T.GLTFLoader().parse(ab, "", ok, ko); });
+        }).then(function(gltf){ if (BALADE.item === item) baladeMonte(T, gltf, visual, mv); });
       })
-      .catch(function(e){ console.warn("visite : chargement impossible", e); });
+      .catch(function(e){ console.warn("balade : chargement impossible", e); });
   }
-  function visiteMonte(T, gltf, visual, mv){
+  function visiteEntre(){ baladeEntre("visite"); }
+  function baladeMonte(T, gltf, visual, mv){
     var THREE = T.THREE;
     var r = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -3747,85 +3754,122 @@
     sc.add(new THREE.AmbientLight(0xffffff, 0.45));
     var soleil = new THREE.DirectionalLight(0xfff2e0, 0.7); soleil.position.set(3, 8, 2); sc.add(soleil);
     var racine = gltf.scene; sc.add(racine);
-    // Recensement : murs, portes, sols, décor ; bornes = murs + sols.
+    // Recensement : murs, portes, sols, plafonds, décor, miroirs ; bornes = murs + sols.
     var bornes = new THREE.Box3(), toutVide = true, solY = Infinity;
-    BALADE.murs = []; BALADE.portes = []; BALADE.sols = [];
+    BALADE.murs = []; BALADE.portes = []; BALADE.sols = []; BALADE.plafonds = []; BALADE.decor = []; BALADE.miroirs = [];
     racine.updateMatrixWorld(true);
     racine.traverse(function(o){
       if (!o.isMesh) return;
-      var role = visiteRole(o);
-      if (role === "decor"){ o.visible = true; o.userData.decor = true; return; }
+      var role = baladeRole(o);
+      o.userData.role = role;
+      if (role === "decor"){ o.userData.decor = true; BALADE.decor.push(o); return; }
       if (role === "mur" || role === "fenetre" || role === "vitre"){ BALADE.murs.push(o); }
       else if (role === "porte"){ BALADE.portes.push(o); }
       else if (role === "sol"){ BALADE.sols.push(o); }
+      else if (role === "plafond"){ BALADE.plafonds.push(o); }
+      else if (role === "miroir"){ BALADE.miroirs.push(o); }
       if (role === "mur" || role === "sol" || role === "fenetre" || role === "porte"){
         var b = new THREE.Box3().setFromObject(o); bornes.union(b); toutVide = false;
         if (role === "sol") solY = Math.min(solY, b.min.y);
       }
-      // Les vitres restent des vitres ; le reste est opaque des deux côtés
-      // pour qu'un mur vu de derrière ne disparaisse pas.
-      if (o.material && role !== "vitre" && !o.material.transparent) o.material.side = THREE.FrontSide;
-      // L'INOX (frigo, lave-vaisselle, cuisinière : metallic 1) ne montre
-      // que ce qu'il reflète, et l'environnement de three.js est sombre : il
-      // sortait NOIR (Alex 2026-09-12). On lui donne plus de reflet et un
-      // brossé minimal, comme l'app le fait avec son plateau d'éclairage.
-      if (o.material && o.material.metalness > 0.5){
+      if (!o.material) return;
+      // Le voile des murs demande une opacité PAR MUR : chacun son matériau.
+      if (role === "mur" || role === "fenetre" || role === "porte" || role === "plafond"){
+        o.material = o.material.clone();
+        o.userData.opacite0 = o.material.opacity; o.userData.transparent0 = o.material.transparent;
+      }
+      if (role !== "vitre" && !o.material.transparent) o.material.side = THREE.FrontSide;
+      // L'INOX (metallic 1) ne montre que ce qu'il reflète, et l'environnement
+      // de three.js est sombre : il sortait NOIR (Alex 2026-09-12). Plus de
+      // reflet, brossé minimal. Le reste reflétait trop (« le plancher reflète
+      // trop ») : moins d'environnement, vernis plafonné.
+      if (o.material.metalness > 0.5){
         o.material.envMapIntensity = 2.4;
         o.material.roughness = Math.max(o.material.roughness, 0.3);
-        o.material.needsUpdate = true;
-      } else if (o.material){
-        // Le reste (planchers, bois vernis, cuir) reflétait trop (Alex
-        // 2026-09-12 : « le plancher reflète trop ») : moins d'environnement,
-        // vernis plafonné, rugosité minimale d'un plancher habité.
+      } else {
         o.material.envMapIntensity = 0.55;
         if (typeof o.material.clearcoat === "number" && o.material.clearcoat > 0.25) o.material.clearcoat = 0.25;
         if (role === "sol") o.material.roughness = Math.max(o.material.roughness, 0.55);
-        o.material.needsUpdate = true;
       }
+      o.material.needsUpdate = true;
     });
     if (toutVide) bornes.setFromObject(racine);
     if (!isFinite(solY)) solY = bornes.min.y;
     BALADE.bornes = bornes; BALADE.solY = solY;
-    var cam = new THREE.PerspectiveCamera(60, 1, 0.08, 300);
+    var cam = new THREE.PerspectiveCamera(BALADE_FOV_ORBITE, 1, 0.08, 300);
     BALADE.r = r; BALADE.sc = sc; BALADE.cam = cam; BALADE.canvas = canvas; BALADE.actif = true;
     BALADE.zoomCumul = 0; BALADE.vYaw = 0; BALADE.vPitch = 0; BALADE.glisse = null;
-    // Départ : au milieu du plus grand plancher (le centre de l'enveloppe
-    // d'un logement en L tombe dehors), à hauteur d'œil, regard dans l'axe
-    // de model-viewer.
-    var c = new THREE.Vector3(); bornes.getCenter(c);
+    BALADE.regardDX = 0; BALADE.regardDY = 0; BALADE.mvDelta = null;
+    // Cadrage : la sphère englobante des murs et sols (jamais le décor).
+    var taille = new THREE.Vector3(); bornes.getSize(taille);
+    var centre = new THREE.Vector3(); bornes.getCenter(centre);
+    BALADE.rFit = (taille.length() / 2) / Math.sin(BALADE_FOV_ORBITE * Math.PI / 360) * 0.95;
+    var o = mv.getCameraOrbit && mv.getCameraOrbit();
+    BALADE.orb = { theta: (o && isFinite(o.theta)) ? o.theta : MODEL_THETA * Math.PI / 180,
+                   phi: MODEL_PHI * Math.PI / 180, radius: BALADE.rFit, cible: centre.clone() };
+    // Départ de la visite : au milieu du plus grand plancher (le centre de
+    // l'enveloppe d'un logement en L tombe dehors), à hauteur d'œil.
     var meilleur = null, aire = 0;
     BALADE.sols.forEach(function(sol){
       var b = new THREE.Box3().setFromObject(sol), a = (b.max.x - b.min.x) * (b.max.z - b.min.z);
       if (a > aire){ aire = a; meilleur = b; }
     });
-    if (meilleur) meilleur.getCenter(c);
-    BALADE.pos = new THREE.Vector3(c.x, solY + BALADE_OEIL, c.z);
-    var o = mv.getCameraOrbit && mv.getCameraOrbit();
-    BALADE.yaw = o ? o.theta + Math.PI : 0; BALADE.pitch = 0;
-    visiteBrancheLesGestes();
-    visiteAjuste();
+    var dep = centre.clone(); if (meilleur) meilleur.getCenter(dep);
+    BALADE.pos = new THREE.Vector3(dep.x, solY + BALADE_OEIL, dep.z);
+    BALADE.yaw = BALADE.orb.theta + Math.PI; BALADE.pitch = 0;
+    baladeBrancheLesGestes();
+    baladeAjuste();
+    baladeMiroirs();
     BALADE.hint = document.createElement("div");
-    BALADE.hint.className = "visite-hint"; BALADE.hint.textContent = t.visit_hint;
-    visual.appendChild(BALADE.hint);
-    setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000);
-    visiteSynchroniseVideo();
-    visiteBoucle();
+    BALADE.hint.className = "visite-hint"; visual.appendChild(BALADE.hint);
+    baladeMode(BALADE.mode);
+    baladeBoucle();
     if (window.ResizeObserver){
-      BALADE.ro = new ResizeObserver(function(){ visiteAjuste(); });
+      BALADE.ro = new ResizeObserver(function(){ baladeAjuste(); });
       BALADE.ro.observe(visual);
     }
-    CAM.mode = "visite";   // la fiche surligne le bouton du mode courant
-    document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === "visite"); });
-    // LA VIDÉO COMMANDE : lecture ou déplacement dans la ligne de temps
-    // ramènent toujours la caméra sur la piste du téléphone.
+    // LA VIDÉO COMMANDE la visite : lecture ou déplacement dans la ligne de
+    // temps ramènent toujours la caméra sur la piste du téléphone.
     var v = document.querySelector("#videoWrap video");
     if (v){
-      BALADE_G.resync = function(){ BALADE.telephone = true; BALADE.regardDX = 0; BALADE.regardDY = 0; };
+      BALADE_G.resync = function(){
+        if (!BALADE.actif) return;
+        // La lecture entraîne en visite seulement si c'est le VISITEUR qui a
+        // lancé la vidéo (un geste dans les 3 s) : la lecture automatique au
+        // chargement ne confisque pas la vue d'ensemble.
+        var geste = performance.now() - (BALADE.dernierGesteDoc || -1e9) < 3000;
+        if (BALADE.mode !== "visite" && CAM.piste && !v.paused && geste) baladeMode("visite");
+        if (BALADE.mode !== "visite") return;
+        BALADE.telephone = true; BALADE.regardDX = 0; BALADE.regardDY = 0;
+      };
       v.addEventListener("play", BALADE_G.resync); v.addEventListener("seeking", BALADE_G.resync);
       BALADE_G.video = v;
     }
   }
-  function visiteAjuste(){
+  /** Les miroirs : un cubemap rendu UNE fois depuis chaque face (comme l'app). */
+  function baladeMiroirs(){
+    var THREE = BALADE.T.THREE;
+    BALADE.miroirs.forEach(function(m){
+      try {
+        var b = new THREE.Box3().setFromObject(m), c = new THREE.Vector3(); b.getCenter(c);
+        var n = new THREE.Vector3(0, 0, 1);
+        if (m.geometry.attributes.normal){ n.fromBufferAttribute(m.geometry.attributes.normal, 0).transformDirection(m.matrixWorld); }
+        var rt = new THREE.WebGLCubeRenderTarget(256, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter });
+        var cc = new THREE.CubeCamera(0.05, 60, rt);
+        cc.position.copy(c).add(n.multiplyScalar(0.06));
+        var vis = m.visible; m.visible = false;
+        var decorVis = BALADE.decor.map(function(d){ return d.visible; });
+        BALADE.decor.forEach(function(d){ d.visible = true; });
+        cc.update(BALADE.r, BALADE.sc);
+        BALADE.decor.forEach(function(d, i){ d.visible = decorVis[i]; });
+        m.visible = vis;
+        m.material = m.material.clone();
+        m.material.envMap = rt.texture; m.material.metalness = 1; m.material.roughness = 0.05;
+        m.material.envMapIntensity = 1; m.material.needsUpdate = true;
+      } catch (e) {}
+    });
+  }
+  function baladeAjuste(){
     if (!BALADE.actif) return;
     var visual = document.querySelector(".hero-visual");
     var w = visual.clientWidth, h = visual.clientHeight;
@@ -3834,12 +3878,85 @@
     BALADE.cam.aspect = w / h;
     BALADE.cam.updateProjectionMatrix();
   }
-  function visiteQuitte(){
+  function baladeMode(mode){
     if (!BALADE.actif) return;
-    BALADE.actif = false;
+    if (mode === "visite" && !CAM.piste) mode = "orbite";
+    var avant = BALADE.mode; BALADE.mode = mode;
+    var visite = (mode === "visite");
+    BALADE.plafonds.forEach(function(p){ p.visible = visite; });
+    BALADE.decor.forEach(function(d){ d.visible = visite; });
+    baladeCacheLesMesures(true);
+    if (visite){
+      BALADE.telephone = true; BALADE.regardDX = 0; BALADE.regardDY = 0; BALADE.zoomCumul = 0;
+      BALADE.murs.concat(BALADE.portes).forEach(function(m){ baladeOpacite(m, 1); });
+      var v = document.querySelector("#videoWrap video");
+      if (v && v.paused){ try { v.play(); } catch (e) {} }
+      CAM.mode = "visite";
+      if (BALADE.hint){ BALADE.hint.textContent = t.visit_hint; BALADE.hint.classList.remove("efface");
+        clearTimeout(BALADE.hintTimer); BALADE.hintTimer = setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000); }
+    } else {
+      if (avant === "visite"){
+        var v2 = document.querySelector("#videoWrap video"); if (v2 && !v2.paused) v2.pause();
+        // On sort par-dessus l'épaule : la cible est là où on était.
+        BALADE.orb.cible.set(BALADE.cam.position.x, BALADE.solY + 1.0, BALADE.cam.position.z);
+        BALADE.orb.theta = BALADE.yaw + Math.PI;
+      }
+      if (BALADE.hint){ BALADE.hint.classList.add("efface"); }
+      if (CAM.mode === "visite") CAM.mode = null;
+    }
+    document.querySelectorAll(".view-btn").forEach(function(b){
+      b.classList.toggle("on", visite ? b.dataset.mode === "visite" : (!!CAM.mode && b.dataset.mode === CAM.mode));
+    });
+  }
+  /** Les vues prêtes, en orbite : « ensemble » (3/4 par-dessus l'épaule), « dessus » (à l'aplomb). */
+  function baladeVue(mode){
+    if (!BALADE.actif) return false;
+    if (BALADE.mode === "visite") baladeMode("orbite");
+    var THREE = BALADE.T.THREE, taille = new THREE.Vector3(); BALADE.bornes.getSize(taille);
+    var centre = new THREE.Vector3(); BALADE.bornes.getCenter(centre);
+    var phi, radius, cible = centre;
+    if (mode === "dessus"){
+      phi = MODEL_TOP_PHI * Math.PI / 180;
+      var fovV = BALADE_FOV_ORBITE * Math.PI / 180, asp = BALADE.cam.aspect || 1;
+      var fovH = 2 * Math.atan(Math.tan(fovV / 2) * asp);
+      // L'emprise tourne avec l'azimut : on prend la diagonale au sol, sûre.
+      var diag = Math.hypot(taille.x, taille.z);
+      radius = Math.max(diag / (2 * Math.tan(fovV / 2)), diag / (2 * Math.tan(fovH / 2))) * 0.62 + taille.y;
+    } else {
+      phi = 60 * Math.PI / 180;
+      radius = Math.max(BALADE.rFit * 0.72, 6);
+    }
+    CAM.mode = mode;
+    BALADE.orbAnim = { de: { theta: BALADE.orb.theta, phi: BALADE.orb.phi, radius: BALADE.orb.radius, cible: BALADE.orb.cible.clone() },
+                       a: { theta: BALADE.orb.theta, phi: phi, radius: radius, cible: cible.clone() },
+                       t0: performance.now(), duree: 900 };
+    BALADE.ronde = true; BALADE.dernierGeste = performance.now();
+    document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === mode); });
+    return true;
+  }
+  /** Les cotes de la fiche se projettent avec la caméra de model-viewer : sur
+   *  notre canvas elles tombent à côté (Alex 2026-09-12, Safari mobile). Tant
+   *  que la balade tient le héros, on les cache ; des mesures natives viendront. */
+  function baladeCacheLesMesures(cache){
+    var cotes = document.querySelector(".atlas-cotes"), btnMes = document.querySelector(".atlas-mesures");
+    if (cotes) cotes.style.display = cache ? "none" : "";
+    if (btnMes) btnMes.style.display = cache ? "none" : "";
+    if (!BALADE.mesuresTimer && cache){
+      BALADE.mesuresTimer = setInterval(function(){
+        if (!BALADE.actif){ clearInterval(BALADE.mesuresTimer); BALADE.mesuresTimer = 0; baladeCacheLesMesures(false); return; }
+        var c2 = document.querySelector(".atlas-cotes"), b2 = document.querySelector(".atlas-mesures");
+        if (c2 && c2.style.display !== "none") c2.style.display = "none";
+        if (b2 && b2.style.display !== "none") b2.style.display = "none";
+      }, 500);
+    }
+  }
+  function baladeQuitte(silencieux){
+    if (!BALADE.actif) return;
+    BALADE.actif = false; BALADE.mode = null;
+    baladeCacheLesMesures(false);
     cancelAnimationFrame(BALADE.raf); BALADE.raf = 0;
     if (BALADE.ro){ try { BALADE.ro.disconnect(); } catch (e) {} BALADE.ro = null; }
-    visiteDebrancheLesGestes();
+    baladeDebrancheLesGestes();
     if (BALADE_G.video && BALADE_G.resync){
       ["play", "seeking"].forEach(function(n){ BALADE_G.video.removeEventListener(n, BALADE_G.resync); });
       BALADE_G.video = null; BALADE_G.resync = null;
@@ -3849,74 +3966,149 @@
     if (BALADE.hint && BALADE.hint.parentNode) BALADE.hint.parentNode.removeChild(BALADE.hint);
     BALADE.hint = null; BALADE.canvas = null; BALADE.sc = null; BALADE.r = null;
     var mv = document.querySelector("model-viewer.model3d");
-    if (mv) mv.style.visibility = "";
+    if (mv && !silencieux) mv.style.visibility = "";
     if (CAM.mode === "visite") CAM.mode = null;
-    document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.remove("on"); });
+    if (!silencieux) document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.remove("on"); });
   }
-  function visiteSynchroniseVideo(){
-    var v = document.querySelector("#videoWrap video");
-    if (BALADE.telephone && v && v.paused){ try { v.play(); } catch (e) {} }
+  function visiteQuitte(){
+    // Depuis la visite : en orbite si la balade a le héros, sinon retour à model-viewer.
+    if (!BALADE.actif) return;
+    if (BALADE.proprietaire) baladeMode("orbite"); else baladeQuitte(false);
+  }
+  function baladeOpacite(m, vise){
+    var mat = m.material; if (!mat) return;
+    var op = m.userData.opacite0 == null ? 1 : m.userData.opacite0;
+    var cible = op * vise;
+    if (Math.abs((mat.opacity || 0) - cible) < 0.01){ mat.opacity = cible; }
+    else mat.opacity += (cible - mat.opacity) * 0.18;
+    var voile = mat.opacity < op - 0.02;
+    mat.transparent = voile || !!m.userData.transparent0;
+    mat.depthWrite = !(mat.opacity < op * 0.5);
   }
   // --- La caméra, à chaque image -----------------------------------------
-  function visiteBoucle(){
+  function baladeBoucle(){
     if (!BALADE.actif) return;
-    BALADE.raf = requestAnimationFrame(visiteBoucle);
+    BALADE.raf = requestAnimationFrame(baladeBoucle);
+    if (document.hidden) return;
     var cam = BALADE.cam, THREE = BALADE.T.THREE;
     var v = document.querySelector("#videoWrap video");
-    if (v && !v.paused && !BALADE.telephone) BALADE.telephone = true;   // en lecture, la piste commande
-    if (BALADE.telephone && CAM.piste && v && BALADE.item.recenterOffset){
-      // LA VUE DU TÉLÉPHONE : la caméra EST celle de la vidéo. Position et
-      // orientation viennent de la piste (repère ARKit brut + recentrage du
-      // fichier), champ vertical = ouverture haute du téléphone.
-      var s = poseA(CAM.piste, BALADE.item.recenterOffset, v.currentTime);
-      if (s){
-        cam.position.set(s.p[0], s.p[1], s.p[2]);
-        cam.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
-        // Le repère de la caméra ARKit a son X le long du GRAND côté du
-        // capteur (voir le cône, plus haut) ; la visite est filmée téléphone
-        // debout, donc on remet l'image droite en tournant autour de l'axe
-        // optique. Le lacet et le tangage restent ceux de la piste.
-        cam.quaternion.multiply(BALADE.debout || (BALADE.debout = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)));
-        // Vidéo en pause : le glissé regarde autour depuis la même place ; la
-        // lecture ou la ligne de temps remettent le regard sur la piste.
-        if (BALADE.regardDX || BALADE.regardDY){
-          var libre = new THREE.Quaternion().setFromEuler(new THREE.Euler(BALADE.regardDY || 0, BALADE.regardDX || 0, 0, "YXZ"));
-          cam.quaternion.premultiply(libre);
+    if (BALADE.mode === "visite"){
+      if (v && !v.paused && !BALADE.telephone) BALADE.telephone = true;   // en lecture, la piste commande
+      if (BALADE.telephone && CAM.piste && v && BALADE.item.recenterOffset){
+        // LA VUE DU TÉLÉPHONE : la caméra EST celle de la vidéo. Position et
+        // orientation viennent de la piste (repère ARKit brut + recentrage du
+        // fichier), champ vertical = ouverture haute du téléphone.
+        var s = poseA(CAM.piste, BALADE.item.recenterOffset, v.currentTime);
+        if (s){
+          cam.position.set(s.p[0], s.p[1], s.p[2]);
+          cam.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
+          // Le repère de la caméra ARKit a son X le long du GRAND côté du
+          // capteur ; la visite est filmée téléphone debout : on remet l'image
+          // droite en tournant autour de l'axe optique.
+          cam.quaternion.multiply(BALADE.debout || (BALADE.debout = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)));
+          // Vidéo en pause : le glissé regarde autour depuis la même place.
+          if (BALADE.regardDX || BALADE.regardDY){
+            cam.quaternion.premultiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(BALADE.regardDY || 0, BALADE.regardDX || 0, 0, "YXZ")));
+          }
+          var fovV = CAM.piste.fovTallDeg || 71;
+          if (cam.fov !== fovV){ cam.fov = fovV; cam.updateProjectionMatrix(); }
+          BALADE.pos.copy(cam.position);
+          var e = new THREE.Euler().setFromQuaternion(cam.quaternion, "YXZ");
+          BALADE.yaw = e.y; BALADE.pitch = e.x;
         }
-        var fovV = CAM.piste.fovTallDeg || 71;
-        if (cam.fov !== fovV){ cam.fov = fovV; cam.updateProjectionMatrix(); }
-        BALADE.pos.copy(cam.position);
-        var e = new THREE.Euler().setFromQuaternion(cam.quaternion, "YXZ");
-        BALADE.yaw = e.y; BALADE.pitch = e.x;
+      } else {
+        if (cam.fov !== BALADE_FOV_MARCHE){ cam.fov = BALADE_FOV_MARCHE; cam.updateProjectionMatrix(); }
+        if (BALADE.glisse){
+          var g = BALADE.glisse, u = Math.min(1, (performance.now() - g.t0) / g.duree);
+          var k = 1 - Math.pow(1 - u, 3);
+          BALADE.pos.lerpVectors(g.de, g.a, k);
+          if (g.yaw !== null){
+            var d = g.yaw - g.yaw0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+            BALADE.yaw = g.yaw0 + d * k;
+          }
+          if (u >= 1) BALADE.glisse = null;
+        }
+        if (!BALADE.pointeur){
+          BALADE.yaw += BALADE.vYaw; BALADE.pitch += BALADE.vPitch;
+          BALADE.vYaw *= 0.955; BALADE.vPitch *= 0.955;
+          if (Math.abs(BALADE.vYaw) < 1e-4) BALADE.vYaw = 0;
+          if (Math.abs(BALADE.vPitch) < 1e-4) BALADE.vPitch = 0;
+        }
+        BALADE.pitch = Math.max(-1.2, Math.min(1.2, BALADE.pitch));
+        cam.position.copy(BALADE.pos);
+        cam.quaternion.setFromEuler(new THREE.Euler(BALADE.pitch, BALADE.yaw, 0, "YXZ"));
       }
     } else {
-      if (cam.fov !== 60){ cam.fov = 60; cam.updateProjectionMatrix(); }
-      // Glissé de position (double-tap) : arrivée en douceur.
-      if (BALADE.glisse){
-        var g = BALADE.glisse, u = Math.min(1, (performance.now() - g.t0) / g.duree);
-        var k = 1 - Math.pow(1 - u, 3);   // ease-out
-        BALADE.pos.lerpVectors(g.de, g.a, k);
-        if (g.yaw !== null){
-          var d = g.yaw - g.yaw0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
-          BALADE.yaw = g.yaw0 + d * k;
-        }
-        if (u >= 1) BALADE.glisse = null;
-      }
-      // Inertie du regard après le geste (comme l'app : 0,955 par image).
-      if (!BALADE.pointeur){
-        BALADE.yaw += BALADE.vYaw; BALADE.pitch += BALADE.vPitch;
-        BALADE.vYaw *= 0.955; BALADE.vPitch *= 0.955;
+      // ORBITE.
+      if (cam.fov !== BALADE_FOV_ORBITE){ cam.fov = BALADE_FOV_ORBITE; cam.updateProjectionMatrix(); }
+      var ob = BALADE.orb;
+      if (BALADE.orbAnim){
+        var A = BALADE.orbAnim, ua = Math.min(1, (performance.now() - A.t0) / A.duree), ka = 1 - Math.pow(1 - ua, 3);
+        ob.theta = A.de.theta + (A.a.theta - A.de.theta) * ka;
+        ob.phi = A.de.phi + (A.a.phi - A.de.phi) * ka;
+        ob.radius = A.de.radius + (A.a.radius - A.de.radius) * ka;
+        ob.cible.lerpVectors(A.de.cible, A.a.cible, ka);
+        if (ua >= 1) BALADE.orbAnim = null;
+      } else if (!BALADE.pointeur){
+        ob.theta += BALADE.vYaw; ob.phi = Math.max(0.09, Math.min(1.53, ob.phi + BALADE.vPitch));
+        BALADE.vYaw *= 0.92; BALADE.vPitch *= 0.92;
         if (Math.abs(BALADE.vYaw) < 1e-4) BALADE.vYaw = 0;
         if (Math.abs(BALADE.vPitch) < 1e-4) BALADE.vPitch = 0;
+        // La ronde : le modèle tourne seul tant que personne n'y touche
+        // (1,2 s après le dernier geste), jamais pendant la vidéo.
+        var repos = performance.now() - BALADE.dernierGeste > 1200 && !(v && !v.paused);
+        if (BALADE.ronde && repos && HEROS_VISIBLE) ob.theta += (6 * Math.PI / 180) / 60;
       }
-      BALADE.pitch = Math.max(-1.2, Math.min(1.2, BALADE.pitch));
-      cam.position.copy(BALADE.pos);
-      cam.quaternion.setFromEuler(new THREE.Euler(BALADE.pitch, BALADE.yaw, 0, "YXZ"));
+      cam.position.set(ob.cible.x + ob.radius * Math.sin(ob.phi) * Math.sin(ob.theta),
+                       ob.cible.y + ob.radius * Math.cos(ob.phi),
+                       ob.cible.z + ob.radius * Math.sin(ob.phi) * Math.cos(ob.theta));
+      cam.lookAt(ob.cible);
+      baladeVoile();
+      baladeMiroirMV();
     }
     BALADE.r.render(BALADE.sc, cam);
   }
+  /** Le voile : en orbite, les murs entre la caméra et la cible s'effacent (comme l'app). */
+  function baladeVoile(){
+    var THREE = BALADE.T.THREE, ob = BALADE.orb;
+    var dir = new THREE.Vector3().subVectors(BALADE.cam.position, ob.cible); dir.y = 0;
+    var horizontal = dir.length() > 0.5 && ob.phi > 0.35;   // vu de haut, rien à voiler
+    dir.normalize();
+    var c = new THREE.Vector3();
+    BALADE.murs.concat(BALADE.portes).forEach(function(m){
+      if (m.userData.role === "vitre") return;
+      if (!m.userData.centre){ var b = new THREE.Box3().setFromObject(m); m.userData.centre = b.getCenter(new THREE.Vector3()); }
+      c.subVectors(m.userData.centre, ob.cible); c.y = 0;
+      var devant = horizontal && c.dot(dir) > 0.6;
+      baladeOpacite(m, devant ? 0.12 : 1);
+    });
+  }
+  /** model-viewer, invisible, COPIE notre caméra : rose des vents, mesures et
+   *  cône de la vidéo continuent de vivre dans son repère (le modèle y est
+   *  recentré : on ajoute l'écart entre son centre et celui du fichier). */
+  function baladeMiroirMV(){
+    var mv = document.querySelector("model-viewer.model3d");
+    if (!mv || !mv.loaded) return;
+    if (!BALADE.mvDelta){
+      var c = mv.getBoundingBoxCenter && mv.getBoundingBoxCenter(); if (!c) return;
+      var cadre = cadrageAtlasPro(mv.__modelItem);
+      // Sans cadrage (modèle de l'app), la boîte de model-viewer est celle du
+      // fichier : même centre que la nôtre.
+      var THREE = BALADE.T.THREE, ours = new THREE.Vector3();
+      if (cadre) ours.set(cadre.boxCenter[0], cadre.boxCenter[1], cadre.boxCenter[2]);
+      else new THREE.Box3().setFromObject(BALADE.sc).getCenter(ours);
+      BALADE.mvDelta = { x: c.x - ours.x, y: c.y - ours.y, z: c.z - ours.z };
+      try { mv.setAttribute("interpolation-decay", "1"); } catch (e) {}
+    }
+    var ob = BALADE.orb, d = BALADE.mvDelta;
+    mv.__userMoved = true;
+    try {
+      mv.setAttribute("camera-target", (ob.cible.x + d.x).toFixed(3) + "m " + (ob.cible.y + d.y).toFixed(3) + "m " + (ob.cible.z + d.z).toFixed(3) + "m");
+      mv.setAttribute("camera-orbit", (ob.theta * 180 / Math.PI).toFixed(2) + "deg " + (ob.phi * 180 / Math.PI).toFixed(2) + "deg " + ob.radius.toFixed(3) + "m");
+    } catch (e) {}
+  }
   // --- La marche : les règles de l'app -------------------------------------
-  function visiteRaycast(ndcX, ndcY){
+  function baladeRaycast(ndcX, ndcY){
     var THREE = BALADE.T.THREE, rc = new THREE.Raycaster();
     rc.near = 0.05;
     rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), BALADE.cam);
@@ -3925,100 +4117,106 @@
     var hits = rc.intersectObjects(cibles, false);
     return hits.length ? { hit: hits[0], dir: rc.ray.direction.clone() } : null;
   }
-  function visiteSurUnPlancher(p){
+  function baladeSurUnPlancher(p){
     var THREE = BALADE.T.THREE, rc = new THREE.Raycaster(new THREE.Vector3(p.x, p.y + 0.5, p.z), new THREE.Vector3(0, -1, 0), 0, 4);
     if (!BALADE.sols.length){
-      // Sans plancher nommé (vieux GLB) : l'enveloppe suffit.
       var b = BALADE.bornes;
       return p.x > b.min.x + BALADE_MARGE && p.x < b.max.x - BALADE_MARGE && p.z > b.min.z + BALADE_MARGE && p.z < b.max.z - BALADE_MARGE;
     }
     return rc.intersectObjects(BALADE.sols, false).length > 0;
   }
-  function visiteBloque(de, a){
-    // Un mur ou une fenêtre entre les deux points : distance du premier, sinon null.
+  function baladeBloque(de, a){
     var THREE = BALADE.T.THREE, d = new THREE.Vector3().subVectors(a, de), L = d.length();
     if (L < 1e-3 || !BALADE.murs.length) return null;
     var rc = new THREE.Raycaster(de.clone(), d.clone().normalize(), 0, L);
     var hits = rc.intersectObjects(BALADE.murs, false);
     return hits.length ? hits[0].distance : null;
   }
-  function visiteMarcheVers(ndcX, ndcY){
-    var THREE = BALADE.T.THREE, r = visiteRaycast(ndcX, ndcY);
+  function baladeMarcheVers(ndcX, ndcY){
+    var THREE = BALADE.T.THREE, r = baladeRaycast(ndcX, ndcY);
     if (!r) return false;
-    var hit = r.hit, role = visiteRole(hit.object);
+    var hit = r.hit, role = hit.object.userData.role;
     var cible = hit.point.clone();
     var n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
     if (Math.abs(n.y) < 0.5 || role === "mur" || role === "fenetre" || role === "vitre" || role === "porte"){
-      // Une paroi : on s'arrête devant, à 1,8 m (0,5 m au moins), côté caméra.
       var recul = new THREE.Vector3(r.dir.x, 0, r.dir.z).normalize().multiplyScalar(-1);
       var dist = Math.min(BALADE_RECUL, Math.max(BALADE_RECUL_MIN, hit.distance - 0.2));
       cible.add(recul.multiplyScalar(dist));
     }
     cible.y = BALADE.solY + BALADE_OEIL;
-    if (!visiteSurUnPlancher(cible)){
-      // Pas de plancher sous le point : on n'y va pas (jamais dehors, jamais dans un mur).
-      var vers = new THREE.Vector3().subVectors(cible, BALADE.pos); vers.y = 0;
-      var essai = BALADE.pos.clone().add(vers.multiplyScalar(0.5));
-      if (!visiteSurUnPlancher(essai)) return false;
+    var depart = BALADE.cam.position.clone();
+    if (!baladeSurUnPlancher(cible)){
+      var vers = new THREE.Vector3().subVectors(cible, depart); vers.y = 0;
+      var essai = depart.clone().add(vers.multiplyScalar(0.5)); essai.y = cible.y;
+      if (!baladeSurUnPlancher(essai)) return false;
       cible.copy(essai);
     }
-    // Un mur sur le chemin : on s'arrête à 0,5 m devant ; une porte laisse passer.
-    var b = visiteBloque(BALADE.pos, cible);
+    var b = baladeBloque(depart, cible);
     if (b !== null){
       if (b < BALADE_RECUL_MIN + 0.1) return false;
-      var dir = new THREE.Vector3().subVectors(cible, BALADE.pos).normalize();
-      cible.copy(BALADE.pos).add(dir.multiplyScalar(b - BALADE_RECUL_MIN));
-      if (!visiteSurUnPlancher(cible)) return false;
+      var dir = new THREE.Vector3().subVectors(cible, depart).normalize();
+      cible.copy(depart).add(dir.multiplyScalar(b - BALADE_RECUL_MIN));
+      if (!baladeSurUnPlancher(cible)) return false;
     }
-    var regard = new THREE.Vector3().subVectors(cible, BALADE.pos);
+    var regard = new THREE.Vector3().subVectors(cible, depart);
     var yaw = (regard.x * regard.x + regard.z * regard.z > 0.25) ? Math.atan2(-regard.x, -regard.z) : null;
-    BALADE.glisse = { de: BALADE.cam.position.clone(), a: cible, t0: performance.now(),
-                      duree: Math.min(1400, 450 + 180 * BALADE.pos.distanceTo(cible)),
-                      yaw0: BALADE.yaw, yaw: yaw };
-    BALADE.vYaw = 0; BALADE.vPitch = 0;
     if (BALADE.telephone){
-      // Un double-tap rend la main : la vidéo se met en pause, on marche seul.
-      // Lecture ou ligne de temps ramènent sur la piste.
       var v = document.querySelector("#videoWrap video"); if (v && !v.paused) v.pause();
       BALADE.telephone = false; BALADE.regardDX = 0; BALADE.regardDY = 0;
+      BALADE.pos.copy(depart);
+      var e0 = new THREE.Euler().setFromQuaternion(BALADE.cam.quaternion, "YXZ");
+      BALADE.yaw = e0.y; BALADE.pitch = Math.max(-1.2, Math.min(1.2, e0.x));
     }
+    BALADE.glisse = { de: depart, a: cible, t0: performance.now(),
+                      duree: Math.min(1400, 450 + 180 * depart.distanceTo(cible)),
+                      yaw0: BALADE.yaw, yaw: yaw };
+    BALADE.vYaw = 0; BALADE.vPitch = 0;
     return true;
   }
   // --- Les gestes ----------------------------------------------------------
-  function visiteNDC(e){
+  function baladeNDC(e){
     var rect = BALADE.canvas.getBoundingClientRect();
     return [((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1];
   }
   var BALADE_G = {};
-  function visiteBrancheLesGestes(){
+  function baladeBrancheLesGestes(){
     var c = BALADE.canvas, pinces = {};
     BALADE_G.down = function(e){
       try { c.setPointerCapture && c.setPointerCapture(e.pointerId); } catch (err) {}
       pinces[e.pointerId] = { x: e.clientX, y: e.clientY };
-      if (Object.keys(pinces).length === 2){ BALADE.pointeur = null; BALADE_G.pinceD = visiteEcartPince(pinces); return; }
-      BALADE.pointeur = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, x0: e.clientX, y0: e.clientY, t0: performance.now() };
+      BALADE.dernierGeste = performance.now(); BALADE.ronde = false;
+      if (Object.keys(pinces).length === 2){ BALADE.pointeur = null; BALADE_G.pinceD = baladeEcartPince(pinces); return; }
+      BALADE.pointeur = { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: performance.now() };
       BALADE.vYaw = 0; BALADE.vPitch = 0;
     };
     BALADE_G.move = function(e){
       if (pinces[e.pointerId]){ pinces[e.pointerId].x = e.clientX; pinces[e.pointerId].y = e.clientY; }
       if (Object.keys(pinces).length === 2){
-        var d = visiteEcartPince(pinces);
-        if (BALADE_G.pinceD){ visiteZoom((BALADE_G.pinceD - d) / 120); BALADE_G.pinceD = d; }
+        var dd = baladeEcartPince(pinces);
+        if (BALADE_G.pinceD){ baladeZoom((BALADE_G.pinceD - dd) / 120); BALADE_G.pinceD = dd; }
         return;
       }
       var p = BALADE.pointeur; if (!p || p.id !== e.pointerId) return;
       var dx = e.clientX - p.x, dy = e.clientY - p.y;
-      p.x = e.clientX; p.y = e.clientY; p.dx = dx; p.dy = dy;
-      var k = 0.0032;
-      if (BALADE.telephone){
-        var v = BALADE_G.video;
-        if (v && !v.paused) return;        // en lecture, la piste commande
-        BALADE.regardDX = (BALADE.regardDX || 0) - dx * k;
-        BALADE.regardDY = Math.max(-1.0, Math.min(1.0, (BALADE.regardDY || 0) - dy * k));
-        return;
+      p.x = e.clientX; p.y = e.clientY;
+      BALADE.dernierGeste = performance.now();
+      if (BALADE.mode === "visite"){
+        var k = 0.0032;
+        if (BALADE.telephone){
+          var v = BALADE_G.video;
+          if (v && !v.paused) return;        // en lecture, la piste commande
+          BALADE.regardDX = (BALADE.regardDX || 0) - dx * k;
+          BALADE.regardDY = Math.max(-1.0, Math.min(1.0, (BALADE.regardDY || 0) - dy * k));
+          return;
+        }
+        BALADE.yaw -= dx * k; BALADE.pitch -= dy * k;
+        BALADE.vYaw = -dx * k * 0.6; BALADE.vPitch = -dy * k * 0.6;
+      } else {
+        var ko = 0.005, ob = BALADE.orb;
+        BALADE.orbAnim = null;
+        ob.theta -= dx * ko; ob.phi = Math.max(0.09, Math.min(1.53, ob.phi - dy * ko));
+        BALADE.vYaw = -dx * ko * 0.5; BALADE.vPitch = -dy * ko * 0.5;
       }
-      BALADE.yaw -= dx * k; BALADE.pitch -= dy * k;
-      BALADE.vYaw = -dx * k * 0.6; BALADE.vPitch = -dy * k * 0.6;
     };
     BALADE_G.up = function(e){
       delete pinces[e.pointerId];
@@ -4029,7 +4227,9 @@
         if (!bouge){
           var dt = maintenant - BALADE.dernierTap, prox = BALADE.dernierTapXY && Math.hypot(e.clientX - BALADE.dernierTapXY[0], e.clientY - BALADE.dernierTapXY[1]) < 30;
           if (dt < 350 && prox){
-            var ndc = visiteNDC(e); visiteMarcheVers(ndc[0], ndc[1]);
+            var ndc = baladeNDC(e);
+            if (BALADE.mode === "visite") baladeMarcheVers(ndc[0], ndc[1]);
+            else if (CAM.piste) baladeMode("visite");     // double-tap en orbite : on entre
             BALADE.dernierTap = 0; BALADE.dernierTapXY = null;
           } else { BALADE.dernierTap = maintenant; BALADE.dernierTapXY = [e.clientX, e.clientY]; }
           BALADE.vYaw = 0; BALADE.vPitch = 0;
@@ -4037,7 +4237,7 @@
         BALADE.pointeur = null;
       }
     };
-    BALADE_G.wheel = function(e){ e.preventDefault(); visiteZoom(e.deltaY / 100); };
+    BALADE_G.wheel = function(e){ e.preventDefault(); BALADE.dernierGeste = performance.now(); BALADE.ronde = false; baladeZoom(e.deltaY / 100); };
     BALADE_G.dbl = function(e){ e.preventDefault(); e.stopPropagation(); };
     BALADE_G.clic = function(e){ e.stopPropagation(); };
     c.addEventListener("pointerdown", BALADE_G.down);
@@ -4049,24 +4249,30 @@
     c.addEventListener("click", BALADE_G.clic);
     c.style.touchAction = "none";
   }
-  function visiteDebrancheLesGestes(){
+  function baladeDebrancheLesGestes(){
     var c = BALADE.canvas; if (!c) return;
     c.removeEventListener("pointerdown", BALADE_G.down); c.removeEventListener("pointermove", BALADE_G.move);
     c.removeEventListener("pointerup", BALADE_G.up); c.removeEventListener("pointercancel", BALADE_G.up);
-    c.removeEventListener("click", BALADE_G.clic);
     c.removeEventListener("wheel", BALADE_G.wheel); c.removeEventListener("dblclick", BALADE_G.dbl);
+    c.removeEventListener("click", BALADE_G.clic);
   }
-  function visiteEcartPince(p){ var k = Object.keys(p); return Math.hypot(p[k[0]].x - p[k[1]].x, p[k[0]].y - p[k[1]].y); }
-  function visiteZoom(quantite){
-    // Vers l'arrière (molette vers soi, pincement fermé) : on s'éloigne ; au
-    // bout du geste, la visite rend la main à la vue d'ensemble — le zoom
-    // continu de l'app, à l'envers.
-    if (quantite <= 0){ BALADE.zoomCumul = Math.max(0, BALADE.zoomCumul + quantite); return; }
-    BALADE.zoomCumul += quantite;
-    if (BALADE.zoomCumul > 3){
-      BALADE.zoomCumul = 0;
-      visiteQuitte();
-      var b = document.querySelector('.view-btn[data-mode="ensemble"]'); if (b) b.click();
+  function baladeEcartPince(p){ var k = Object.keys(p); return Math.hypot(p[k[0]].x - p[k[1]].x, p[k[0]].y - p[k[1]].y); }
+  function baladeZoom(quantite){
+    // quantite > 0 : vers l'arrière (molette vers soi, pincement fermé).
+    if (BALADE.mode === "visite"){
+      if (quantite <= 0){ BALADE.zoomCumul = Math.max(0, BALADE.zoomCumul + quantite); return; }
+      BALADE.zoomCumul += quantite;
+      if (BALADE.zoomCumul > 3){ BALADE.zoomCumul = 0; visiteQuitte(); baladeVue("ensemble"); }
+      return;
+    }
+    var ob = BALADE.orb; BALADE.orbAnim = null;
+    ob.radius *= Math.exp(quantite * 0.12);
+    var min = BALADE.rFit * MODEL_ZOOM_IN, max = BALADE.rFit * MODEL_ZOOM_OUT;
+    if (ob.radius > max) ob.radius = max;
+    if (ob.radius < min){
+      // S'approcher jusqu'au bout, c'est entrer : le zoom continu de l'app.
+      ob.radius = min;
+      if (CAM.piste) baladeMode("visite");
     }
   }
   function makeViewButtons(mv){
@@ -4093,6 +4299,7 @@
       b.dataset.mode = mode || "";
       b.addEventListener("click", function(){
         if (mode === "visite"){ visiteEntre(); return; }
+        if (BALADE.actif && BALADE.proprietaire && (mode === "ensemble" || mode === "dessus")){ baladeVue(mode); return; }
         visiteQuitte();
         var fit = mv && mv.__fit;
         if (!fit) return;
@@ -4643,6 +4850,9 @@
           var mv = document.createElement("model-viewer");
           mv.className = "model3d";
           poseModele(mv, m.driveId);
+          // Une scène Atlas Pro : la balade (notre visionneuse) tient le
+          // héros ; model-viewer reste monté, invisible, et copie sa caméra.
+          if (baladeProprietaire()) setTimeout(function(){ baladeEntre("orbite"); }, 0);
           mv.setAttribute("camera-controls", "");
           mv.setAttribute("auto-rotate", "");
           mv.setAttribute("auto-rotate-delay", "1200");
@@ -4798,6 +5008,7 @@
           function rejoueLeModele(i){
             var m = modeleCourant(FLOORS.list[i]);
             if (!m) return;
+            if (BALADE.actif){ var modeAvant = BALADE.mode; baladeQuitte(true); setTimeout(function(){ baladeEntre(modeAvant || "orbite"); }, 0); }
             mv.__floor = i;
             mv.__userMoved = false; mv.__fitBox = null; mv.__lookKept = false;
             mv.__fit = null; mv.__triedFallbackFor = null;
