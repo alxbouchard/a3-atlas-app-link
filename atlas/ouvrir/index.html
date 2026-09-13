@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>A3 Atlas — Propriété</title>
@@ -442,6 +443,12 @@
     background:var(--chip); border:1px solid var(--line); border-radius:999px;
     padding:7px 14px; cursor:pointer; min-height:36px}
   .view-btn:hover{border-color:var(--accent)}
+  .view-btn.on{background:var(--accent); color:#fff; border-color:var(--accent)}
+  .hero-visual .variant-pills{display:flex !important}
+  .visite-canvas{position:absolute; inset:0; width:100% !important; height:100% !important; z-index:1; border-radius:inherit; cursor:crosshair}
+  .visite-hint{position:absolute; left:50%; top:14px; transform:translateX(-50%); z-index:3; padding:8px 14px; border-radius:999px;
+    background:rgba(10,14,22,.72); color:#fff; font-size:13px; font-weight:600; backdrop-filter:blur(8px); pointer-events:none; transition:opacity .6s}
+  .visite-hint.efface{opacity:0}
   .view-btn:active{transform:translateY(1px)}
 
   /* ---- Phase 2: history timeline (history.json) ---- */
@@ -835,7 +842,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T02:37Z";
+  var ATLAS_BUILD = "2026-09-13T03:07Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -944,6 +951,7 @@
       model_h:"Modèle 3D",
       model_hint:"Glissez pour pivoter · molette ou pincement pour zoomer · deux doigts (ou clic droit) pour déplacer.",
       model_variant_pro:"Texturé (Atlas Pro)", model_variant_base:"Relevé",
+      view_visit:"Visite", visit_hint:"La vidéo mène la visite · en pause, glissez pour regarder, double-tap pour marcher · pincez pour sortir",
       model_furnished:"Meublé", model_unfurnished:"Sans meubles",
       view_overview:"Vue d'ensemble", view_top:"Vue de dessus",
       model_walls:function(cm){return "Épaisseur des murs : représentation ("+cm+" cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.";},
@@ -1050,6 +1058,7 @@
       model_h:"3D model",
       model_hint:"Drag to rotate · scroll or pinch to zoom · two fingers (or right-click) to pan.",
       model_variant_pro:"Textured (Atlas Pro)", model_variant_base:"Survey",
+      view_visit:"Tour", visit_hint:"The video leads the tour · when paused, drag to look, double-tap to walk · pinch out to leave",
       model_furnished:"Furnished", model_unfurnished:"Unfurnished",
       view_overview:"Overview", view_top:"Top view",
       model_walls:function(cm){return "Wall thickness: a representation ("+cm+" cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.";},
@@ -3060,8 +3069,13 @@
         e.stopPropagation();
         if (MODEL_VARIANT === v[0]) return;
         MODEL_VARIANT = v[0];
+        // Changer de modèle pendant la visite : on quitte la visite, on la
+        // relance sur l'autre modèle (la piste et la vidéo sont les mêmes).
+        var enVisite = (typeof BALADE !== "undefined") && BALADE.actif;
+        if (enVisite) visiteQuitte();
         for (var i = 0; i < nav.children.length; i++) nav.children[i].classList.toggle("on", i === (v[0] === "pro" ? 0 : 1));
         rejoue();
+        if (enVisite) setTimeout(visiteEntre, 50);
       };
       nav.appendChild(b);
     });
@@ -3176,6 +3190,10 @@
   }
   function poseModele(mv, id){
     mv.__modelItem = MODEL_ITEMS[id] || null;
+    // Exposition : 0,6 était réglé pour le modèle gris de l'app ; la scène
+    // texturée du moteur veut un peu plus (note du dev E101 : model-viewer
+    // est ~1,75 × plus clair que RealityKit à exposition 1).
+    mv.setAttribute("exposure", (mv.__modelItem && mv.__modelItem.source === "atlas-pro") ? "0.85" : "0.6");
     var sources = DRIVE_API_KEY ? [driveModelApiUrl(id), driveRaw(id)] : [driveRaw(id)];
     chargeOctets("modele-" + id, sources, 60000)
       .then(function(b){
@@ -3635,6 +3653,414 @@
     return (isFinite(d) && d > 0) ? d : recours;
   }
 
+
+  // ======================================================================
+  // LA BALADE — notre propre visionneuse three.js, à la première personne.
+  //
+  // Alex 2026-09-12 : « il n'y a pas moyen comme dans l'app d'avoir la vue du
+  // téléphone pour faire la visite… rendre l'expérience aussi cool que dans
+  // l'app ». model-viewer est une caméra orbitale : pour marcher dedans il
+  // faut une caméra libre, un plan proche de quelques centimètres et un champ
+  // stable. Pendant la visite, model-viewer est masqué (son contexte reste),
+  // notre canvas prend sa place dans le héros ; « Vue d'ensemble » et « Vue de
+  // dessus » ramènent à model-viewer.
+  //
+  // Les règles de marche sont celles de l'app (Atterrissage) : double-tap sur
+  // le sol → on y va à hauteur d'œil (1,55 m) ; sur un mur → on s'arrête
+  // devant (1,8 m) ; un mur ou une fenêtre sur le chemin arrête à 0,5 m, une
+  // porte laisse passer ; jamais hors d'un plancher ; pincer/molette vers
+  // l'arrière = sortir en vue d'ensemble. Le panoramique n'existe que dedans.
+  // ======================================================================
+  var BALADE = { actif: false, T: null, r: null, sc: null, cam: null, canvas: null, raf: 0,
+                 murs: [], portes: [], sols: [], bornes: null, solY: 0,
+                 pos: null, yaw: 0, pitch: 0, vYaw: 0, vPitch: 0, glisse: null,
+                 telephone: false, item: null, pointeur: null, dernierTap: 0, dernierTapXY: null,
+                 zoomCumul: 0, hint: null };
+  var BALADE_OEIL = 1.55, BALADE_RECUL = 1.8, BALADE_RECUL_MIN = 0.5, BALADE_MARGE = 0.35;
+  try { window.__BALADE = BALADE; } catch (e) {}
+
+  function visiteModules(){
+    if (BALADE.T) return Promise.resolve(BALADE.T);
+    return Promise.all([import("three"), import("three/addons/loaders/GLTFLoader.js"),
+                        import("three/addons/environments/RoomEnvironment.js")])
+      .then(function(m){ BALADE.T = { THREE: m[0], GLTFLoader: m[1].GLTFLoader, RoomEnvironment: m[2].RoomEnvironment }; return BALADE.T; });
+  }
+  function visiteNomDe(o){
+    for (var p = o; p; p = p.parent){ if (p.name) return p.name; }
+    return "";
+  }
+  function visiteRole(o){
+    var mn = (o.material && o.material.name) || "";
+    for (var p = o; p; p = p.parent){
+      var n = p.name || "";
+      if (/^Backdrop/i.test(n)) return "decor";
+      if (/^Door\d/i.test(n)) return (/glazing/i.test(o.name || "") ? "vitre" : "porte");
+      if (/^Window\d/i.test(n)) return "fenetre";
+      if (/^Wall\d/i.test(n)) return "mur";
+      if (/^Floor\d/i.test(n)) return "sol";
+      if (/^Ceiling\d/i.test(n)) return "plafond";
+    }
+    if (mn === "door") return "porte";
+    if (mn === "window") return "fenetre";
+    if (mn === "wall") return "mur";
+    if (mn === "floor") return "sol";
+    if (mn === "ceiling") return "plafond";
+    return "autre";
+  }
+  function visiteEntre(){
+    var f = FLOORS.list[FLOORS.current], item = modeleCourant(f);
+    var visual = document.querySelector(".hero-visual"), mv = document.querySelector("model-viewer.model3d");
+    if (!item || !visual || !mv) return;
+    if (BALADE.actif){ BALADE.telephone = true; visiteSynchroniseVideo(); return; }
+    BALADE.item = item; BALADE.telephone = true;
+    var sources = DRIVE_API_KEY ? [driveModelApiUrl(item.driveId), driveRaw(item.driveId)] : [driveRaw(item.driveId)];
+    Promise.all([visiteModules(), chargeOctets("modele-" + item.driveId, sources, 60000)])
+      .then(function(r){
+        var T = r[0], octets = r[1];
+        return new Promise(function(ok, ko){
+          new T.GLTFLoader().parse(octets instanceof Blob ? null : octets, "", ok, ko);
+        }).catch(function(){
+          // Un Blob : on lit ses octets d'abord.
+          return octets.arrayBuffer().then(function(ab){
+            return new Promise(function(ok, ko){ new T.GLTFLoader().parse(ab, "", ok, ko); });
+          });
+        }).then(function(gltf){ visiteMonte(T, gltf, visual, mv); });
+      })
+      .catch(function(e){ console.warn("visite : chargement impossible", e); });
+  }
+  function visiteMonte(T, gltf, visual, mv){
+    var THREE = T.THREE;
+    var r = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = (BALADE.item.source === "atlas-pro") ? 1.2 : 1.4;
+    var canvas = r.domElement;
+    canvas.className = "visite-canvas";
+    visual.appendChild(canvas);
+    mv.style.visibility = "hidden";
+    var sc = new THREE.Scene();
+    sc.background = new THREE.Color(0x0f172a);
+    var pm = new THREE.PMREMGenerator(r);
+    sc.environment = pm.fromScene(new T.RoomEnvironment(), 0.04).texture;
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 0.9));
+    sc.add(new THREE.AmbientLight(0xffffff, 0.35));
+    var soleil = new THREE.DirectionalLight(0xfff2e0, 1.2); soleil.position.set(3, 8, 2); sc.add(soleil);
+    var racine = gltf.scene; sc.add(racine);
+    // Recensement : murs, portes, sols, décor ; bornes = murs + sols.
+    var bornes = new THREE.Box3(), toutVide = true, solY = Infinity;
+    BALADE.murs = []; BALADE.portes = []; BALADE.sols = [];
+    racine.updateMatrixWorld(true);
+    racine.traverse(function(o){
+      if (!o.isMesh) return;
+      var role = visiteRole(o);
+      if (role === "decor"){ o.visible = true; o.userData.decor = true; return; }
+      if (role === "mur" || role === "fenetre" || role === "vitre"){ BALADE.murs.push(o); }
+      else if (role === "porte"){ BALADE.portes.push(o); }
+      else if (role === "sol"){ BALADE.sols.push(o); }
+      if (role === "mur" || role === "sol" || role === "fenetre" || role === "porte"){
+        var b = new THREE.Box3().setFromObject(o); bornes.union(b); toutVide = false;
+        if (role === "sol") solY = Math.min(solY, b.min.y);
+      }
+      // Les vitres restent des vitres ; le reste est opaque des deux côtés
+      // pour qu'un mur vu de derrière ne disparaisse pas.
+      if (o.material && role !== "vitre" && !o.material.transparent) o.material.side = THREE.FrontSide;
+      // L'INOX (frigo, lave-vaisselle, cuisinière : metallic 1) ne montre
+      // que ce qu'il reflète, et l'environnement de three.js est sombre : il
+      // sortait NOIR (Alex 2026-09-12). On lui donne plus de reflet et un
+      // brossé minimal, comme l'app le fait avec son plateau d'éclairage.
+      if (o.material && o.material.metalness > 0.5){
+        o.material.envMapIntensity = 2.4;
+        o.material.roughness = Math.max(o.material.roughness, 0.3);
+        o.material.needsUpdate = true;
+      }
+    });
+    if (toutVide) bornes.setFromObject(racine);
+    if (!isFinite(solY)) solY = bornes.min.y;
+    BALADE.bornes = bornes; BALADE.solY = solY;
+    var cam = new THREE.PerspectiveCamera(60, 1, 0.08, 300);
+    BALADE.r = r; BALADE.sc = sc; BALADE.cam = cam; BALADE.canvas = canvas; BALADE.actif = true;
+    BALADE.zoomCumul = 0; BALADE.vYaw = 0; BALADE.vPitch = 0; BALADE.glisse = null;
+    // Départ : au milieu du plus grand plancher (le centre de l'enveloppe
+    // d'un logement en L tombe dehors), à hauteur d'œil, regard dans l'axe
+    // de model-viewer.
+    var c = new THREE.Vector3(); bornes.getCenter(c);
+    var meilleur = null, aire = 0;
+    BALADE.sols.forEach(function(sol){
+      var b = new THREE.Box3().setFromObject(sol), a = (b.max.x - b.min.x) * (b.max.z - b.min.z);
+      if (a > aire){ aire = a; meilleur = b; }
+    });
+    if (meilleur) meilleur.getCenter(c);
+    BALADE.pos = new THREE.Vector3(c.x, solY + BALADE_OEIL, c.z);
+    var o = mv.getCameraOrbit && mv.getCameraOrbit();
+    BALADE.yaw = o ? o.theta + Math.PI : 0; BALADE.pitch = 0;
+    visiteBrancheLesGestes();
+    visiteAjuste();
+    BALADE.hint = document.createElement("div");
+    BALADE.hint.className = "visite-hint"; BALADE.hint.textContent = t.visit_hint;
+    visual.appendChild(BALADE.hint);
+    setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000);
+    visiteSynchroniseVideo();
+    visiteBoucle();
+    if (window.ResizeObserver){
+      BALADE.ro = new ResizeObserver(function(){ visiteAjuste(); });
+      BALADE.ro.observe(visual);
+    }
+    CAM.mode = "visite";   // la fiche surligne le bouton du mode courant
+    document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === "visite"); });
+    // LA VIDÉO COMMANDE : lecture ou déplacement dans la ligne de temps
+    // ramènent toujours la caméra sur la piste du téléphone.
+    var v = document.querySelector("#videoWrap video");
+    if (v){
+      BALADE_G.resync = function(){ BALADE.telephone = true; BALADE.regardDX = 0; BALADE.regardDY = 0; };
+      v.addEventListener("play", BALADE_G.resync); v.addEventListener("seeking", BALADE_G.resync);
+      BALADE_G.video = v;
+    }
+  }
+  function visiteAjuste(){
+    if (!BALADE.actif) return;
+    var visual = document.querySelector(".hero-visual");
+    var w = visual.clientWidth, h = visual.clientHeight;
+    if (!(w > 0 && h > 0)) return;
+    BALADE.r.setSize(w, h, false);
+    BALADE.cam.aspect = w / h;
+    BALADE.cam.updateProjectionMatrix();
+  }
+  function visiteQuitte(){
+    if (!BALADE.actif) return;
+    BALADE.actif = false;
+    cancelAnimationFrame(BALADE.raf); BALADE.raf = 0;
+    if (BALADE.ro){ try { BALADE.ro.disconnect(); } catch (e) {} BALADE.ro = null; }
+    visiteDebrancheLesGestes();
+    if (BALADE_G.video && BALADE_G.resync){
+      ["play", "seeking"].forEach(function(n){ BALADE_G.video.removeEventListener(n, BALADE_G.resync); });
+      BALADE_G.video = null; BALADE_G.resync = null;
+    }
+    try { BALADE.r.dispose(); } catch (e) {}
+    if (BALADE.canvas && BALADE.canvas.parentNode) BALADE.canvas.parentNode.removeChild(BALADE.canvas);
+    if (BALADE.hint && BALADE.hint.parentNode) BALADE.hint.parentNode.removeChild(BALADE.hint);
+    BALADE.hint = null; BALADE.canvas = null; BALADE.sc = null; BALADE.r = null;
+    var mv = document.querySelector("model-viewer.model3d");
+    if (mv) mv.style.visibility = "";
+    if (CAM.mode === "visite") CAM.mode = null;
+    document.querySelectorAll(".view-btn").forEach(function(b){ b.classList.remove("on"); });
+  }
+  function visiteSynchroniseVideo(){
+    var v = document.querySelector("#videoWrap video");
+    if (BALADE.telephone && v && v.paused){ try { v.play(); } catch (e) {} }
+  }
+  // --- La caméra, à chaque image -----------------------------------------
+  function visiteBoucle(){
+    if (!BALADE.actif) return;
+    BALADE.raf = requestAnimationFrame(visiteBoucle);
+    var cam = BALADE.cam, THREE = BALADE.T.THREE;
+    var v = document.querySelector("#videoWrap video");
+    if (v && !v.paused && !BALADE.telephone) BALADE.telephone = true;   // en lecture, la piste commande
+    if (BALADE.telephone && CAM.piste && v && BALADE.item.recenterOffset){
+      // LA VUE DU TÉLÉPHONE : la caméra EST celle de la vidéo. Position et
+      // orientation viennent de la piste (repère ARKit brut + recentrage du
+      // fichier), champ vertical = ouverture haute du téléphone.
+      var s = poseA(CAM.piste, BALADE.item.recenterOffset, v.currentTime);
+      if (s){
+        cam.position.set(s.p[0], s.p[1], s.p[2]);
+        cam.quaternion.set(s.q[0], s.q[1], s.q[2], s.q[3]);
+        // Le repère de la caméra ARKit a son X le long du GRAND côté du
+        // capteur (voir le cône, plus haut) ; la visite est filmée téléphone
+        // debout, donc on remet l'image droite en tournant autour de l'axe
+        // optique. Le lacet et le tangage restent ceux de la piste.
+        cam.quaternion.multiply(BALADE.debout || (BALADE.debout = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)));
+        // Vidéo en pause : le glissé regarde autour depuis la même place ; la
+        // lecture ou la ligne de temps remettent le regard sur la piste.
+        if (BALADE.regardDX || BALADE.regardDY){
+          var libre = new THREE.Quaternion().setFromEuler(new THREE.Euler(BALADE.regardDY || 0, BALADE.regardDX || 0, 0, "YXZ"));
+          cam.quaternion.premultiply(libre);
+        }
+        var fovV = CAM.piste.fovTallDeg || 71;
+        if (cam.fov !== fovV){ cam.fov = fovV; cam.updateProjectionMatrix(); }
+        BALADE.pos.copy(cam.position);
+        var e = new THREE.Euler().setFromQuaternion(cam.quaternion, "YXZ");
+        BALADE.yaw = e.y; BALADE.pitch = e.x;
+      }
+    } else {
+      if (cam.fov !== 60){ cam.fov = 60; cam.updateProjectionMatrix(); }
+      // Glissé de position (double-tap) : arrivée en douceur.
+      if (BALADE.glisse){
+        var g = BALADE.glisse, u = Math.min(1, (performance.now() - g.t0) / g.duree);
+        var k = 1 - Math.pow(1 - u, 3);   // ease-out
+        BALADE.pos.lerpVectors(g.de, g.a, k);
+        if (g.yaw !== null){
+          var d = g.yaw - g.yaw0; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI;
+          BALADE.yaw = g.yaw0 + d * k;
+        }
+        if (u >= 1) BALADE.glisse = null;
+      }
+      // Inertie du regard après le geste (comme l'app : 0,955 par image).
+      if (!BALADE.pointeur){
+        BALADE.yaw += BALADE.vYaw; BALADE.pitch += BALADE.vPitch;
+        BALADE.vYaw *= 0.955; BALADE.vPitch *= 0.955;
+        if (Math.abs(BALADE.vYaw) < 1e-4) BALADE.vYaw = 0;
+        if (Math.abs(BALADE.vPitch) < 1e-4) BALADE.vPitch = 0;
+      }
+      BALADE.pitch = Math.max(-1.2, Math.min(1.2, BALADE.pitch));
+      cam.position.copy(BALADE.pos);
+      cam.quaternion.setFromEuler(new THREE.Euler(BALADE.pitch, BALADE.yaw, 0, "YXZ"));
+    }
+    BALADE.r.render(BALADE.sc, cam);
+  }
+  // --- La marche : les règles de l'app -------------------------------------
+  function visiteRaycast(ndcX, ndcY){
+    var THREE = BALADE.T.THREE, rc = new THREE.Raycaster();
+    rc.near = 0.05;
+    rc.setFromCamera(new THREE.Vector2(ndcX, ndcY), BALADE.cam);
+    var cibles = [];
+    BALADE.sc.traverse(function(o){ if (o.isMesh && o.visible && !o.userData.decor) cibles.push(o); });
+    var hits = rc.intersectObjects(cibles, false);
+    return hits.length ? { hit: hits[0], dir: rc.ray.direction.clone() } : null;
+  }
+  function visiteSurUnPlancher(p){
+    var THREE = BALADE.T.THREE, rc = new THREE.Raycaster(new THREE.Vector3(p.x, p.y + 0.5, p.z), new THREE.Vector3(0, -1, 0), 0, 4);
+    if (!BALADE.sols.length){
+      // Sans plancher nommé (vieux GLB) : l'enveloppe suffit.
+      var b = BALADE.bornes;
+      return p.x > b.min.x + BALADE_MARGE && p.x < b.max.x - BALADE_MARGE && p.z > b.min.z + BALADE_MARGE && p.z < b.max.z - BALADE_MARGE;
+    }
+    return rc.intersectObjects(BALADE.sols, false).length > 0;
+  }
+  function visiteBloque(de, a){
+    // Un mur ou une fenêtre entre les deux points : distance du premier, sinon null.
+    var THREE = BALADE.T.THREE, d = new THREE.Vector3().subVectors(a, de), L = d.length();
+    if (L < 1e-3 || !BALADE.murs.length) return null;
+    var rc = new THREE.Raycaster(de.clone(), d.clone().normalize(), 0, L);
+    var hits = rc.intersectObjects(BALADE.murs, false);
+    return hits.length ? hits[0].distance : null;
+  }
+  function visiteMarcheVers(ndcX, ndcY){
+    var THREE = BALADE.T.THREE, r = visiteRaycast(ndcX, ndcY);
+    if (!r) return false;
+    var hit = r.hit, role = visiteRole(hit.object);
+    var cible = hit.point.clone();
+    var n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+    if (Math.abs(n.y) < 0.5 || role === "mur" || role === "fenetre" || role === "vitre" || role === "porte"){
+      // Une paroi : on s'arrête devant, à 1,8 m (0,5 m au moins), côté caméra.
+      var recul = new THREE.Vector3(r.dir.x, 0, r.dir.z).normalize().multiplyScalar(-1);
+      var dist = Math.min(BALADE_RECUL, Math.max(BALADE_RECUL_MIN, hit.distance - 0.2));
+      cible.add(recul.multiplyScalar(dist));
+    }
+    cible.y = BALADE.solY + BALADE_OEIL;
+    if (!visiteSurUnPlancher(cible)){
+      // Pas de plancher sous le point : on n'y va pas (jamais dehors, jamais dans un mur).
+      var vers = new THREE.Vector3().subVectors(cible, BALADE.pos); vers.y = 0;
+      var essai = BALADE.pos.clone().add(vers.multiplyScalar(0.5));
+      if (!visiteSurUnPlancher(essai)) return false;
+      cible.copy(essai);
+    }
+    // Un mur sur le chemin : on s'arrête à 0,5 m devant ; une porte laisse passer.
+    var b = visiteBloque(BALADE.pos, cible);
+    if (b !== null){
+      if (b < BALADE_RECUL_MIN + 0.1) return false;
+      var dir = new THREE.Vector3().subVectors(cible, BALADE.pos).normalize();
+      cible.copy(BALADE.pos).add(dir.multiplyScalar(b - BALADE_RECUL_MIN));
+      if (!visiteSurUnPlancher(cible)) return false;
+    }
+    var regard = new THREE.Vector3().subVectors(cible, BALADE.pos);
+    var yaw = (regard.x * regard.x + regard.z * regard.z > 0.25) ? Math.atan2(-regard.x, -regard.z) : null;
+    BALADE.glisse = { de: BALADE.cam.position.clone(), a: cible, t0: performance.now(),
+                      duree: Math.min(1400, 450 + 180 * BALADE.pos.distanceTo(cible)),
+                      yaw0: BALADE.yaw, yaw: yaw };
+    BALADE.vYaw = 0; BALADE.vPitch = 0;
+    if (BALADE.telephone){
+      // Un double-tap rend la main : la vidéo se met en pause, on marche seul.
+      // Lecture ou ligne de temps ramènent sur la piste.
+      var v = document.querySelector("#videoWrap video"); if (v && !v.paused) v.pause();
+      BALADE.telephone = false; BALADE.regardDX = 0; BALADE.regardDY = 0;
+    }
+    return true;
+  }
+  // --- Les gestes ----------------------------------------------------------
+  function visiteNDC(e){
+    var rect = BALADE.canvas.getBoundingClientRect();
+    return [((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1];
+  }
+  var BALADE_G = {};
+  function visiteBrancheLesGestes(){
+    var c = BALADE.canvas, pinces = {};
+    BALADE_G.down = function(e){
+      try { c.setPointerCapture && c.setPointerCapture(e.pointerId); } catch (err) {}
+      pinces[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (Object.keys(pinces).length === 2){ BALADE.pointeur = null; BALADE_G.pinceD = visiteEcartPince(pinces); return; }
+      BALADE.pointeur = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0, x0: e.clientX, y0: e.clientY, t0: performance.now() };
+      BALADE.vYaw = 0; BALADE.vPitch = 0;
+    };
+    BALADE_G.move = function(e){
+      if (pinces[e.pointerId]){ pinces[e.pointerId].x = e.clientX; pinces[e.pointerId].y = e.clientY; }
+      if (Object.keys(pinces).length === 2){
+        var d = visiteEcartPince(pinces);
+        if (BALADE_G.pinceD){ visiteZoom((BALADE_G.pinceD - d) / 120); BALADE_G.pinceD = d; }
+        return;
+      }
+      var p = BALADE.pointeur; if (!p || p.id !== e.pointerId) return;
+      var dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY; p.dx = dx; p.dy = dy;
+      var k = 0.0032;
+      if (BALADE.telephone){
+        var v = BALADE_G.video;
+        if (v && !v.paused) return;        // en lecture, la piste commande
+        BALADE.regardDX = (BALADE.regardDX || 0) - dx * k;
+        BALADE.regardDY = Math.max(-1.0, Math.min(1.0, (BALADE.regardDY || 0) - dy * k));
+        return;
+      }
+      BALADE.yaw -= dx * k; BALADE.pitch -= dy * k;
+      BALADE.vYaw = -dx * k * 0.6; BALADE.vPitch = -dy * k * 0.6;
+    };
+    BALADE_G.up = function(e){
+      delete pinces[e.pointerId];
+      var p = BALADE.pointeur;
+      if (p && p.id === e.pointerId){
+        var bouge = Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 8;
+        var maintenant = performance.now();
+        if (!bouge){
+          var dt = maintenant - BALADE.dernierTap, prox = BALADE.dernierTapXY && Math.hypot(e.clientX - BALADE.dernierTapXY[0], e.clientY - BALADE.dernierTapXY[1]) < 30;
+          if (dt < 350 && prox){
+            var ndc = visiteNDC(e); visiteMarcheVers(ndc[0], ndc[1]);
+            BALADE.dernierTap = 0; BALADE.dernierTapXY = null;
+          } else { BALADE.dernierTap = maintenant; BALADE.dernierTapXY = [e.clientX, e.clientY]; }
+          BALADE.vYaw = 0; BALADE.vPitch = 0;
+        } else if (maintenant - p.t0 < 80){ BALADE.vYaw = 0; BALADE.vPitch = 0; }
+        BALADE.pointeur = null;
+      }
+    };
+    BALADE_G.wheel = function(e){ e.preventDefault(); visiteZoom(e.deltaY / 100); };
+    BALADE_G.dbl = function(e){ e.preventDefault(); e.stopPropagation(); };
+    BALADE_G.clic = function(e){ e.stopPropagation(); };
+    c.addEventListener("pointerdown", BALADE_G.down);
+    c.addEventListener("pointermove", BALADE_G.move);
+    c.addEventListener("pointerup", BALADE_G.up);
+    c.addEventListener("pointercancel", BALADE_G.up);
+    c.addEventListener("wheel", BALADE_G.wheel, { passive: false });
+    c.addEventListener("dblclick", BALADE_G.dbl);
+    c.addEventListener("click", BALADE_G.clic);
+    c.style.touchAction = "none";
+  }
+  function visiteDebrancheLesGestes(){
+    var c = BALADE.canvas; if (!c) return;
+    c.removeEventListener("pointerdown", BALADE_G.down); c.removeEventListener("pointermove", BALADE_G.move);
+    c.removeEventListener("pointerup", BALADE_G.up); c.removeEventListener("pointercancel", BALADE_G.up);
+    c.removeEventListener("click", BALADE_G.clic);
+    c.removeEventListener("wheel", BALADE_G.wheel); c.removeEventListener("dblclick", BALADE_G.dbl);
+  }
+  function visiteEcartPince(p){ var k = Object.keys(p); return Math.hypot(p[k[0]].x - p[k[1]].x, p[k[0]].y - p[k[1]].y); }
+  function visiteZoom(quantite){
+    // Vers l'arrière (molette vers soi, pincement fermé) : on s'éloigne ; au
+    // bout du geste, la visite rend la main à la vue d'ensemble — le zoom
+    // continu de l'app, à l'envers.
+    if (quantite <= 0){ BALADE.zoomCumul = Math.max(0, BALADE.zoomCumul + quantite); return; }
+    BALADE.zoomCumul += quantite;
+    if (BALADE.zoomCumul > 3){
+      BALADE.zoomCumul = 0;
+      visiteQuitte();
+      var b = document.querySelector('.view-btn[data-mode="ensemble"]'); if (b) b.click();
+    }
+  }
   function makeViewButtons(mv){
     var row = document.createElement("div");
     row.className = "view-btns";
@@ -3658,6 +4084,8 @@
       b.type = "button"; b.className = "view-btn"; b.textContent = label;
       b.dataset.mode = mode || "";
       b.addEventListener("click", function(){
+        if (mode === "visite"){ visiteEntre(); return; }
+        visiteQuitte();
         var fit = mv && mv.__fit;
         if (!fit) return;
         mv.__userMoved = true;
@@ -3719,6 +4147,14 @@
     add(t.view_overview, 60, 1, function(fit){
       return Math.max(fit.radius * 0.5, 6);
     }, "ensemble");
+    // « Visite » = la vue du téléphone, synchronisée à la vidéo (Alex
+    // 2026-09-12) ; le bouton n'existe qu'avec une piste caméra.
+    var btVisite = add(t.view_visit, 90, 1, null, "visite");
+    btVisite.hidden = true;
+    (function attendLaPiste(n){
+      if (CAM.piste){ btVisite.hidden = false; return; }
+      if (n < 90) setTimeout(function(){ attendLaPiste(n + 1); }, 1000);
+    })(0);
     // À la verticale, mais assez HAUT pour voir l'étage entier : c'est la
     // seule vue qui montre encore le logement en entier, et une distance
     // suffit à la garder.
@@ -4722,6 +5158,8 @@
       // juste en dessous, et elle emporterait les boutons avec elle.
       var views = document.getElementById("viewButtons");
       if (views) bar.appendChild(views);
+      var variantes = document.getElementById("variantPills");
+      if (variantes) bar.appendChild(variantes);
       visual.hidden = false; visual.dataset.filled = "3d";
       var ms = document.getElementById("modelSection");
       if (ms && !ms.querySelector("model-viewer")) ms.hidden = true;
@@ -6577,7 +7015,14 @@
       if (hote) hote.style.opacity = "0";
       return;
     }
+    // L'ARRÊT SUR IMAGE (la vidéo projetée sur le modèle en pause) n'a de
+    // sens que sur le modèle gris de l'app : la scène Atlas Pro porte déjà
+    // ses textures, la projection la salirait (Alex 2026-09-12). Et pendant
+    // la visite, c'est notre canvas qui montre la scène, pas model-viewer.
+    var courant = modeleCourant(FLOORS.list[FLOORS.current]);
+    var atlasPro = !!(courant && courant.source === "atlas-pro");
     if (!videoOuverte() || CAM.arretVisible === false || !v || v.paused !== true
+        || atlasPro || BALADE.actif
         || !CAM.cadre || !s || s.fiable === false){
       if (hote) hote.style.opacity = "0";
       return;
@@ -7988,6 +8433,11 @@
       var ba = document.createElement("button");
       ba.type = "button"; ba.className = "view-btn atlas-arret-btn on";
       ba.textContent = (lang === "fr") ? "Arrêt sur image" : "Freeze frame";
+      (function majArret(){
+        var c = modeleCourant(FLOORS.list[FLOORS.current]);
+        ba.hidden = !!(c && c.source === "atlas-pro");
+        setTimeout(majArret, 1000);
+      })();
       ba.addEventListener("click", function(e){
         e.stopPropagation();
         CAM.arretVisible = !CAM.arretVisible;
