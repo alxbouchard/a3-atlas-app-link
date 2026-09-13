@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-08-30T21:20Z";
+  var ATLAS_BUILD = "2026-09-13T00:28Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2280,6 +2280,9 @@
         var e = { driveId: o.driveId, label: o.label };
         if (o.recenterOffset) e.recenterOffset = o.recenterOffset;
         if (o.wallThicknessM != null) e.wallThicknessM = o.wallThicknessM;
+        // Atlas Pro (2026-09-12) : le .glb du moteur et son cadrage (§13.5).
+        if (o.source) e.source = o.source;
+        if (o.frame) e.frame = o.frame;
         return e;
       }),
       plans: liste(m.plans).map(function(o){
@@ -3086,7 +3089,19 @@
   // Le GLB — l'octet le plus lourd de la fiche — passe par le coffre : un
   // rechargement ne le redemande plus à Google, et un bridage ressert la
   // copie déjà vue (URL d'objet locale, aucune requête).
+  // Les fiches de modèle par identifiant Drive : la visionneuse unique change
+  // de source, et le cadrage comme le repeint dépendent du modèle affiché.
+  var MODEL_ITEMS = {};
+  function cadrageAtlasPro(item){
+    var f = item && item.frame;
+    function v3(a){ return Array.isArray(a) && a.length === 3 && a.every(function(x){ return isFinite(Number(x)); })
+                           ? a.map(Number) : null; }
+    if (!f) return null;
+    var c = v3(f.center), s = v3(f.size), b = v3(f.boxCenter);
+    return (c && s && b && s[0] > 0 && s[1] > 0 && s[2] > 0) ? { center: c, size: s, boxCenter: b } : null;
+  }
   function poseModele(mv, id){
+    mv.__modelItem = MODEL_ITEMS[id] || null;
     var sources = DRIVE_API_KEY ? [driveModelApiUrl(id), driveRaw(id)] : [driveRaw(id)];
     chargeOctets("modele-" + id, sources, 60000)
       .then(function(b){
@@ -3785,7 +3800,12 @@
     var nommes = 0;
     for (var k = 0; k < mats.length; k++){ if (mats[k].name) nommes++; }
     var roles = [];
-    if (nommes === mats.length){
+    if (mv.__modelItem && mv.__modelItem.source === "atlas-pro"){
+      // LA SCÈNE DU MOTEUR (§13.5) : textures, occlusion, verre, vernis —
+      // tout est déjà décidé dans le fichier. On ne repeint rien.
+      for (var a = 0; a < mats.length; a++) roles.push("keep");
+      mv.__nomme = true;
+    } else if (nommes === mats.length){
       // LE MODÈLE PARLE. On ne repeint plus que les cadres d'ouvertures :
       // c'est le seul repeint que le propriétaire a voulu garder — « ça
       // découpe bien » (2026-08-10). Tout le reste garde EXACTEMENT ce que le
@@ -3913,6 +3933,18 @@
       var c = mv.getBoundingBoxCenter ? mv.getBoundingBoxCenter() : null;
       var w = mv.clientWidth, h = mv.clientHeight;
       if (!s || !c || !(s.x > 0) || !(s.y > 0) || !(s.z > 0) || !(w > 0) || !(h > 0)) return false;
+      // Atlas Pro (§13.5) : le panoramique du moteur est une sphère de 28 m
+      // AUTOUR du logement ; cadrer toute la boîte montre un globe avec
+      // l'appartement minuscule dedans. L'app a mesuré l'enveloppe des murs
+      // et des sols dans le repère du fichier, et le centre de la boîte
+      // complète : l'écart entre ce centre et celui que la visionneuse
+      // rapporte est le décalage qu'elle a appliqué au chargement.
+      var cadre = cadrageAtlasPro(mv.__modelItem);
+      if (cadre){
+        var dx = c.x - cadre.boxCenter[0], dy = c.y - cadre.boxCenter[1], dz = c.z - cadre.boxCenter[2];
+        c = { x: cadre.center[0] + dx, y: cadre.center[1] + dy, z: cadre.center[2] + dz };
+        s = { x: cadre.size[0], y: cadre.size[1], z: cadre.size[2] };
+      }
       var cur = mv.getCameraOrbit ? mv.getCameraOrbit() : null;
       var thetaDeg = (cur && isFinite(cur.theta)) ? cur.theta * 180 / Math.PI : MODEL_THETA;
       var th = thetaDeg * Math.PI / 180, ph = MODEL_PHI * Math.PI / 180,
@@ -4075,6 +4107,7 @@
   function renderModels(models){
     setTimeout(function(){ window.__atlasLayout && window.__atlasLayout(); }, 0);
     var valid = (models || []).filter(function(m){ return m && typeof m === "object" && validId(m.driveId); });
+    valid.forEach(function(m){ MODEL_ITEMS[m.driveId] = m; });
     if (!valid.length) return;
     valid.forEach(function(m){ registerFloor(m.label, { model: m }); });
     loadModelViewer(function(ok){
