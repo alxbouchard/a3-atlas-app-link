@@ -835,7 +835,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T00:39Z";
+  var ATLAS_BUILD = "2026-09-13T02:37Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3067,55 +3067,42 @@
     });
     return nav;
   }
-  // « Sans meubles » (Alex 2026-09-12) — la même règle que l'app
-  // (FurniturePolicy) : ce que l'occupant emporte disparaît — lit, canapé,
-  // chaise, table, téléviseur. Électroménagers, plomberie, comptoirs et
-  // rangements restent : ils font partie du logement. Le GLB de l'app nomme
-  // ses matériaux « furniture:<catégorie> » ; celui du moteur nomme ses
-  // nœuds « Bed0 », « Sofa0 »… (contrat §10).
-  var MEUBLES = true;
-  var MEUBLES_OCCUPANT = { bed: 1, sofa: 1, chair: 1, table: 1, television: 1 };
-  function estMeubleOccupant(o){
-    var mn = o.material && o.material.name;
-    if (mn && mn.indexOf("furniture:") === 0) return !!MEUBLES_OCCUPANT[mn.slice(10)];
-    for (var p = o; p; p = p.parent){
-      var m = /^(Bed|Sofa|Chair|Table|Television)\d/i.exec(p.name || "");
-      if (m) return true;
-    }
-    return false;
+  // LE PANORAMIQUE DU MOTEUR (`Backdrop*`, §11) n'existe que vu de
+  // l'intérieur : dehors, en vue de dessus ou d'ensemble, on regarde un
+  // bâtiment, pas un globe (Alex 2026-09-12 : « la pano est affichée… il
+  // faudrait comme dans l'app la voir à travers les fenêtres »). Même règle
+  // que l'app : dedans = dans l'enveloppe des murs, avec 0,8 m de marge.
+  function positionCamera(mv){
+    var o = mv.getCameraOrbit && mv.getCameraOrbit(), t = mv.getCameraTarget && mv.getCameraTarget();
+    if (!o || !t || !isFinite(o.radius)) return null;
+    return { x: t.x + o.radius * Math.sin(o.phi) * Math.sin(o.theta),
+             y: t.y + o.radius * Math.cos(o.phi),
+             z: t.z + o.radius * Math.sin(o.phi) * Math.cos(o.theta) };
   }
-  function appliqueMeubles(mv){
+  function majDecor(mv){
     try {
+      var cadre = cadrageAtlasPro(mv.__modelItem);
       var syms = Object.getOwnPropertySymbols(mv), symScene = null;
       for (var i = 0; i < syms.length; i++){ if (syms[i].description === "scene") symScene = syms[i]; }
       if (!symScene || !mv[symScene]) return;
-      var touche = 0;
+      var decor = [];
       mv[symScene].traverse(function(o){
         if (!o.isMesh) return;
-        if (estMeubleOccupant(o)){ if (o.visible !== MEUBLES){ o.visible = MEUBLES; touche++; } }
+        for (var p = o; p; p = p.parent){ if (/^Backdrop/i.test(p.name || "")){ decor.push(o); return; } }
       });
+      if (!decor.length) return;
+      var dedans = false;
+      var c = mv.getBoundingBoxCenter && mv.getBoundingBoxCenter(), cam = positionCamera(mv);
+      if (cadre && c && cam){
+        var dx = c.x - cadre.boxCenter[0], dy = c.y - cadre.boxCenter[1], dz = c.z - cadre.boxCenter[2];
+        var cx = cadre.center[0] + dx, cy = cadre.center[1] + dy, cz = cadre.center[2] + dz;
+        var hx = cadre.size[0] / 2 + 0.8, hy = cadre.size[1] / 2 + 0.5, hz = cadre.size[2] / 2 + 0.8;
+        dedans = Math.abs(cam.x - cx) <= hx && Math.abs(cam.y - cy) <= hy && Math.abs(cam.z - cz) <= hz;
+      }
+      var touche = 0;
+      decor.forEach(function(o){ if (o.visible !== dedans){ o.visible = dedans; touche++; } });
       if (touche && mv[symScene].queueRender) mv[symScene].queueRender();
     } catch (e) {}
-  }
-  function makeFurniturePills(){
-    var nav = document.createElement("div");
-    nav.className = "floor-pills furniture-pills";
-    [[true, t.model_furnished], [false, t.model_unfurnished]].forEach(function(v){
-      var b = document.createElement("button");
-      b.type = "button";
-      b.className = "floor-pill" + (v[0] === MEUBLES ? " on" : "");
-      b.textContent = v[1];
-      b.onclick = function(e){
-        e.stopPropagation();
-        if (MEUBLES === v[0]) return;
-        MEUBLES = v[0];
-        for (var i = 0; i < nav.children.length; i++) nav.children[i].classList.toggle("on", i === (v[0] ? 0 : 1));
-        var mv = document.querySelector("model-viewer.model3d");
-        if (mv) appliqueMeubles(mv);
-      };
-      nav.appendChild(b);
-    });
-    return nav;
   }
   function makeFloorPills(){
     if (FLOORS.list.length < 2) return null;
@@ -4151,7 +4138,7 @@
 
   function applyModelLook(mv){
     var touched = styleModelMaterials(mv);
-    appliqueMeubles(mv);   // à chaque (re)chargement : le choix survit au changement de modèle
+    majDecor(mv);          // le panoramique n'existe que vu de l'intérieur (§11)
     var box = mv.clientWidth + "x" + mv.clientHeight;
     if (touched > 0 || mv.__fitBox !== box){
       if (fitModel(mv)) mv.__fitBox = box;
@@ -4275,6 +4262,10 @@
           });
           mv.addEventListener("camera-change", function(e){
             if (e && e.detail && e.detail.source === "user-interaction") mv.__userMoved = true;
+            if (!mv.__decorDemande){
+              mv.__decorDemande = true;
+              requestAnimationFrame(function(){ mv.__decorDemande = false; majDecor(mv); });
+            }
           });
           mv.setAttribute("tone-mapping", "neutral");
           mv.setAttribute("interaction-prompt", "none");
@@ -4394,8 +4385,6 @@
         var mvCourant = document.querySelector("model-viewer.model3d");
         var variantes = makeVariantPills(function(){ if (mvCourant && mvCourant.__rejoue) mvCourant.__rejoue(); });
         if (variantes){ variantes.id = "variantPills"; root.appendChild(variantes); }
-        var meubles = makeFurniturePills();
-        meubles.id = "furniturePills"; root.appendChild(meubles);
         // Deux points d'entrée pour qui ne sait pas piloter une 3D : sans eux,
         // le visiteur n'a que le glissement à l'aveugle. « Vue de dessus » est
         // aussi le pont avec le plan 2D — c'est le même objet, vu d'aplomb.
