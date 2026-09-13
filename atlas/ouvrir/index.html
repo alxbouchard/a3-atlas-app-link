@@ -856,7 +856,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-13T19:27Z";
+  var ATLAS_BUILD = "2026-09-13T19:34Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3942,6 +3942,13 @@
       // part qu'à l'arrivée. Un geste interrompt le vol et lance la lecture.
       if (avant !== "visite" && BALADE.telephone && CAM.piste && v){
         if (!v.paused) v.pause();
+        // Jamais l'origine couchée d'ARKit (q identité au tout début) : le vol
+        // vise la première pose fiable.
+        var tFiable = 0, Q = CAM.piste.q, Pp = CAM.piste.p;
+        for (var iq = 0; iq < Q.length; iq++){
+          if (Math.abs(Q[iq][3]) < 0.9999 || Math.hypot(Pp[iq][0], Pp[iq][1], Pp[iq][2]) > 1e-4){ tFiable = CAM.piste.t[iq]; break; }
+        }
+        if (v.currentTime < tFiable) v.currentTime = tFiable;
         BALADE.vol = { t0: performance.now(), duree: 1500, de: { p: BALADE.cam.position.clone(), q: BALADE.cam.quaternion.clone(), fov: BALADE.cam.fov } };
       } else if (v && v.paused && BALADE.telephone){ try { v.play(); } catch (e) {} }
       CAM.mode = "visite";
