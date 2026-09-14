@@ -856,7 +856,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-14T17:02Z";
+  var ATLAS_BUILD = "2026-09-14T17:48Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3791,12 +3791,21 @@
     var racine = gltf.scene; sc.add(racine);
     // Recensement : murs, portes, sols, plafonds, décor, miroirs ; bornes = murs + sols.
     var bornes = new THREE.Box3(), toutVide = true, solY = Infinity;
+    // Le bas du bâti d'abord (sols), pour reconnaître les murs qui ne touchent pas le sol.
+    var bornesProvisoires = new THREE.Box3();
+    racine.traverse(function(o){ if (o.isMesh && /^Floor\d/i.test((o.parent && o.parent.name) || o.name || "")) bornesProvisoires.expandByObject(o); });
+    if (!isFinite(bornesProvisoires.min.y)) bornesProvisoires.setFromObject(racine);
     BALADE.murs = []; BALADE.portes = []; BALADE.sols = []; BALADE.plafonds = []; BALADE.decor = []; BALADE.miroirs = []; BALADE.meubles = [];
     racine.updateMatrixWorld(true);
     racine.traverse(function(o){
       if (!o.isMesh) return;
       var role = baladeRole(o);
       o.userData.role = role;
+      if (role === "mur" || role === "fenetre" || role === "vitre"){
+        // Un « mur » RoomPlan qui ne touche pas le sol est une retombée : décor (dedans seulement).
+        var bm = new THREE.Box3().setFromObject(o);
+        if (bm.min.y > bornesProvisoires.min.y + 1.0 && isFinite(bornesProvisoires.min.y)){ role = "decor"; o.userData.role = role; }
+      }
       if (role === "decor"){ o.userData.decor = true; BALADE.decor.push(o); return; }
       if (role === "mur" || role === "fenetre" || role === "vitre"){ BALADE.murs.push(o); }
       else if (role === "porte"){ BALADE.portes.push(o); }
