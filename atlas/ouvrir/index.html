@@ -873,7 +873,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-15T20:37Z";
+  var ATLAS_BUILD = "2026-09-15T20:54Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -983,7 +983,8 @@
       model_hint:"Glissez pour pivoter · molette ou pincement pour zoomer · deux doigts (ou clic droit) pour déplacer.",
       model_variant_pro:"Texturé (Atlas Pro)", model_variant_base:"Relevé",
       view_visit:"Visite", visit_hint:"La vidéo mène la visite · en pause, glissez pour regarder, double-tap pour marcher · dézoomez pour sortir",
-      balade_hint:"Glissez pour pivoter · molette ou pincement pour zoomer · double-tap pour entrer dans la visite",
+      balade_hint:"Glissez pour pivoter · molette ou pincement pour zoomer · double-tap pour vous promener",
+      marche_hint:"Promenade libre · glissez pour regarder, double-tap pour avancer · dézoomez pour sortir",
       model_furnished:"Meublé", model_unfurnished:"Sans meubles",
       view_overview:"Vue d'ensemble", view_top:"Vue de dessus",
       model_walls:function(cm){return "Épaisseur des murs : représentation ("+cm+" cm), non mesurée. Le scan relève les surfaces vues d'un côté ; longueurs et hauteurs, elles, sont mesurées.";},
@@ -1091,7 +1092,8 @@
       model_hint:"Drag to rotate · scroll or pinch to zoom · two fingers (or right-click) to pan.",
       model_variant_pro:"Textured (Atlas Pro)", model_variant_base:"Survey",
       view_visit:"Tour", visit_hint:"The video leads the tour · when paused, drag to look, double-tap to walk · zoom out to leave",
-      balade_hint:"Drag to rotate · scroll or pinch to zoom · double-tap to enter the tour",
+      balade_hint:"Drag to rotate · scroll or pinch to zoom · double-tap to walk around",
+      marche_hint:"Free walk · drag to look, double-tap to move · zoom out to leave",
       model_furnished:"Furnished", model_unfurnished:"Unfurnished",
       view_overview:"Overview", view_top:"Top view",
       model_walls:function(cm){return "Wall thickness: a representation ("+cm+" cm), not measured. The scan captures surfaces seen from one side; lengths and heights are measured.";},
@@ -3642,7 +3644,10 @@
     for (var i = 0; i < seg.children.length; i++){
       var b = seg.children[i];
       if (b.dataset.mode === undefined) continue;   // « Meubles » a son propre état
-      b.classList.toggle("on", !!CAM.mode && b.dataset.mode === CAM.mode);
+      // La promenade libre n'allume pas « Visite » : c'est la visite vidéo.
+      var allume = !!CAM.mode && b.dataset.mode === CAM.mode;
+      if (b.dataset.mode === "visite" && BALADE.actif && !BALADE.telephone) allume = false;
+      b.classList.toggle("on", allume);
     }
   }
 
@@ -3925,7 +3930,7 @@
     baladeMode(BALADE.mode);
     if (BALADE.mode !== "visite" && !BALADE.hintMontre){
       BALADE.hintMontre = true;
-      BALADE.hint.textContent = CAM.piste ? t.balade_hint : t.balade_hint.replace(/ · [^·]*$/, "");
+      BALADE.hint.textContent = t.balade_hint;
       BALADE.hint.classList.remove("efface");
       clearTimeout(BALADE.hintTimer); BALADE.hintTimer = setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000);
     }
@@ -3987,7 +3992,7 @@
   }
   function baladeMode(mode){
     if (!BALADE.actif) return;
-    if (mode === "visite" && !CAM.piste) mode = "orbite";
+    if (mode === "visite" && !CAM.piste && !BALADE.reprendreMarche) mode = "orbite";
     var avant = BALADE.mode; BALADE.mode = mode;
     var visite = (mode === "visite");
     BALADE.plafonds.forEach(function(p){ p.visible = visite; });
@@ -4019,7 +4024,7 @@
         BALADE.vol = { t0: performance.now(), duree: 1500, de: { p: BALADE.cam.position.clone(), q: BALADE.cam.quaternion.clone(), fov: BALADE.cam.fov } };
       } else if (v && v.paused && BALADE.telephone){ try { v.play(); } catch (e) {} }
       CAM.mode = "visite";
-      if (BALADE.hint){ BALADE.hint.textContent = t.visit_hint; BALADE.hint.classList.remove("efface");
+      if (BALADE.hint){ BALADE.hint.textContent = BALADE.telephone ? t.visit_hint : t.marche_hint; BALADE.hint.classList.remove("efface");
         clearTimeout(BALADE.hintTimer); BALADE.hintTimer = setTimeout(function(){ if (BALADE.hint) BALADE.hint.classList.add("efface"); }, 6000); }
     } else {
       if (avant === "visite"){
@@ -4032,7 +4037,7 @@
       if (CAM.mode === "visite") CAM.mode = null;
     }
     document.querySelectorAll(".view-btn[data-mode]").forEach(function(b){
-      b.classList.toggle("on", visite ? b.dataset.mode === "visite" : (!!CAM.mode && b.dataset.mode === CAM.mode));
+      b.classList.toggle("on", visite ? (BALADE.telephone && b.dataset.mode === "visite") : (!!CAM.mode && b.dataset.mode === CAM.mode));
     });
     document.body.classList.toggle("atlas-balade-visite", !!visite);
     if (BALADE.canvas) BALADE.canvas.classList.toggle("mode-visite", !!visite);
@@ -4236,7 +4241,10 @@
     var dort = auRepos() && !BALADE.orbAnim && !BALADE.glisse && !BALADE.vol && BALADE.mode !== "visite" && !(v && !v.paused);
     if (dort){ if (++BALADE.rendusDormants > 4) return; } else BALADE.rendusDormants = 0;
     if (BALADE.mode === "visite"){
-      if (v && !v.paused && !BALADE.telephone) BALADE.telephone = true;   // en lecture, la piste commande
+      if (v && !v.paused && !BALADE.telephone){                            // en lecture, la piste commande
+        BALADE.telephone = true;
+        document.querySelectorAll(".view-btn[data-mode]").forEach(function(b){ b.classList.toggle("on", b.dataset.mode === "visite"); });
+      }
       if (BALADE.telephone && CAM.piste && v && BALADE.item.recenterOffset){
         // LA VUE DU TÉLÉPHONE : la caméra EST celle de la vidéo. Position et
         // orientation viennent de la piste (repère ARKit brut + recentrage du
@@ -4415,6 +4423,32 @@
     var hits = rc.intersectObjects(BALADE.murs, false);
     return hits.length ? hits[0].distance : null;
   }
+  /** PROMENADE LIBRE (Alex 2026-09-15 : « deux modes distincts, je me
+   *  promène librement ou je clique Visite pour la visite auto »). Depuis
+   *  l'orbite, un double-clic pose la caméra à hauteur d'œil à l'endroit
+   *  cliqué, sans lancer la vidéo — même sur un partage sans vidéo. */
+  function baladeMarcheLibre(ndcX, ndcY){
+    var THREE = BALADE.T.THREE, r = baladeRaycast(ndcX, ndcY), cible = null;
+    if (r){
+      var hit = r.hit, role = hit.object.userData.role;
+      cible = hit.point.clone();
+      var n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 1, 0);
+      if (Math.abs(n.y) < 0.5 || role === "mur" || role === "fenetre" || role === "vitre" || role === "porte"){
+        var recul = new THREE.Vector3(r.dir.x, 0, r.dir.z).normalize().multiplyScalar(-1);
+        cible.add(recul.multiplyScalar(Math.min(BALADE_RECUL, Math.max(BALADE_RECUL_MIN, hit.distance - 0.2))));
+      }
+      cible.y = BALADE.solY + BALADE_OEIL;
+      if (!baladeSurUnPlancher(cible)) cible = null;
+    }
+    // Hors plancher : le point de départ par défaut (milieu du plus grand plancher).
+    if (cible) BALADE.pos.copy(cible);
+    BALADE.yaw = BALADE.orb.theta + Math.PI; BALADE.pitch = 0;
+    BALADE.vYaw = 0; BALADE.vPitch = 0; BALADE.glisse = null;
+    BALADE.reprendreMarche = true;
+    var v = document.querySelector("#videoWrap video"); if (v && !v.paused) { try { v.pause(); } catch (e) {} }
+    baladeMode("visite");
+    return true;
+  }
   function baladeMarcheVers(ndcX, ndcY){
     var THREE = BALADE.T.THREE, r = baladeRaycast(ndcX, ndcY);
     if (!r) return false;
@@ -4528,7 +4562,7 @@
           if (dt < 350 && prox){
             var ndc = baladeNDC(e);
             if (BALADE.mode === "visite") baladeMarcheVers(ndc[0], ndc[1]);
-            else if (CAM.piste) baladeMode("visite");     // double-tap en orbite : on entre
+            else baladeMarcheLibre(ndc[0], ndc[1]);      // double-tap en orbite : promenade libre
             BALADE.dernierTap = 0; BALADE.dernierTapXY = null;
           } else { BALADE.dernierTap = maintenant; BALADE.dernierTapXY = [e.clientX, e.clientY]; }
           BALADE.vYaw = 0; BALADE.vPitch = 0;
