@@ -873,7 +873,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-15T21:15Z";
+  var ATLAS_BUILD = "2026-09-15T21:23Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3890,6 +3890,7 @@
     });
     if (toutVide) bornes.setFromObject(racine);
     if (!isFinite(solY)) solY = bornes.min.y;
+    baladeRangements(racine, solY);
     BALADE.bornes = bornes; BALADE.solY = solY;
     var cam = new THREE.PerspectiveCamera(BALADE_FOV_ORBITE, 1, 0.08, 300);
     BALADE.r = r; BALADE.sc = sc; BALADE.cam = cam; BALADE.canvas = canvas; BALADE.actif = true;
@@ -3960,6 +3961,48 @@
       BALADE_G.video = v;
     }
   }
+  /** LES RANGEMENTS (`Storage<N>`) : la règle de l'app (FurniturePolicy).
+   *  `storage` est le mot ambigu de RoomPlan : commode ET comptoir de cuisine.
+   *  Reste avec le logement ce qui est ACCROCHÉ (dessous à plus de 60 cm du
+   *  sol), ce qui porte une vasque ou un comptoir, et ce qui touche un
+   *  appareil encastré à hauteur de plan de travail (dessus entre 0,85 et
+   *  1,25 m). Le reste — bibliothèque, commode, meuble télé — part avec les
+   *  meubles. Un comptoir de service isolé partira aussi : même limite que
+   *  l'app, on n'invente pas la différence. */
+  function baladeRangements(racine, solY){
+    var THREE = BALADE.T.THREE, groupes = [];
+    racine.traverse(function(o){
+      if (!o.name || !/^(Storage|Dishwasher|Oven|Stove|Refrigerator|Washer|Dryer|WasherDryer|Sink)\d+$/i.test(o.name)) return;
+      var b = new THREE.Box3().setFromObject(o); if (!isFinite(b.min.x)) return;
+      groupes.push({ o: o, nom: o.name, b: b, rangement: /^Storage/i.test(o.name) });
+    });
+    if (!groupes.length) return;
+    function touche(a, c, marge){
+      return a.min.x - marge <= c.max.x && a.max.x + marge >= c.min.x
+          && a.min.z - marge <= c.max.z && a.max.z + marge >= c.min.z
+          && a.min.y - marge <= c.max.y && a.max.y + marge >= c.min.y;
+    }
+    var n = 0;
+    groupes.forEach(function(g){
+      if (!g.rangement) return;
+      var dessous = g.b.min.y - solY, dessus = g.b.max.y - solY;
+      if (dessous > 0.60) return;                                   // accroché : au bâtiment
+      var comptoir = false;
+      g.o.traverse(function(c){ if (/counter|basin|sink|worktop/i.test(c.name || "")) comptoir = true; });
+      if (comptoir) return;
+      if (dessus >= 0.85 && dessus <= 1.25){
+        var voisinEncastre = groupes.some(function(h){ return !h.rangement && touche(g.b, h.b, 0.15); });
+        if (voisinEncastre) return;
+      }
+      // Part avec les meubles.
+      g.o.traverse(function(c){
+        if (!c.isMesh) return;
+        c.userData.role = "meuble";
+        BALADE.meubles.push(c); c.visible = BALADE.meublesVisibles !== false;
+      });
+      n++;
+    });
+  }
   /** Les miroirs : un cubemap rendu UNE fois depuis chaque face (comme l'app). */
   function baladeMiroirs(){
     var THREE = BALADE.T.THREE;
@@ -4007,6 +4050,7 @@
       // Les murs voilés en orbite redeviennent pleins TOUT DE SUITE : en
       // visite, personne ne les lisse image par image.
       BALADE.murs.concat(BALADE.portes).forEach(function(m){
+        m.visible = true;   // texturé : cachés en orbite, pleins dedans
         var mat = m.material; if (!mat || m.userData.opacite0 == null) return;
         mat.opacity = m.userData.opacite0;
         mat.transparent = !!m.userData.transparent0; mat.depthWrite = true;
@@ -4365,6 +4409,14 @@
   /** Le voile : en orbite, les murs entre la caméra et la cible s'effacent (comme l'app). */
   function baladeVoile(){
     var THREE = BALADE.T.THREE, ob = BALADE.orb;
+    // TEXTURÉ : en orbite, aucun mur, ni porte, ni fenêtre — la maquette
+    // ouverte (Alex 2026-09-15 : « le look d'hier »). Ils reviennent en
+    // promenade et en visite. Le Relevé garde son voile : il a besoin de
+    // ses murs pour se lire.
+    if (BALADE.item && BALADE.item.source === "atlas-pro"){
+      BALADE.murs.concat(BALADE.portes).forEach(function(m){ if (m.visible) m.visible = false; });
+      return;
+    }
     var dir = new THREE.Vector3().subVectors(BALADE.cam.position, ob.cible); dir.y = 0;
     var horizontal = dir.length() > 0.5 && ob.phi > 0.35;   // vu de haut, rien à voiler
     dir.normalize();
