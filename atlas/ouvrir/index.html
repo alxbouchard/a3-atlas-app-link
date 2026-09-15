@@ -873,7 +873,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-15T20:54Z";
+  var ATLAS_BUILD = "2026-09-15T21:15Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -3866,7 +3866,10 @@
       }
       if (!o.material) return;
       // Le voile des murs demande une opacité PAR MUR : chacun son matériau.
-      if (role === "mur" || role === "fenetre" || role === "porte" || role === "plafond"){
+      // La vitre aussi : sans opacité d'origine, l'entrée en visite (« murs
+      // pleins tout de suite ») la remettait à 100 % — porte-fenêtre opaque,
+      // panoramique invisible (Alex 2026-09-15).
+      if (role === "mur" || role === "fenetre" || role === "porte" || role === "plafond" || role === "vitre"){
         o.material = o.material.clone();
         o.userData.opacite0 = o.material.opacity; o.userData.transparent0 = o.material.transparent;
       }
@@ -4004,8 +4007,8 @@
       // Les murs voilés en orbite redeviennent pleins TOUT DE SUITE : en
       // visite, personne ne les lisse image par image.
       BALADE.murs.concat(BALADE.portes).forEach(function(m){
-        var mat = m.material; if (!mat) return;
-        mat.opacity = (m.userData.opacite0 == null) ? 1 : m.userData.opacite0;
+        var mat = m.material; if (!mat || m.userData.opacite0 == null) return;
+        mat.opacity = m.userData.opacite0;
         mat.transparent = !!m.userData.transparent0; mat.depthWrite = true;
       });
       var v = document.querySelector("#videoWrap video");
