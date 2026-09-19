@@ -873,7 +873,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-15T21:23Z";
+  var ATLAS_BUILD = "2026-09-19T21:22Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -4050,7 +4050,6 @@
       // Les murs voilés en orbite redeviennent pleins TOUT DE SUITE : en
       // visite, personne ne les lisse image par image.
       BALADE.murs.concat(BALADE.portes).forEach(function(m){
-        m.visible = true;   // texturé : cachés en orbite, pleins dedans
         var mat = m.material; if (!mat || m.userData.opacite0 == null) return;
         mat.opacity = m.userData.opacite0;
         mat.transparent = !!m.userData.transparent0; mat.depthWrite = true;
@@ -4409,14 +4408,9 @@
   /** Le voile : en orbite, les murs entre la caméra et la cible s'effacent (comme l'app). */
   function baladeVoile(){
     var THREE = BALADE.T.THREE, ob = BALADE.orb;
-    // TEXTURÉ : en orbite, aucun mur, ni porte, ni fenêtre — la maquette
-    // ouverte (Alex 2026-09-15 : « le look d'hier »). Ils reviennent en
-    // promenade et en visite. Le Relevé garde son voile : il a besoin de
-    // ses murs pour se lire.
-    if (BALADE.item && BALADE.item.source === "atlas-pro"){
-      BALADE.murs.concat(BALADE.portes).forEach(function(m){ if (m.visible) m.visible = false; });
-      return;
-    }
+    // Comme dans l'app (Alex 2026-09-19) : les murs restent, seuls ceux
+    // entre la caméra et la cible se voilent — texturé comme relevé.
+    BALADE.murs.concat(BALADE.portes).forEach(function(m){ if (!m.visible) m.visible = true; });
     var dir = new THREE.Vector3().subVectors(BALADE.cam.position, ob.cible); dir.y = 0;
     var horizontal = dir.length() > 0.5 && ob.phi > 0.35;   // vu de haut, rien à voiler
     dir.normalize();
