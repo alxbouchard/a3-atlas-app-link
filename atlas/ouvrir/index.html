@@ -790,7 +790,7 @@
       <div id="limits"></div>
     </section>
 
-    <section class="card">
+    <section class="card" id="downloadSection">
       <div class="btns">
         <a class="btn primary" id="dlBtn" href="#" data-i18n="download">Télécharger l'export</a>
         <a class="btn secondary" id="ctxBtn" href="#" target="_blank" rel="noopener" data-i18n="read_context">Lire le contexte</a>
@@ -873,7 +873,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-19T22:30Z";
+  var ATLAS_BUILD = "2026-09-21T22:35Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -2132,20 +2132,25 @@
     var ec = doc.entityCounts || {};
     var st = [];
     // « 1 pièce », jamais « 1 PIÈCES » (audit 2026-08-30).
-    function addStat(v,l,l1){
+    // Une case qui annonce un contenu plus bas y mène (comme les tuiles du
+    // haut, Alex 2026-09-21) ; portes et fenêtres n'ont pas de section à elles.
+    function addStat(v,l,l1,vers){
       if (typeof v === "number" && isFinite(v))
-        st.push({n:v, l:(v === 1 && l1) ? l1 : l});
+        st.push({n:v, l:(v === 1 && l1) ? l1 : l, vers: vers || null});
     }
-    addStat(ec.spaces,  t.rooms,   t.rooms1);
+    addStat(ec.spaces,  t.rooms,   t.rooms1, ["plansSection", "spacesSection"]);
     addStat(ec.doors,   t.doors,   t.doors1);
     addStat(ec.windows, t.windows, t.windows1);
-    addStat(ec.equipment, t.equip_stat, t.equip1);
-    addStat(ec.photos,  t.photos,  t.photos1);
-    var sz = fmtSize(q.get("s")); if (sz) st.push({n:sz, l:t.size});
+    addStat(ec.equipment, t.equip_stat, t.equip1, ["equipSection"]);
+    addStat(ec.photos,  t.photos,  t.photos1, ["gallerySection"]);
+    var sz = fmtSize(q.get("s")); if (sz) st.push({n:sz, l:t.size, vers: ["downloadSection"]});
     if (st.length){
-      document.getElementById("stats").innerHTML = st.map(function(s){
+      var statsEl = document.getElementById("stats");
+      statsEl.innerHTML = st.map(function(s){
         return '<div class="stat"><div class="n">'+esc(String(s.n))+'</div><div class="l">'+esc(s.l)+'</div></div>';
       }).join("");
+      var cases = statsEl.querySelectorAll(".stat");
+      st.forEach(function(s, i){ if (s.vers && cases[i]) meneVers(cases[i], s.vers); });
     }
 
     // 3. Spaces (core upgrade)
@@ -2752,7 +2757,9 @@
       // 2026-08-10). La surface, elle, ne mène nulle part : elle n'a pas de
       // section à elle, et elle porte déjà le choix pi²/m² — un clic dessus
       // serait une promesse vide.
-      if (it.vers && premiereSectionVisible(it.vers)) meneVers(f, it.vers);
+      // Décidé AU CLIC, pas au dessin : la galerie n'existe qu'une fois
+      // media.json lu, donc « 36 photos » naissait sans clic (Alex 2026-09-21).
+      if (it.vers) meneVers(f, it.vers);
       figs.appendChild(f);
     });
   }
