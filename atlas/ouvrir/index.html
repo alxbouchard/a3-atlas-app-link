@@ -507,12 +507,20 @@
     display:flex; align-items:center; justify-content:center; z-index:4;
     pointer-events:none}
   .rose-nord svg{width:30px; height:30px; display:block}
-  .model-attente{position:absolute; inset:0; display:flex; align-items:center;
-    justify-content:center; gap:8px; color:var(--muted); font-size:14px;
-    pointer-events:none}
-  .model-attente::before{content:""; width:14px; height:14px; border-radius:50%;
-    border:2px solid var(--muted); border-top-color:transparent;
+  /* Le modèle se charge : une pastille de verre au centre du cadre, un
+     anneau qui tourne et la progression (Alex 2026-09-21 : le texte muet
+     d'avant ne se voyait pas sur un GLB de 29 Mo). */
+  .model-attente{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    display:flex; align-items:center; gap:10px; padding:10px 16px; border-radius:999px;
+    background:rgba(8,18,28,.74); color:#fff; font-size:14px; font-weight:600;
+    border:1px solid rgba(255,255,255,.16); backdrop-filter:blur(8px);
+    -webkit-backdrop-filter:blur(8px); box-shadow:0 6px 24px rgba(0,0,0,.28);
+    pointer-events:none; z-index:6; white-space:nowrap}
+  .model-attente::before{content:""; flex:none; width:18px; height:18px; border-radius:50%;
+    border:2.5px solid rgba(255,255,255,.3); border-top-color:#fff;
     animation:attente-tour 0.9s linear infinite}
+  .model-attente-pct{font-variant-numeric:tabular-nums; color:var(--accent); min-width:3.5ch; text-align:right}
+  .model-attente-pct:empty{display:none}
   @keyframes attente-tour{to{transform:rotate(360deg)}}
   .lightbox{position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,.975);
     display:flex; align-items:center; justify-content:center; flex-direction:column;
@@ -873,7 +881,7 @@
   // « le refresh ne change rien »). On revalide donc la page en arrière-plan
   // et on recharge UNE seule fois par session si la version a bougé, pour
   // qu'un lien partagé montre toujours la fiche à jour.
-  var ATLAS_BUILD = "2026-09-21T22:35Z";
+  var ATLAS_BUILD = "2026-09-22T00:20Z";
   (function freshness(){
     try {
       if (sessionStorage.getItem("atlas-build") === ATLAS_BUILD) return;
@@ -1801,15 +1809,15 @@
     return coffreOuvre().then(function(c){ return c.delete(coffreCle(cle)); }).catch(function(){});
   }
   var OCTETS_EN_VOL = {};
-  function chargeOctets(cle, urls, timeoutMs){
+  function chargeOctets(cle, urls, timeoutMs, onProgress){
     var kv = coffreCle(cle);
     if (OCTETS_EN_VOL[kv]) return OCTETS_EN_VOL[kv];
-    var p = chargeOctetsBrut(cle, urls, timeoutMs);
+    var p = chargeOctetsBrut(cle, urls, timeoutMs, onProgress);
     OCTETS_EN_VOL[kv] = p;
     p.then(function(){ delete OCTETS_EN_VOL[kv]; }, function(){ delete OCTETS_EN_VOL[kv]; });
     return p;
   }
-  function chargeOctetsBrut(cle, urls, timeoutMs){
+  function chargeOctetsBrut(cle, urls, timeoutMs, onProgress){
     var k = coffreCle(cle);
     function range(blob){
       coffreOuvre().then(function(c){
@@ -1842,7 +1850,21 @@
           var e = new Error("http " + r.status); e.reessayer = true; throw e;
         }
         if (!r.ok) throw new Error("http " + r.status);
-        return r.blob();
+        // Lu morceau par morceau quand on veut la progression : le compteur
+        // avance pendant les secondes où un gros GLB descend.
+        if (!(onProgress && r.body && r.body.getReader)) return r.blob();
+        var total = +(r.headers.get("content-length") || 0);
+        var type = r.headers.get("content-type") || "";
+        var lecteur = r.body.getReader(), morceaux = [], recu = 0;
+        function lit(){
+          return lecteur.read().then(function(x){
+            if (x.done) return new Blob(morceaux, { type: type });
+            morceaux.push(x.value); recu += x.value.byteLength;
+            try{ onProgress(recu, total); }catch(e){}
+            return lit();
+          });
+        }
+        return lit();
       }).then(function(b){
         // L'hôte sans clé répond parfois 200 avec sa page de confirmation
         // antivirus — du HTML, jamais le fichier. Ça ne se range pas.
@@ -3252,6 +3274,28 @@
     var c = v3(f.center), s = v3(f.size), b = v3(f.boxCenter);
     return (c && s && b && s[0] > 0 && s[1] > 0 && s[2] > 0) ? { center: c, size: s, boxCenter: b } : null;
   }
+  // LA PASTILLE D'ATTENTE D'UN MODÈLE : une par conteneur, retirée quand le
+  // modèle est posé (jamais avant), pourcentage quand Google dit la taille,
+  // sinon les mégaoctets reçus.
+  function texteProgression(recu, total){
+    if (total > 0 && recu <= total) return Math.round(100 * recu / total) + " %";
+    var mo = recu / 1048576;
+    return (mo < 10 ? mo.toFixed(1) : Math.round(mo)) + (lang === "fr" ? " Mo" : " MB");
+  }
+  function attenteModele(conteneur){
+    if (!conteneur) return { maj: function(){}, fin: function(){} };
+    var ancien = conteneur.querySelector(":scope > .model-attente");
+    if (ancien && ancien.parentNode) ancien.parentNode.removeChild(ancien);
+    var el = document.createElement("div"); el.className = "model-attente";
+    var txt = document.createElement("span");
+    txt.textContent = (lang === "fr") ? "Modèle 3D en chargement…" : "Loading 3D model…";
+    var pct = document.createElement("span"); pct.className = "model-attente-pct";
+    el.appendChild(txt); el.appendChild(pct); conteneur.appendChild(el);
+    return {
+      maj: function(recu, total){ pct.textContent = texteProgression(recu, total); },
+      fin: function(){ if (el.parentNode) el.parentNode.removeChild(el); }
+    };
+  }
   function poseModele(mv, id){
     mv.__modelItem = MODEL_ITEMS[id] || null;
     // Exposition : 0,6 était réglé pour le modèle gris de l'app ; la scène
@@ -3259,14 +3303,18 @@
     // est ~1,75 × plus clair que RealityKit à exposition 1).
     mv.setAttribute("exposure", (mv.__modelItem && mv.__modelItem.source === "atlas-pro") ? "0.85" : "0.6");
     var sources = DRIVE_API_KEY ? [driveModelApiUrl(id), driveRaw(id)] : [driveRaw(id)];
-    chargeOctets("modele-" + id, sources, 60000)
+    var attente = attenteModele(mv.parentNode);
+    chargeOctets("modele-" + id, sources, 60000, attente.maj)
       .then(function(b){
         var u = URL.createObjectURL(b);
         if (mv.__urlObjet){ try{ URL.revokeObjectURL(mv.__urlObjet); }catch(e){} }
         mv.__urlObjet = u;
+        mv.addEventListener("load", attente.fin, { once: true });
+        mv.addEventListener("error", attente.fin, { once: true });
         mv.setAttribute("src", u);
       })
       .catch(function(){
+        attente.fin();
         // Dernier recours : laisser la visionneuse essayer elle-même.
         mv.setAttribute("src", driveModelUrl(id));
       });
@@ -3804,18 +3852,19 @@
       BALADE.reprise = { mode: BALADE.mode, orb: BALADE.orb && { theta: BALADE.orb.theta, phi: BALADE.orb.phi, radius: BALADE.orb.radius },
                          telephone: BALADE.telephone, pos: BALADE.pos && BALADE.pos.clone(), yaw: BALADE.yaw, pitch: BALADE.pitch };
       mode = BALADE.mode || mode;
-      if (BALADE.hint){ BALADE.hint.textContent = (lang === "fr") ? "Modèle 3D en chargement…" : "Loading 3D model…"; BALADE.hint.classList.remove("efface"); }
     }
     BALADE.proprietaire = baladeProprietaire();
     var itemDemande = item; BALADE.itemDemande = item;
     var sources = DRIVE_API_KEY ? [driveModelApiUrl(item.driveId), driveRaw(item.driveId)] : [driveRaw(item.driveId)];
-    Promise.all([baladeModules(), chargeOctets("modele-" + item.driveId, sources, 60000)])
+    var attenteBalade = attenteModele(visual);
+    Promise.all([baladeModules(), chargeOctets("modele-" + item.driveId, sources, 60000, attenteBalade.maj)])
       .then(function(r){
         var T = r[0], octets = r[1];
         var lit = (octets instanceof Blob) ? octets.arrayBuffer() : Promise.resolve(octets);
         return lit.then(function(ab){
           return new Promise(function(ok, ko){ new T.GLTFLoader().parse(ab, "", ok, ko); });
         }).then(function(gltf){
+          attenteBalade.fin();
           if (BALADE.itemDemande !== itemDemande) return;   // une autre demande a suivi
           if (BALADE.actif) baladeQuitte(true);
           BALADE.item = item; BALADE.mode = mode;
@@ -3823,6 +3872,7 @@
         });
       })
       .catch(function(e){
+        attenteBalade.fin();
         console.warn("balade : chargement impossible", e);
         if (BALADE.itemDemande !== itemDemande) return;
         // Un héros vide et un bouton « Visite » mort ne disent rien. On le
@@ -5441,14 +5491,8 @@
               tourneLaRose();
             }).catch(function(){});
           }
-          var attente = document.createElement("div");
-          attente.className = "model-attente";
-          attente.textContent = (lang === "fr"
-            ? "Modèle 3D en chargement…" : "Loading 3D model…");
-          root.appendChild(attente);
-          mv.addEventListener("load", function(){
-            if (attente.parentNode) attente.parentNode.removeChild(attente);
-          });
+          // La pastille d'attente vit dans poseModele : premier affichage,
+          // changement d'étage et de variante, tous pareils.
           keepModelLook(mv);   // le gardien démarre ici, pas au `load`
           // Changer d'étage = changer la source, puis tout recadrer : le
           // nouveau modèle n'a ni la même taille ni le même centre.
